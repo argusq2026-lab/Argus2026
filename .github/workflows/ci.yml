@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (${{ matrix.os }}, py${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest is the product target; ubuntu catches anything that
+        # only works because of a Windows-specific path or default.
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      # opencv-python links libGL, which a headless Ubuntu runner lacks.
+      - name: Install OpenCV system deps (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # models/ is gitignored, so CI has no artifacts. The artifact-gated tests
+      # skip themselves; everything else -- contracts, determinism, privacy,
+      # the whole mock pipeline -- runs for real.
+      - name: Run tests
+        run: pytest tests/ -q --timeout=300
+
+      - name: Smoke-run the pipeline end to end
+        run: |
+          python -m argus.cli demo --out demo/ci.mp4 --frames 40
+          python -m argus.cli run --engine mock --camera demo/ci.mp4 --max-ticks 30 --clock frame --json-log out/ci.jsonl
+          python -m argus.cli doctor
+
+      - name: Assert the run produced a ranked, redacted log
+        shell: python
+        run: |
+          import json, sys
+          lines = [json.loads(x) for x in open("out/ci.jsonl", encoding="utf-8") if x.strip()]
+          assert len(lines) == 30, f"expected 30 ticks, got {len(lines)}"
+          ranked = [line for line in lines if line["records"]]
+          assert ranked, "no trainee was ever ranked"
+          for line in lines:
+              for record in line["records"]:
+                  assert set(record) == {"trainee_id", "score", "reason_codes", "ts"}, record
+          scores = [r["score"] for r in ranked[-1]["records"]]
+          assert scores == sorted(scores, reverse=True), scores
+          print(f"ok: {len(lines)} ticks, {len(ranked[-1]['records'])} trainees ranked")
+
+  determinism:
+    name: byte-identical rank
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # The product claim is that the rank is reproducible. Two independent
+      # process invocations over the same clip must produce identical bytes.
+      - name: Two runs, one diff
+        run: |
+          python -m argus.cli demo --out demo/ci.mp4 --frames 60
+          python -m argus.cli run --engine mock --camera demo/ci.mp4 --max-ticks 50 --clock frame --json-log out/a.jsonl
+          python -m argus.cli run --engine mock --camera demo/ci.mp4 --max-ticks 50 --clock frame --json-log out/b.jsonl
+          diff out/a.jsonl out/b.jsonl && echo "rank is byte-identical across runs"
+
+  privacy:
+    name: alert boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # Run the structural privacy tests as their own required job, so a change
+      # that widens the boundary cannot be lost in a long test log.
+      - run: pytest tests/test_privacy.py -v
+
+  lint:
+    name: import hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: sudo apt-get update && sudo apt-get install -y libgl1 libglib2.0-0
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      # Importing the scorer must not drag in a model runtime: the pure-function
+      # core is meant to be usable, and auditable, on its own.
+      - name: triage.py imports standalone
+        shell: python
+        run: |
+          import sys
+          import argus.triage  # noqa: F401
+          heavy = {"onnxruntime", "cv2", "onnx"} & set(sys.modules)
+          assert not heavy, f"argus.triage pulled in {heavy}"
+          print("ok: the scorer imports with no model runtime")

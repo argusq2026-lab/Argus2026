@@ -1,0 +1,16 @@
+{
+ "pose::pose_detector.bin": {
+  "profile": "j56wvj8ng"
+ },
+ "pose::pose_landmark_detector.bin": {
+  "profile": "jp3683zmp"
+ },
+ "yolox": {
+  "compile": "jgo8m0l1p",
+  "profile": "jpv74olzp"
+ },
+ "quicksrnetmedium": {
+  "compile": "jpey21785",
+  "profile": "jg9d81zm5"
+ }
+}

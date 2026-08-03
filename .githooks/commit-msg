@@ -1,0 +1,50 @@
+#!/bin/sh
+# commit-msg hook — reject AI/LLM authorship attribution in commit messages.
+#
+# Rationale: commit messages should describe the change, not credit the tool
+# that helped write it. This blocks the "Co-Authored-By: <model>" trailers and
+# "Generated with ..." footers that AI coding assistants append by default.
+#
+# It targets ATTRIBUTION lines only, so ordinary prose that happens to mention
+# a product (e.g. "list codex alongside Claude Code as supported MCP clients")
+# is NOT blocked.
+#
+# Enable per-clone with:   git config core.hooksPath .githooks
+# (The QUAD-Client install/setup wires this automatically.)
+
+msg_file="$1"
+
+# Drop scissors/comment lines that git strips anyway before scanning.
+scan=$(grep -v '^#' "$msg_file")
+
+fail() {
+	echo "----------------------------------------------------------------------" >&2
+	echo "COMMIT REJECTED: AI/LLM authorship attribution found in commit message." >&2
+	echo "" >&2
+	echo "  Offending line(s):" >&2
+	echo "$1" | sed 's/^/    /' >&2
+	echo "" >&2
+	echo "  Commit messages describe the change, not the tool that wrote it." >&2
+	echo "  Remove the trailer/footer and commit again." >&2
+	echo "----------------------------------------------------------------------" >&2
+	exit 1
+}
+
+# 1) "Co-Authored-By:" trailer naming an LLM or AI vendor/tool.
+hits=$(printf '%s\n' "$scan" | grep -iE \
+	'^[[:space:]]*Co-?authored-?by:.*(claude|opus|sonnet|haiku|fable|anthropic|chatgpt|gpt-[0-9o]|openai|copilot|gemini|codex|llama|mistral|\bllm\b)')
+[ -n "$hits" ] && fail "$hits"
+
+# 2) noreply@anthropic.com (or other assistant no-reply) used as co-author.
+hits=$(printf '%s\n' "$scan" | grep -iE 'noreply@anthropic\.com|<[^>]*@openai\.com>')
+[ -n "$hits" ] && fail "$hits"
+
+# 3) "Generated with <AI tool>" footer, incl. the robot-emoji variant.
+hits=$(printf '%s\n' "$scan" | grep -iE \
+	'(generated (with|by)|written by|authored by|created (with|by)).*(claude|anthropic|chatgpt|openai|copilot|gemini|codex|ai assistant)')
+[ -n "$hits" ] && fail "$hits"
+
+hits=$(printf '%s\n' "$scan" | grep -F '🤖')
+[ -n "$hits" ] && fail "$hits"
+
+exit 0

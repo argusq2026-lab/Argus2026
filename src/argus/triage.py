@@ -1,0 +1,320 @@
+"""Deterministic triage scorer for Argus.
+
+Pure functions of numeric pose/detection/VLM-flag history — no model calls, no
+randomness, no wall-clock reads other than the caller-supplied timestamp. The
+same input history always produces the same rank, independent of anything
+non-deterministic upstream (a VLM's free-form decoding included), so the "who
+needs a human instructor" ranking is reproducible and auditable.
+
+Privacy by wiring: nothing in this module ever holds a frame, a crop, or a raw
+caption string — only numeric keypoints, boxes, and a fixed-vocabulary anomaly
+score. That is what makes :class:`TriageRecord` safe to cross the alert
+boundary in :mod:`argus.alerts`.
+
+The algorithm is carried over verbatim from the Argus prototype; the only
+change is that the weights, thresholds, vocabulary, and history length now
+arrive as a :class:`~argus.config.ScoringConfig` argument instead of being
+module constants, so tuning is a config edit rather than a code edit.
+"""
+
+from __future__ import annotations
+
+import math
+from collections import deque
+from dataclasses import dataclass, field
+from typing import Iterable
+
+from argus.config import ScoringConfig
+
+# Pose keypoint indices this module cares about, in COCO-17 order. Only
+# indices are ever used -- never pixel data. The pose stage is responsible for
+# delivering COCO-17 regardless of what layout the underlying model emits
+# (see argus.vision.keypoints).
+KP_NOSE = 0
+KP_LEFT_SHOULDER = 5
+KP_RIGHT_SHOULDER = 6
+KP_LEFT_WRIST = 9
+KP_RIGHT_WRIST = 10
+KP_LEFT_HIP = 11
+KP_RIGHT_HIP = 12
+HAND_KEYPOINTS = (KP_LEFT_WRIST, KP_RIGHT_WRIST)
+NUM_KEYPOINTS = 17
+
+REASON_FALL = "possible_fall"
+REASON_STILLNESS = "prolonged_stillness"
+REASON_OCCLUSION = "hands_face_occluded"
+REASON_OFF_TASK = "off_task_orientation"
+REASON_VLM = "vlm_anomaly"
+
+
+@dataclass
+class FrameObservation:
+    """One frame's numeric observation for one tracked trainee. No pixels."""
+
+    ts: float
+    bbox_xyxy: tuple[float, float, float, float]
+    keypoints_xy: list[tuple[float, float]]  # len 17, COCO order
+    keypoints_conf: list[float]  # len 17
+    vlm_caption: str | None = None  # only present on VLM-sampled frames
+
+
+@dataclass
+class TrackState:
+    """Rolling per-trainee history. Owned by the caller, one per track id."""
+
+    history_len: int = 30
+    history: deque[FrameObservation] = field(default_factory=deque)
+    last_vlm_anomaly_score: float = 0.0
+
+    def __post_init__(self) -> None:
+        # deque(maxlen=...) cannot be expressed as a field default that depends
+        # on another field, so bind it here.
+        if self.history.maxlen != self.history_len:
+            self.history = deque(self.history, maxlen=self.history_len)
+
+    def push(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
+        self.history.append(obs)
+        if obs.vlm_caption is not None:
+            self.last_vlm_anomaly_score = score_vlm_caption(obs.vlm_caption, cfg)
+
+    def apply_caption(self, caption: str, cfg: ScoringConfig) -> float:
+        """Score a caption into this track and return the numeric result.
+
+        Used by the pipeline, where the VLM is sampled *after* the frame's
+        observation has been pushed — the prefilter gate needs the trainee's
+        current triage score to decide whether to sample at all. The caption
+        string is scored and dropped; it is never stored on the track, so a
+        caption cannot reach a sink even by accident.
+        """
+        self.last_vlm_anomaly_score = score_vlm_caption(caption, cfg)
+        return self.last_vlm_anomaly_score
+
+
+@dataclass(frozen=True)
+class TriageRecord:
+    """Redacted output — the ONLY thing allowed to cross the alert boundary.
+
+    Frozen so a sink cannot mutate a record another sink has already seen, and
+    so the four fields below are the complete, closed set of what leaves the
+    perception layer. There is deliberately no field that could carry a frame,
+    a crop, a caption, or a bounding box.
+    """
+
+    trainee_id: str
+    score: float
+    reason_codes: tuple[str, ...]
+    ts: float
+
+
+def _centroid(bbox: tuple[float, float, float, float]) -> tuple[float, float]:
+    x0, y0, x1, y1 = bbox
+    return (x0 + x1) / 2.0, (y0 + y1) / 2.0
+
+
+def _bbox_aspect(bbox: tuple[float, float, float, float]) -> float:
+    x0, y0, x1, y1 = bbox
+    h = max(y1 - y0, 1e-6)
+    w = max(x1 - x0, 1e-6)
+    return w / h
+
+
+def score_fall(
+    history: Iterable[FrameObservation], cfg: ScoringConfig
+) -> tuple[float, bool]:
+    """Sudden vertical drop of the hip/shoulder centroid + bbox aspect flip.
+
+    Returns (score in [0,1], triggered).
+    """
+    obs_list = list(history)
+    if len(obs_list) < 2:
+        return 0.0, False
+
+    recent = obs_list[-6:]  # ~0.4 s window at 15 FPS
+    first, last = recent[0], recent[-1]
+
+    def torso_y(obs: FrameObservation) -> float | None:
+        idxs = (KP_LEFT_SHOULDER, KP_RIGHT_SHOULDER, KP_LEFT_HIP, KP_RIGHT_HIP)
+        ys = [
+            obs.keypoints_xy[i][1]
+            for i in idxs
+            if obs.keypoints_conf[i] >= cfg.keypoint_conf_threshold
+        ]
+        return sum(ys) / len(ys) if ys else None
+
+    y0, y1 = torso_y(first), torso_y(last)
+    bbox_h_first = max(first.bbox_xyxy[3] - first.bbox_xyxy[1], 1e-6)
+
+    vertical_drop_ratio = 0.0
+    if y0 is not None and y1 is not None:
+        vertical_drop_ratio = max(0.0, (y1 - y0) / bbox_h_first)
+
+    aspect_flip = _bbox_aspect(last.bbox_xyxy) > 1.3  # wider than tall
+
+    score = min(1.0, vertical_drop_ratio / 0.6)  # a 60%+ body-height drop -> 1.0
+    if aspect_flip:
+        score = min(1.0, score + 0.3)
+
+    return score, score >= 0.6
+
+
+def score_stillness(
+    history: Iterable[FrameObservation], cfg: ScoringConfig
+) -> tuple[float, bool]:
+    """Fraction of the history window with near-zero centroid displacement."""
+    obs_list = list(history)
+    if len(obs_list) < 2:
+        return 0.0, False
+
+    still_frames = 0
+    for prev, cur in zip(obs_list, obs_list[1:]):
+        cx0, cy0 = _centroid(prev.bbox_xyxy)
+        cx1, cy1 = _centroid(cur.bbox_xyxy)
+        disp = ((cx1 - cx0) ** 2 + (cy1 - cy0) ** 2) ** 0.5
+        if disp < cfg.stillness_motion_threshold_px:
+            still_frames += 1
+
+    fraction = still_frames / max(len(obs_list) - 1, 1)
+    triggered = fraction >= 0.9 and len(obs_list) >= cfg.history_len
+    return fraction, triggered
+
+
+def score_occlusion(
+    history: Iterable[FrameObservation], cfg: ScoringConfig
+) -> tuple[float, bool]:
+    """Fraction of the window where both hands *and* face are low-confidence."""
+    obs_list = list(history)
+    if not obs_list:
+        return 0.0, False
+
+    occluded_frames = 0
+    for obs in obs_list:
+        hands_visible = any(
+            obs.keypoints_conf[i] >= cfg.keypoint_conf_threshold for i in HAND_KEYPOINTS
+        )
+        face_visible = obs.keypoints_conf[KP_NOSE] >= cfg.keypoint_conf_threshold
+        if not hands_visible and not face_visible:
+            occluded_frames += 1
+
+    fraction = occluded_frames / len(obs_list)
+    triggered = fraction >= 0.8 and len(obs_list) >= cfg.history_len
+    return fraction, triggered
+
+
+def score_off_task(
+    history: Iterable[FrameObservation],
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> tuple[float, bool]:
+    """Shoulder-line orientation deviation from the expected station-facing angle.
+
+    `reference_angle_deg` overrides the config default so a camera whose
+    stations face a different way can be corrected per-source.
+    """
+    reference = (
+        cfg.off_task_reference_angle_deg
+        if reference_angle_deg is None
+        else reference_angle_deg
+    )
+    obs_list = list(history)
+
+    deviations = []
+    for obs in obs_list:
+        ls = obs.keypoints_xy[KP_LEFT_SHOULDER]
+        rs = obs.keypoints_xy[KP_RIGHT_SHOULDER]
+        lc = obs.keypoints_conf[KP_LEFT_SHOULDER]
+        rc = obs.keypoints_conf[KP_RIGHT_SHOULDER]
+        if lc < cfg.keypoint_conf_threshold or rc < cfg.keypoint_conf_threshold:
+            continue
+        angle = math.degrees(math.atan2(rs[1] - ls[1], rs[0] - ls[0]))
+        deviations.append(abs(((angle - reference + 180) % 360) - 180))
+
+    if not deviations:
+        return 0.0, False
+
+    mean_dev = sum(deviations) / len(deviations)
+    score = min(1.0, mean_dev / 90.0)
+    triggered = score >= 0.5 and len(deviations) >= cfg.history_len // 2
+    return score, triggered
+
+
+def score_vlm_caption(caption: str, cfg: ScoringConfig) -> float:
+    """Deterministic substring match against the fixed anomaly vocabulary.
+
+    The highest-scoring vocabulary hit wins. The VLM's exact phrasing never
+    otherwise influences the score, which keeps the rank reproducible even
+    though the VLM's own decoding is not.
+    """
+    lowered = caption.lower()
+    hits = [w for phrase, w in cfg.anomaly_vocab.items() if phrase in lowered]
+    return max(hits) if hits else 0.0
+
+
+def compute_triage(
+    trainee_id: str,
+    track: TrackState,
+    ts: float,
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> TriageRecord:
+    """Combine the deterministic features into one ranked, explainable record."""
+    fall, fall_hit = score_fall(track.history, cfg)
+    still, still_hit = score_stillness(track.history, cfg)
+    occl, occl_hit = score_occlusion(track.history, cfg)
+    off_task, off_task_hit = score_off_task(track.history, cfg, reference_angle_deg)
+    vlm = track.last_vlm_anomaly_score
+
+    w = cfg.weights
+    score = (
+        w["fall"] * fall
+        + w["stillness"] * still
+        + w["occlusion"] * occl
+        + w["off_task"] * off_task
+        + w["vlm_anomaly"] * vlm
+    )
+
+    reasons: list[str] = []
+    if fall_hit:
+        reasons.append(REASON_FALL)
+    if still_hit:
+        reasons.append(REASON_STILLNESS)
+    if occl_hit:
+        reasons.append(REASON_OCCLUSION)
+    if off_task_hit:
+        reasons.append(REASON_OFF_TASK)
+    if vlm >= 0.5:
+        reasons.append(REASON_VLM)
+
+    return TriageRecord(
+        trainee_id=trainee_id,
+        score=round(score, 4),
+        reason_codes=tuple(reasons),
+        ts=ts,
+    )
+
+
+def rank_trainees(
+    tracks: dict[str, TrackState],
+    ts: float,
+    cfg: ScoringConfig,
+    top_k: int | None = None,
+    reference_angles: dict[str, float] | None = None,
+) -> list[TriageRecord]:
+    """Deterministic descending rank; ties broken by trainee_id for stability.
+
+    `reference_angles` maps trainee_id -> the station-facing angle of the
+    camera that trainee was seen on, so a merged multi-camera rank still
+    scores off-task orientation per-camera.
+    """
+    angles = reference_angles or {}
+    records = [
+        compute_triage(tid, track, ts, cfg, angles.get(tid))
+        for tid, track in tracks.items()
+    ]
+    records.sort(key=lambda r: (-r.score, r.trainee_id))
+    return records[:top_k] if top_k is not None else records
+
+
+def needs_instructor(
+    records: list[TriageRecord], cfg: ScoringConfig
+) -> list[TriageRecord]:
+    return [r for r in records if r.score >= cfg.alert_threshold]

@@ -1,0 +1,33 @@
+# Model artifacts are large and are provisioned, never committed.
+# `argus bootstrap` (scripts/fetch_models.py) reproduces this tree from the
+# AI Hub job IDs recorded in models/argus_jobs.json.
+models/**
+!models/argus_jobs.json
+!models/argus_cu_jobs.json
+!models/argus_summary.json
+!models/argus_profiles_raw.json
+!models/README.md
+
+# Venvs -- both halves of the two-venv split (see run.ps1).
+.venv/
+.venv-npu/
+
+# QNN HTP context cache: regenerated on first run, machine-specific.
+.qnn_cache/
+*.onnxruntime_profile_*.json
+
+# Runtime output
+out/
+*.jsonl
+*.mp4
+!demo/*.mp4
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+
+.env

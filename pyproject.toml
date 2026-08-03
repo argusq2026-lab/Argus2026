@@ -1,0 +1,71 @@
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[project]
+name = "argus"
+version = "0.1.0"
+description = "Argus — many eyes, one mind. Deterministic, explainable multi-camera trainee triage on the Snapdragon X Elite Hexagon NPU."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "QUAD Contributors" }]
+keywords = ["computer-vision", "npu", "qnn", "snapdragon", "hexagon", "triage", "pose"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+]
+
+# The core install is deliberately small. Everything needed for capture,
+# tracking, triage, and all output sinks -- plus CPU ONNX inference, which is
+# the reference implementation the NPU path is checked against.
+#
+# NOT listed: onnxruntime-qnn / onnxruntime-genai. Those are win-arm64-only
+# wheels and cannot coexist with opencv-python in one venv (opencv-python has
+# no win-arm64 wheel at all). See run.ps1's two-venv split.
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.9",
+    "onnx>=1.16",
+    "onnxruntime>=1.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-timeout>=2.1",
+]
+# Model provisioning talks to AI Hub. Kept optional so a clone that already
+# has models/ populated never needs a network client installed.
+provision = [
+    "qai-hub>=0.20",
+    "requests>=2.31",
+]
+
+[project.scripts]
+argus = "argus.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/CBN-AI-TEAM/Argus"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/argus"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"configs/argus.default.toml" = "argus/_data/argus.default.toml"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+timeout = 120
+markers = [
+    "npu: requires a real Hexagon NPU + onnxruntime-qnn (skipped elsewhere)",
+    "artifacts: requires models/ to be provisioned (skipped when absent)",
+]
+filterwarnings = ["error::DeprecationWarning:argus.*"]

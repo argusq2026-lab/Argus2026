@@ -1,0 +1,5830 @@
+{
+ "pose::pose_detector.bin": {
+  "execution_summary": {
+   "estimated_inference_time": 421,
+   "estimated_inference_peak_memory": 14458880,
+   "first_load_time": 292777,
+   "first_load_peak_memory": 14929920,
+   "warm_load_time": 245567,
+   "warm_load_peak_memory": 14561280,
+   "compile_time": 0,
+   "compile_peak_memory": 0,
+   "compile_memory_increase_range": [
+    0,
+    0
+   ],
+   "compile_memory_peak_range": [
+    0,
+    0
+   ],
+   "first_load_memory_increase_range": [
+    10117120,
+    10117120
+   ],
+   "first_load_memory_peak_range": [
+    10117120,
+    10117120
+   ],
+   "warm_load_memory_increase_range": [
+    9691136,
+    9691136
+   ],
+   "warm_load_memory_peak_range": [
+    9695232,
+    9695232
+   ],
+   "inference_memory_increase_range": [
+    57344,
+    57344
+   ],
+   "inference_memory_peak_range": [
+    483328,
+    483328
+   ],
+   "all_compile_times": [],
+   "all_first_load_times": [
+    292777
+   ],
+   "all_warm_load_times": [
+    245567
+   ],
+   "all_inference_times": [
+    1451,
+    452,
+    438,
+    432,
+    440,
+    427,
+    448,
+    492,
+    465,
+    437,
+    423,
+    427,
+    424,
+    435,
+    433,
+    428,
+    429,
+    426,
+    433,
+    424,
+    423,
+    425,
+    425,
+    423,
+    424,
+    427,
+    423,
+    425,
+    426,
+    458,
+    462,
+    427,
+    428,
+    445,
+    423,
+    426,
+    425,
+    425,
+    450,
+    479,
+    459,
+    447,
+    427,
+    427,
+    425,
+    421,
+    435,
+    423,
+    427,
+    428,
+    532,
+    422,
+    423,
+    428,
+    427,
+    456,
+    461,
+    468,
+    463,
+    426,
+    422,
+    427,
+    463,
+    469,
+    431,
+    429,
+    440,
+    426,
+    425,
+    445,
+    421,
+    441,
+    437,
+    425,
+    480,
+    477,
+    429,
+    430,
+    432,
+    431,
+    586,
+    550,
+    446,
+    439,
+    430,
+    437,
+    457,
+    459,
+    446,
+    423,
+    427,
+    478,
+    423,
+    435,
+    430,
+    425,
+    430,
+    425,
+    471,
+    452
+   ]
+  },
+  "execution_detail": [
+   {
+    "name": "Input",
+    "type": "Input",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/0/Conv",
+    "type": "/detector/backbone1/0/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/1/Relu",
+    "type": "/detector/backbone1/1/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 145829
+   },
+   {
+    "name": "node_Conv_0",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 44099
+   },
+   {
+    "name": "/detector/backbone1/2/convs/1/Conv",
+    "type": "/detector/backbone1/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 15867
+   },
+   {
+    "name": "/detector/backbone1/2/Add",
+    "type": "/detector/backbone1/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/2/act/Relu",
+    "type": "/detector/backbone1/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 110641
+   },
+   {
+    "name": "node_Conv_1",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41239
+   },
+   {
+    "name": "/detector/backbone1/3/convs/1/Conv",
+    "type": "/detector/backbone1/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13880
+   },
+   {
+    "name": "/detector/backbone1/3/Add",
+    "type": "/detector/backbone1/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/3/act/Relu",
+    "type": "/detector/backbone1/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 105960
+   },
+   {
+    "name": "node_Conv_2",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 39899
+   },
+   {
+    "name": "/detector/backbone1/4/convs/1/Conv",
+    "type": "/detector/backbone1/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13659
+   },
+   {
+    "name": "/detector/backbone1/4/Add",
+    "type": "/detector/backbone1/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/4/act/Relu",
+    "type": "/detector/backbone1/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 102915
+   },
+   {
+    "name": "/detector/backbone1/5/max_pool/MaxPool",
+    "type": "/detector/backbone1/5/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41160
+   },
+   {
+    "name": "node_Conv_3",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 244720
+   },
+   {
+    "name": "/detector/backbone1/5/skip_proj/Conv",
+    "type": "/detector/backbone1/5/skip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5316
+   },
+   {
+    "name": "/detector/backbone1/5/convs/1/Conv",
+    "type": "/detector/backbone1/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5430
+   },
+   {
+    "name": "/detector/backbone1/5/Add",
+    "type": "/detector/backbone1/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/5/act/Relu",
+    "type": "/detector/backbone1/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25737
+   },
+   {
+    "name": "node_Conv_4",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12468
+   },
+   {
+    "name": "/detector/backbone1/6/convs/1/Conv",
+    "type": "/detector/backbone1/6/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4625
+   },
+   {
+    "name": "/detector/backbone1/6/Add",
+    "type": "/detector/backbone1/6/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/6/act/Relu",
+    "type": "/detector/backbone1/6/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 28530
+   },
+   {
+    "name": "node_Conv_5",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12802
+   },
+   {
+    "name": "/detector/backbone1/7/convs/1/Conv",
+    "type": "/detector/backbone1/7/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4242
+   },
+   {
+    "name": "/detector/backbone1/7/Add",
+    "type": "/detector/backbone1/7/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/7/act/Relu",
+    "type": "/detector/backbone1/7/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 27672
+   },
+   {
+    "name": "node_Conv_6",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12530
+   },
+   {
+    "name": "/detector/backbone1/8/convs/1/Conv",
+    "type": "/detector/backbone1/8/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4928
+   },
+   {
+    "name": "/detector/backbone1/8/Add",
+    "type": "/detector/backbone1/8/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/8/act/Relu",
+    "type": "/detector/backbone1/8/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 27777
+   },
+   {
+    "name": "/detector/backbone1/9/max_pool/MaxPool",
+    "type": "/detector/backbone1/9/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9323
+   },
+   {
+    "name": "node_Conv_7",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 61008
+   },
+   {
+    "name": "/detector/backbone1/9/skip_proj/Conv",
+    "type": "/detector/backbone1/9/skip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2997
+   },
+   {
+    "name": "/detector/backbone1/9/convs/1/Conv",
+    "type": "/detector/backbone1/9/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2539
+   },
+   {
+    "name": "/detector/backbone1/9/Add",
+    "type": "/detector/backbone1/9/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/9/act/Relu",
+    "type": "/detector/backbone1/9/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10360
+   },
+   {
+    "name": "node_Conv_8",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4961
+   },
+   {
+    "name": "/detector/backbone1/10/convs/1/Conv",
+    "type": "/detector/backbone1/10/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2434
+   },
+   {
+    "name": "/detector/backbone1/10/Add",
+    "type": "/detector/backbone1/10/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/10/act/Relu",
+    "type": "/detector/backbone1/10/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8455
+   },
+   {
+    "name": "node_Conv_9",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4706
+   },
+   {
+    "name": "/detector/backbone1/11/convs/1/Conv",
+    "type": "/detector/backbone1/11/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2480
+   },
+   {
+    "name": "/detector/backbone1/11/Add",
+    "type": "/detector/backbone1/11/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/11/act/Relu",
+    "type": "/detector/backbone1/11/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8225
+   },
+   {
+    "name": "node_Conv_10",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4969
+   },
+   {
+    "name": "/detector/backbone1/12/convs/1/Conv",
+    "type": "/detector/backbone1/12/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2712
+   },
+   {
+    "name": "/detector/backbone1/12/Add",
+    "type": "/detector/backbone1/12/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/12/act/Relu",
+    "type": "/detector/backbone1/12/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8264
+   },
+   {
+    "name": "node_Conv_11",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5139
+   },
+   {
+    "name": "/detector/backbone1/13/convs/1/Conv",
+    "type": "/detector/backbone1/13/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2726
+   },
+   {
+    "name": "/detector/backbone1/13/Add",
+    "type": "/detector/backbone1/13/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/13/act/Relu",
+    "type": "/detector/backbone1/13/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8156
+   },
+   {
+    "name": "node_Conv_12",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4359
+   },
+   {
+    "name": "/detector/backbone1/14/convs/1/Conv",
+    "type": "/detector/backbone1/14/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2394
+   },
+   {
+    "name": "/detector/backbone1/14/Add",
+    "type": "/detector/backbone1/14/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/14/act/Relu",
+    "type": "/detector/backbone1/14/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7957
+   },
+   {
+    "name": "node_Conv_13",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4383
+   },
+   {
+    "name": "/detector/backbone1/15/convs/1/Conv",
+    "type": "/detector/backbone1/15/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2363
+   },
+   {
+    "name": "/detector/backbone1/15/Add",
+    "type": "/detector/backbone1/15/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/15/act/Relu",
+    "type": "/detector/backbone1/15/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8102
+   },
+   {
+    "name": "/detector/backbone1/16/max_pool/MaxPool",
+    "type": "/detector/backbone1/16/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3074
+   },
+   {
+    "name": "node_Conv_14",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 23732
+   },
+   {
+    "name": "/detector/backbone1/16/skip_proj/Conv",
+    "type": "/detector/backbone1/16/skip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1062
+   },
+   {
+    "name": "/detector/backbone1/16/convs/1/Conv",
+    "type": "/detector/backbone1/16/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 886
+   },
+   {
+    "name": "/detector/backbone1/16/Add",
+    "type": "/detector/backbone1/16/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/16/act/Relu",
+    "type": "/detector/backbone1/16/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2072
+   },
+   {
+    "name": "node_Conv_15",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1389
+   },
+   {
+    "name": "/detector/backbone1/17/convs/1/Conv",
+    "type": "/detector/backbone1/17/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 929
+   },
+   {
+    "name": "/detector/backbone1/17/Add",
+    "type": "/detector/backbone1/17/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/17/act/Relu",
+    "type": "/detector/backbone1/17/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2072
+   },
+   {
+    "name": "node_Conv_16",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1178
+   },
+   {
+    "name": "/detector/backbone1/18/convs/1/Conv",
+    "type": "/detector/backbone1/18/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 924
+   },
+   {
+    "name": "/detector/backbone1/18/Add",
+    "type": "/detector/backbone1/18/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/18/act/Relu",
+    "type": "/detector/backbone1/18/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2099
+   },
+   {
+    "name": "node_Conv_17",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1190
+   },
+   {
+    "name": "/detector/backbone1/19/convs/1/Conv",
+    "type": "/detector/backbone1/19/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 850
+   },
+   {
+    "name": "/detector/backbone1/19/Add",
+    "type": "/detector/backbone1/19/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/19/act/Relu",
+    "type": "/detector/backbone1/19/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2075
+   },
+   {
+    "name": "node_Conv_18",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1093
+   },
+   {
+    "name": "/detector/backbone1/20/convs/1/Conv",
+    "type": "/detector/backbone1/20/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 770
+   },
+   {
+    "name": "/detector/backbone1/20/Add",
+    "type": "/detector/backbone1/20/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/20/act/Relu",
+    "type": "/detector/backbone1/20/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2074
+   },
+   {
+    "name": "node_Conv_19",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1061
+   },
+   {
+    "name": "/detector/backbone1/21/convs/1/Conv",
+    "type": "/detector/backbone1/21/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 760
+   },
+   {
+    "name": "/detector/backbone1/21/Add",
+    "type": "/detector/backbone1/21/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/21/act/Relu",
+    "type": "/detector/backbone1/21/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2085
+   },
+   {
+    "name": "node_Conv_20",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1089
+   },
+   {
+    "name": "/detector/backbone1/22/convs/1/Conv",
+    "type": "/detector/backbone1/22/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 981
+   },
+   {
+    "name": "/detector/backbone1/22/Add",
+    "type": "/detector/backbone1/22/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/22/act/Relu",
+    "type": "/detector/backbone1/22/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2120
+   },
+   {
+    "name": "node_Conv_21",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1333
+   },
+   {
+    "name": "/detector/backbone1/23/convs/1/Conv",
+    "type": "/detector/backbone1/23/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 867
+   },
+   {
+    "name": "/detector/backbone1/23/Add",
+    "type": "/detector/backbone1/23/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/23/act/Relu",
+    "type": "/detector/backbone1/23/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2061
+   },
+   {
+    "name": "/detector/backbone2/0/max_pool/MaxPool",
+    "type": "/detector/backbone2/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2025
+   },
+   {
+    "name": "node_Conv_22",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10485
+   },
+   {
+    "name": "/detector/classifier_8/Conv",
+    "type": "/detector/classifier",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1614
+   },
+   {
+    "name": "/detector/regressor_8/Conv",
+    "type": "/detector/regressor",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 724
+   },
+   {
+    "name": "/detector/backbone2/0/skip_proj/Conv",
+    "type": "/detector/backbone2/0/skip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 620
+   },
+   {
+    "name": "/detector/backbone2/0/convs/1/Conv",
+    "type": "/detector/backbone2/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 579
+   },
+   {
+    "name": "/detector/backbone2/0/Add",
+    "type": "/detector/backbone2/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/Reshape",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3601
+   },
+   {
+    "name": "/detector/Reshape_2",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3358
+   },
+   {
+    "name": "/detector/backbone2/0/act/Relu",
+    "type": "/detector/backbone2/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1500
+   },
+   {
+    "name": "node_Conv_23",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 782
+   },
+   {
+    "name": "/detector/backbone2/1/convs/1/Conv",
+    "type": "/detector/backbone2/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 603
+   },
+   {
+    "name": "/detector/backbone2/1/Add",
+    "type": "/detector/backbone2/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/1/act/Relu",
+    "type": "/detector/backbone2/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1515
+   },
+   {
+    "name": "node_Conv_24",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 818
+   },
+   {
+    "name": "/detector/backbone2/2/convs/1/Conv",
+    "type": "/detector/backbone2/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 720
+   },
+   {
+    "name": "/detector/backbone2/2/Add",
+    "type": "/detector/backbone2/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/2/act/Relu",
+    "type": "/detector/backbone2/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1488
+   },
+   {
+    "name": "node_Conv_25",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 866
+   },
+   {
+    "name": "/detector/backbone2/3/convs/1/Conv",
+    "type": "/detector/backbone2/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 666
+   },
+   {
+    "name": "/detector/backbone2/3/Add",
+    "type": "/detector/backbone2/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/3/act/Relu",
+    "type": "/detector/backbone2/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1505
+   },
+   {
+    "name": "node_Conv_26",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 826
+   },
+   {
+    "name": "/detector/backbone2/4/convs/1/Conv",
+    "type": "/detector/backbone2/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 665
+   },
+   {
+    "name": "/detector/backbone2/4/Add",
+    "type": "/detector/backbone2/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/4/act/Relu",
+    "type": "/detector/backbone2/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1482
+   },
+   {
+    "name": "node_Conv_27",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 881
+   },
+   {
+    "name": "/detector/backbone2/5/convs/1/Conv",
+    "type": "/detector/backbone2/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 594
+   },
+   {
+    "name": "/detector/backbone2/5/Add",
+    "type": "/detector/backbone2/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/5/act/Relu",
+    "type": "/detector/backbone2/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1536
+   },
+   {
+    "name": "node_Conv_28",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 872
+   },
+   {
+    "name": "/detector/backbone2/6/convs/1/Conv",
+    "type": "/detector/backbone2/6/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 670
+   },
+   {
+    "name": "/detector/backbone2/6/Add",
+    "type": "/detector/backbone2/6/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/6/act/Relu",
+    "type": "/detector/backbone2/6/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1502
+   },
+   {
+    "name": "/detector/classifier_16/Conv",
+    "type": "/detector/classifier",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 531
+   },
+   {
+    "name": "/detector/regressor_16/Conv",
+    "type": "/detector/regressor",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 641
+   },
+   {
+    "name": "/detector/Reshape_1",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 709
+   },
+   {
+    "name": "/detector/Reshape_3",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2876
+   },
+   {
+    "name": "Output",
+    "type": "Output",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5763
+   }
+  ]
+ },
+ "pose::pose_landmark_detector.bin": {
+  "execution_summary": {
+   "estimated_inference_time": 425,
+   "estimated_inference_peak_memory": 14454784,
+   "first_load_time": 320951,
+   "first_load_peak_memory": 14901248,
+   "warm_load_time": 243085,
+   "warm_load_peak_memory": 14569472,
+   "compile_time": 0,
+   "compile_peak_memory": 0,
+   "compile_memory_increase_range": [
+    0,
+    0
+   ],
+   "compile_memory_peak_range": [
+    0,
+    0
+   ],
+   "first_load_memory_increase_range": [
+    10043392,
+    10043392
+   ],
+   "first_load_memory_peak_range": [
+    10043392,
+    10043392
+   ],
+   "warm_load_memory_increase_range": [
+    9682944,
+    9682944
+   ],
+   "warm_load_memory_peak_range": [
+    9682944,
+    9682944
+   ],
+   "inference_memory_increase_range": [
+    212992,
+    212992
+   ],
+   "inference_memory_peak_range": [
+    380928,
+    380928
+   ],
+   "all_compile_times": [],
+   "all_first_load_times": [
+    320951
+   ],
+   "all_warm_load_times": [
+    243085
+   ],
+   "all_inference_times": [
+    1866,
+    499,
+    528,
+    449,
+    440,
+    438,
+    490,
+    469,
+    468,
+    493,
+    436,
+    437,
+    432,
+    436,
+    434,
+    438,
+    453,
+    452,
+    436,
+    437,
+    433,
+    469,
+    470,
+    430,
+    434,
+    428,
+    437,
+    454,
+    444,
+    491,
+    494,
+    482,
+    489,
+    474,
+    464,
+    434,
+    438,
+    434,
+    441,
+    437,
+    432,
+    427,
+    437,
+    432,
+    436,
+    435,
+    453,
+    450,
+    468,
+    434,
+    430,
+    433,
+    442,
+    472,
+    487,
+    490,
+    447,
+    457,
+    438,
+    445,
+    446,
+    437,
+    464,
+    464,
+    824,
+    846,
+    909,
+    435,
+    430,
+    434,
+    437,
+    483,
+    504,
+    516,
+    509,
+    498,
+    515,
+    485,
+    488,
+    477,
+    440,
+    433,
+    430,
+    455,
+    478,
+    478,
+    481,
+    458,
+    435,
+    434,
+    427,
+    430,
+    431,
+    427,
+    435,
+    429,
+    427,
+    425,
+    451,
+    428
+   ]
+  },
+  "execution_detail": [
+   {
+    "name": "Input",
+    "type": "Input",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/0/Conv",
+    "type": "/detector/backbone1/0/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/1/Relu",
+    "type": "/detector/backbone1/1/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 174006
+   },
+   {
+    "name": "node_Conv_0",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13896
+   },
+   {
+    "name": "/detector/backbone1/2/convs/1/Conv",
+    "type": "/detector/backbone1/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6234
+   },
+   {
+    "name": "/detector/backbone1/2/Add",
+    "type": "/detector/backbone1/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/2/act/Relu",
+    "type": "/detector/backbone1/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 40928
+   },
+   {
+    "name": "node_Conv_1",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9587
+   },
+   {
+    "name": "/detector/backbone1/3/convs/1/Conv",
+    "type": "/detector/backbone1/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5237
+   },
+   {
+    "name": "/detector/backbone1/3/Add",
+    "type": "/detector/backbone1/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone1/3/act/Relu",
+    "type": "/detector/backbone1/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41218
+   },
+   {
+    "name": "/detector/backbone2/0/max_pool/MaxPool",
+    "type": "/detector/backbone2/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 32722
+   },
+   {
+    "name": "node_Conv_2",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 50683
+   },
+   {
+    "name": "/detector/backbone2/0/Pad_1",
+    "type": "/detector/backbone2/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/0/convs/1/Conv",
+    "type": "/detector/backbone2/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4039
+   },
+   {
+    "name": "/detector/backbone2/0/Add",
+    "type": "/detector/backbone2/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/0/act/Relu",
+    "type": "/detector/backbone2/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 23457
+   },
+   {
+    "name": "node_Conv_3",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5212
+   },
+   {
+    "name": "/detector/backbone2/1/convs/1/Conv",
+    "type": "/detector/backbone2/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4501
+   },
+   {
+    "name": "/detector/backbone2/1/Add",
+    "type": "/detector/backbone2/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/1/act/Relu",
+    "type": "/detector/backbone2/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 19742
+   },
+   {
+    "name": "node_Conv_4",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4974
+   },
+   {
+    "name": "/detector/backbone2/2/convs/1/Conv",
+    "type": "/detector/backbone2/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3379
+   },
+   {
+    "name": "/detector/backbone2/2/Add",
+    "type": "/detector/backbone2/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/2/act/Relu",
+    "type": "/detector/backbone2/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 21329
+   },
+   {
+    "name": "node_Conv_5",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5380
+   },
+   {
+    "name": "/detector/backbone2/3/convs/1/Conv",
+    "type": "/detector/backbone2/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3761
+   },
+   {
+    "name": "/detector/backbone2/3/Add",
+    "type": "/detector/backbone2/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone2/3/act/Relu",
+    "type": "/detector/backbone2/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 20611
+   },
+   {
+    "name": "/detector/backbone3/0/max_pool/MaxPool",
+    "type": "/detector/backbone3/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8030
+   },
+   {
+    "name": "node_Conv_6",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 24527
+   },
+   {
+    "name": "node_Conv_27",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5590
+   },
+   {
+    "name": "/detector/backbone3/0/Pad_1",
+    "type": "/detector/backbone3/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/0/convs/1/Conv",
+    "type": "/detector/backbone3/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2095
+   },
+   {
+    "name": "/detector/up4/1/Conv",
+    "type": "/detector/up4/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up4/2/Relu",
+    "type": "/detector/up4/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4106
+   },
+   {
+    "name": "/detector/backbone3/0/Add",
+    "type": "/detector/backbone3/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/0/act/Relu",
+    "type": "/detector/backbone3/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9016
+   },
+   {
+    "name": "node_Conv_7",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2864
+   },
+   {
+    "name": "/detector/backbone3/1/convs/1/Conv",
+    "type": "/detector/backbone3/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2196
+   },
+   {
+    "name": "/detector/backbone3/1/Add",
+    "type": "/detector/backbone3/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/1/act/Relu",
+    "type": "/detector/backbone3/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7395
+   },
+   {
+    "name": "node_Conv_8",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2567
+   },
+   {
+    "name": "/detector/backbone3/2/convs/1/Conv",
+    "type": "/detector/backbone3/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1984
+   },
+   {
+    "name": "/detector/backbone3/2/Add",
+    "type": "/detector/backbone3/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/2/act/Relu",
+    "type": "/detector/backbone3/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7396
+   },
+   {
+    "name": "node_Conv_9",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2545
+   },
+   {
+    "name": "/detector/backbone3/3/convs/1/Conv",
+    "type": "/detector/backbone3/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1746
+   },
+   {
+    "name": "/detector/backbone3/3/Add",
+    "type": "/detector/backbone3/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/3/act/Relu",
+    "type": "/detector/backbone3/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7308
+   },
+   {
+    "name": "node_Conv_10",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2514
+   },
+   {
+    "name": "/detector/backbone3/4/convs/1/Conv",
+    "type": "/detector/backbone3/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1794
+   },
+   {
+    "name": "/detector/backbone3/4/Add",
+    "type": "/detector/backbone3/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone3/4/act/Relu",
+    "type": "/detector/backbone3/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7440
+   },
+   {
+    "name": "/detector/backbone4/0/max_pool/MaxPool",
+    "type": "/detector/backbone4/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10895
+   },
+   {
+    "name": "node_Conv_11",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12888
+   },
+   {
+    "name": "node_Conv_26",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2632
+   },
+   {
+    "name": "node_Conv_33",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2737
+   },
+   {
+    "name": "/detector/backbone4/0/Pad_1",
+    "type": "/detector/backbone4/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/0/convs/1/Conv",
+    "type": "/detector/backbone4/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 982
+   },
+   {
+    "name": "/detector/up3/1/Conv",
+    "type": "/detector/up3/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up5/1/Conv",
+    "type": "/detector/up5/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up3/2/Relu",
+    "type": "/detector/up3/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1453
+   },
+   {
+    "name": "/detector/up5/2/Relu",
+    "type": "/detector/up5/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1797
+   },
+   {
+    "name": "/detector/backbone4/0/Add",
+    "type": "/detector/backbone4/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/0/act/Relu",
+    "type": "/detector/backbone4/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 32789
+   },
+   {
+    "name": "node_Conv_12",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1506
+   },
+   {
+    "name": "/detector/backbone4/1/convs/1/Conv",
+    "type": "/detector/backbone4/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1100
+   },
+   {
+    "name": "/detector/backbone4/1/Add",
+    "type": "/detector/backbone4/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/1/act/Relu",
+    "type": "/detector/backbone4/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3759
+   },
+   {
+    "name": "node_Conv_13",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1307
+   },
+   {
+    "name": "/detector/backbone4/2/convs/1/Conv",
+    "type": "/detector/backbone4/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1218
+   },
+   {
+    "name": "/detector/backbone4/2/Add",
+    "type": "/detector/backbone4/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/2/act/Relu",
+    "type": "/detector/backbone4/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3659
+   },
+   {
+    "name": "node_Conv_14",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1632
+   },
+   {
+    "name": "/detector/backbone4/3/convs/1/Conv",
+    "type": "/detector/backbone4/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1258
+   },
+   {
+    "name": "/detector/backbone4/3/Add",
+    "type": "/detector/backbone4/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/3/act/Relu",
+    "type": "/detector/backbone4/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3701
+   },
+   {
+    "name": "node_Conv_15",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1573
+   },
+   {
+    "name": "/detector/backbone4/4/convs/1/Conv",
+    "type": "/detector/backbone4/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1275
+   },
+   {
+    "name": "/detector/backbone4/4/Add",
+    "type": "/detector/backbone4/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/4/act/Relu",
+    "type": "/detector/backbone4/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3790
+   },
+   {
+    "name": "node_Conv_16",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1543
+   },
+   {
+    "name": "/detector/backbone4/5/convs/1/Conv",
+    "type": "/detector/backbone4/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1295
+   },
+   {
+    "name": "/detector/backbone4/5/Add",
+    "type": "/detector/backbone4/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone4/5/act/Relu",
+    "type": "/detector/backbone4/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3708
+   },
+   {
+    "name": "/detector/backbone5/0/max_pool/MaxPool",
+    "type": "/detector/backbone5/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2535
+   },
+   {
+    "name": "node_Conv_17",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9843
+   },
+   {
+    "name": "node_Conv_24",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1813
+   },
+   {
+    "name": "node_Conv_40",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1896
+   },
+   {
+    "name": "/detector/backbone5/0/Pad_1",
+    "type": "/detector/backbone5/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/0/convs/1/Conv",
+    "type": "/detector/backbone5/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1224
+   },
+   {
+    "name": "/detector/up2/1/Conv",
+    "type": "/detector/up2/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up6/1/Conv",
+    "type": "/detector/up6/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up2/2/Relu",
+    "type": "/detector/up2/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 872
+   },
+   {
+    "name": "/detector/up6/2/Relu",
+    "type": "/detector/up6/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1481
+   },
+   {
+    "name": "/detector/backbone5/0/Add",
+    "type": "/detector/backbone5/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/0/act/Relu",
+    "type": "/detector/backbone5/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2745
+   },
+   {
+    "name": "node_Conv_18",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1542
+   },
+   {
+    "name": "/detector/backbone5/1/convs/1/Conv",
+    "type": "/detector/backbone5/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1553
+   },
+   {
+    "name": "/detector/backbone5/1/Add",
+    "type": "/detector/backbone5/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/1/act/Relu",
+    "type": "/detector/backbone5/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2098
+   },
+   {
+    "name": "node_Conv_19",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1578
+   },
+   {
+    "name": "/detector/backbone5/2/convs/1/Conv",
+    "type": "/detector/backbone5/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1548
+   },
+   {
+    "name": "/detector/backbone5/2/Add",
+    "type": "/detector/backbone5/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/2/act/Relu",
+    "type": "/detector/backbone5/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1986
+   },
+   {
+    "name": "node_Conv_20",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1572
+   },
+   {
+    "name": "/detector/backbone5/3/convs/1/Conv",
+    "type": "/detector/backbone5/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1315
+   },
+   {
+    "name": "/detector/backbone5/3/Add",
+    "type": "/detector/backbone5/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/3/act/Relu",
+    "type": "/detector/backbone5/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2011
+   },
+   {
+    "name": "node_Conv_21",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1609
+   },
+   {
+    "name": "/detector/backbone5/4/convs/1/Conv",
+    "type": "/detector/backbone5/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1380
+   },
+   {
+    "name": "/detector/backbone5/4/Add",
+    "type": "/detector/backbone5/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/4/act/Relu",
+    "type": "/detector/backbone5/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1995
+   },
+   {
+    "name": "node_Conv_22",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1481
+   },
+   {
+    "name": "/detector/backbone5/5/convs/1/Conv",
+    "type": "/detector/backbone5/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1353
+   },
+   {
+    "name": "/detector/backbone5/5/Add",
+    "type": "/detector/backbone5/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/5/act/Relu",
+    "type": "/detector/backbone5/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2005
+   },
+   {
+    "name": "node_Conv_23",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1554
+   },
+   {
+    "name": "/detector/backbone5/6/convs/1/Conv",
+    "type": "/detector/backbone5/6/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1436
+   },
+   {
+    "name": "/detector/backbone5/6/Add",
+    "type": "/detector/backbone5/6/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/backbone5/6/act/Relu",
+    "type": "/detector/backbone5/6/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2041
+   },
+   {
+    "name": "node_Conv_25",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1597
+   },
+   {
+    "name": "node_Conv_48",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1441
+   },
+   {
+    "name": "/detector/up1/1/Conv",
+    "type": "/detector/up1/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up7/1/Conv",
+    "type": "/detector/up7/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/up1/2/Relu",
+    "type": "/detector/up1/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 561
+   },
+   {
+    "name": "/detector/up7/2/Relu",
+    "type": "/detector/up7/2/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1504
+   },
+   {
+    "name": "/detector/Resize",
+    "type": "/detector/Resize",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 15596
+   },
+   {
+    "name": "/detector/Add",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1878
+   },
+   {
+    "name": "/detector/Resize_1",
+    "type": "/detector/Resize",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 18736
+   },
+   {
+    "name": "/detector/Add_1",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5877
+   },
+   {
+    "name": "/detector/Resize_2",
+    "type": "/detector/Resize",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 55633
+   },
+   {
+    "name": "/detector/Add_2",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 19585
+   },
+   {
+    "name": "/detector/block1/0/max_pool/MaxPool",
+    "type": "/detector/block1/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7209
+   },
+   {
+    "name": "node_Conv_28",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 21779
+   },
+   {
+    "name": "/detector/block1/0/Pad_1",
+    "type": "/detector/block1/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/0/convs/1/Conv",
+    "type": "/detector/block1/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2332
+   },
+   {
+    "name": "/detector/block1/0/Add",
+    "type": "/detector/block1/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/0/act/Relu",
+    "type": "/detector/block1/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8211
+   },
+   {
+    "name": "node_Conv_29",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2444
+   },
+   {
+    "name": "/detector/block1/1/convs/1/Conv",
+    "type": "/detector/block1/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2021
+   },
+   {
+    "name": "/detector/block1/1/Add",
+    "type": "/detector/block1/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/1/act/Relu",
+    "type": "/detector/block1/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7371
+   },
+   {
+    "name": "node_Conv_30",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2601
+   },
+   {
+    "name": "/detector/block1/2/convs/1/Conv",
+    "type": "/detector/block1/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1934
+   },
+   {
+    "name": "/detector/block1/2/Add",
+    "type": "/detector/block1/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/2/act/Relu",
+    "type": "/detector/block1/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7331
+   },
+   {
+    "name": "node_Conv_31",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2589
+   },
+   {
+    "name": "/detector/block1/3/convs/1/Conv",
+    "type": "/detector/block1/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2014
+   },
+   {
+    "name": "/detector/block1/3/Add",
+    "type": "/detector/block1/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/3/act/Relu",
+    "type": "/detector/block1/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7548
+   },
+   {
+    "name": "node_Conv_32",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2535
+   },
+   {
+    "name": "/detector/block1/4/convs/1/Conv",
+    "type": "/detector/block1/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2107
+   },
+   {
+    "name": "/detector/block1/4/Add",
+    "type": "/detector/block1/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block1/4/act/Relu",
+    "type": "/detector/block1/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7649
+   },
+   {
+    "name": "/detector/Add_3",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7301
+   },
+   {
+    "name": "/detector/block2/0/max_pool/MaxPool",
+    "type": "/detector/block2/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4616
+   },
+   {
+    "name": "node_Conv_34",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11004
+   },
+   {
+    "name": "/detector/block2/0/Pad_1",
+    "type": "/detector/block2/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/0/convs/1/Conv",
+    "type": "/detector/block2/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1367
+   },
+   {
+    "name": "/detector/block2/0/Add",
+    "type": "/detector/block2/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/0/act/Relu",
+    "type": "/detector/block2/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9475
+   },
+   {
+    "name": "node_Conv_35",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1698
+   },
+   {
+    "name": "/detector/block2/1/convs/1/Conv",
+    "type": "/detector/block2/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1296
+   },
+   {
+    "name": "/detector/block2/1/Add",
+    "type": "/detector/block2/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/1/act/Relu",
+    "type": "/detector/block2/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3480
+   },
+   {
+    "name": "node_Conv_36",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1545
+   },
+   {
+    "name": "/detector/block2/2/convs/1/Conv",
+    "type": "/detector/block2/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1257
+   },
+   {
+    "name": "/detector/block2/2/Add",
+    "type": "/detector/block2/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/2/act/Relu",
+    "type": "/detector/block2/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3562
+   },
+   {
+    "name": "node_Conv_37",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1576
+   },
+   {
+    "name": "/detector/block2/3/convs/1/Conv",
+    "type": "/detector/block2/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1189
+   },
+   {
+    "name": "/detector/block2/3/Add",
+    "type": "/detector/block2/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/3/act/Relu",
+    "type": "/detector/block2/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3524
+   },
+   {
+    "name": "node_Conv_38",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1609
+   },
+   {
+    "name": "/detector/block2/4/convs/1/Conv",
+    "type": "/detector/block2/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1192
+   },
+   {
+    "name": "/detector/block2/4/Add",
+    "type": "/detector/block2/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/4/act/Relu",
+    "type": "/detector/block2/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3479
+   },
+   {
+    "name": "node_Conv_39",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1512
+   },
+   {
+    "name": "/detector/block2/5/convs/1/Conv",
+    "type": "/detector/block2/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1163
+   },
+   {
+    "name": "/detector/block2/5/Add",
+    "type": "/detector/block2/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block2/5/act/Relu",
+    "type": "/detector/block2/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3579
+   },
+   {
+    "name": "/detector/Add_4",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3408
+   },
+   {
+    "name": "/detector/block3/0/max_pool/MaxPool",
+    "type": "/detector/block3/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2633
+   },
+   {
+    "name": "node_Conv_41",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7105
+   },
+   {
+    "name": "/detector/block3/0/Pad_1",
+    "type": "/detector/block3/0/Pad",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/0/convs/1/Conv",
+    "type": "/detector/block3/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1298
+   },
+   {
+    "name": "/detector/block3/0/Add",
+    "type": "/detector/block3/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/0/act/Relu",
+    "type": "/detector/block3/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2557
+   },
+   {
+    "name": "node_Conv_42",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1933
+   },
+   {
+    "name": "/detector/block3/1/convs/1/Conv",
+    "type": "/detector/block3/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1351
+   },
+   {
+    "name": "/detector/block3/1/Add",
+    "type": "/detector/block3/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/1/act/Relu",
+    "type": "/detector/block3/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1883
+   },
+   {
+    "name": "node_Conv_43",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1685
+   },
+   {
+    "name": "/detector/block3/2/convs/1/Conv",
+    "type": "/detector/block3/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1229
+   },
+   {
+    "name": "/detector/block3/2/Add",
+    "type": "/detector/block3/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/2/act/Relu",
+    "type": "/detector/block3/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1920
+   },
+   {
+    "name": "node_Conv_44",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1444
+   },
+   {
+    "name": "/detector/block3/3/convs/1/Conv",
+    "type": "/detector/block3/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1269
+   },
+   {
+    "name": "/detector/block3/3/Add",
+    "type": "/detector/block3/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/3/act/Relu",
+    "type": "/detector/block3/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1913
+   },
+   {
+    "name": "node_Conv_45",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1489
+   },
+   {
+    "name": "/detector/block3/4/convs/1/Conv",
+    "type": "/detector/block3/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1224
+   },
+   {
+    "name": "/detector/block3/4/Add",
+    "type": "/detector/block3/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/4/act/Relu",
+    "type": "/detector/block3/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1935
+   },
+   {
+    "name": "node_Conv_46",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1568
+   },
+   {
+    "name": "/detector/block3/5/convs/1/Conv",
+    "type": "/detector/block3/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1244
+   },
+   {
+    "name": "/detector/block3/5/Add",
+    "type": "/detector/block3/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/5/act/Relu",
+    "type": "/detector/block3/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1924
+   },
+   {
+    "name": "node_Conv_47",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1521
+   },
+   {
+    "name": "/detector/block3/6/convs/1/Conv",
+    "type": "/detector/block3/6/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1294
+   },
+   {
+    "name": "/detector/block3/6/Add",
+    "type": "/detector/block3/6/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block3/6/act/Relu",
+    "type": "/detector/block3/6/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1736
+   },
+   {
+    "name": "/detector/Add_5",
+    "type": "/detector/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1826
+   },
+   {
+    "name": "/detector/block4/0/max_pool/MaxPool",
+    "type": "/detector/block4/0/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3777
+   },
+   {
+    "name": "node_Conv_49",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6937
+   },
+   {
+    "name": "/detector/block4/0/convs/1/Conv",
+    "type": "/detector/block4/0/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1415
+   },
+   {
+    "name": "/detector/block4/0/Add",
+    "type": "/detector/block4/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/0/act/Relu",
+    "type": "/detector/block4/0/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1787
+   },
+   {
+    "name": "node_Conv_50",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6652
+   },
+   {
+    "name": "/detector/block4/1/convs/1/Conv",
+    "type": "/detector/block4/1/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1385
+   },
+   {
+    "name": "/detector/block4/1/Add",
+    "type": "/detector/block4/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/1/act/Relu",
+    "type": "/detector/block4/1/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1758
+   },
+   {
+    "name": "node_Conv_51",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3054
+   },
+   {
+    "name": "/detector/block4/2/convs/1/Conv",
+    "type": "/detector/block4/2/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1256
+   },
+   {
+    "name": "/detector/block4/2/Add",
+    "type": "/detector/block4/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/2/act/Relu",
+    "type": "/detector/block4/2/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1700
+   },
+   {
+    "name": "node_Conv_52",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3080
+   },
+   {
+    "name": "/detector/block4/3/convs/1/Conv",
+    "type": "/detector/block4/3/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1366
+   },
+   {
+    "name": "/detector/block4/3/Add",
+    "type": "/detector/block4/3/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/3/act/Relu",
+    "type": "/detector/block4/3/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1738
+   },
+   {
+    "name": "node_Conv_53",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3261
+   },
+   {
+    "name": "/detector/block4/4/convs/1/Conv",
+    "type": "/detector/block4/4/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1305
+   },
+   {
+    "name": "/detector/block4/4/Add",
+    "type": "/detector/block4/4/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/4/act/Relu",
+    "type": "/detector/block4/4/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1708
+   },
+   {
+    "name": "node_Conv_54",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3093
+   },
+   {
+    "name": "/detector/block4/5/convs/1/Conv",
+    "type": "/detector/block4/5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1256
+   },
+   {
+    "name": "/detector/block4/5/Add",
+    "type": "/detector/block4/5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/5/act/Relu",
+    "type": "/detector/block4/5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1758
+   },
+   {
+    "name": "node_Conv_55",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3534
+   },
+   {
+    "name": "/detector/block4/6/convs/1/Conv",
+    "type": "/detector/block4/6/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1207
+   },
+   {
+    "name": "/detector/block4/6/Add",
+    "type": "/detector/block4/6/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/6/act/Relu",
+    "type": "/detector/block4/6/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1759
+   },
+   {
+    "name": "node_Conv_56",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3153
+   },
+   {
+    "name": "/detector/block4/7/convs/1/Conv",
+    "type": "/detector/block4/7/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1263
+   },
+   {
+    "name": "/detector/block4/7/Add",
+    "type": "/detector/block4/7/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/7/act/Relu",
+    "type": "/detector/block4/7/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1763
+   },
+   {
+    "name": "/detector/block4/8/max_pool/MaxPool",
+    "type": "/detector/block4/8/max",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3667
+   },
+   {
+    "name": "node_Conv_57",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7466
+   },
+   {
+    "name": "/detector/block4/8/convs/1/Conv",
+    "type": "/detector/block4/8/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1288
+   },
+   {
+    "name": "/detector/block4/8/Add",
+    "type": "/detector/block4/8/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/8/act/Relu",
+    "type": "/detector/block4/8/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1952
+   },
+   {
+    "name": "node_Conv_58",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3138
+   },
+   {
+    "name": "/detector/block4/9/convs/1/Conv",
+    "type": "/detector/block4/9/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1348
+   },
+   {
+    "name": "/detector/block4/9/Add",
+    "type": "/detector/block4/9/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/9/act/Relu",
+    "type": "/detector/block4/9/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1817
+   },
+   {
+    "name": "node_Conv_59",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2897
+   },
+   {
+    "name": "/detector/block4/10/convs/1/Conv",
+    "type": "/detector/block4/10/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1723
+   },
+   {
+    "name": "/detector/block4/10/Add",
+    "type": "/detector/block4/10/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/10/act/Relu",
+    "type": "/detector/block4/10/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1824
+   },
+   {
+    "name": "node_Conv_60",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3124
+   },
+   {
+    "name": "/detector/block4/11/convs/1/Conv",
+    "type": "/detector/block4/11/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1337
+   },
+   {
+    "name": "/detector/block4/11/Add",
+    "type": "/detector/block4/11/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/11/act/Relu",
+    "type": "/detector/block4/11/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1801
+   },
+   {
+    "name": "node_Conv_61",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2959
+   },
+   {
+    "name": "/detector/block4/12/convs/1/Conv",
+    "type": "/detector/block4/12/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1299
+   },
+   {
+    "name": "/detector/block4/12/Add",
+    "type": "/detector/block4/12/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/12/act/Relu",
+    "type": "/detector/block4/12/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1840
+   },
+   {
+    "name": "node_Conv_62",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3055
+   },
+   {
+    "name": "/detector/block4/13/convs/1/Conv",
+    "type": "/detector/block4/13/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1575
+   },
+   {
+    "name": "/detector/block4/13/Add",
+    "type": "/detector/block4/13/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/13/act/Relu",
+    "type": "/detector/block4/13/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1901
+   },
+   {
+    "name": "node_Conv_63",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2948
+   },
+   {
+    "name": "/detector/block4/14/convs/1/Conv",
+    "type": "/detector/block4/14/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1423
+   },
+   {
+    "name": "/detector/block4/14/Add",
+    "type": "/detector/block4/14/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block4/14/act/Relu",
+    "type": "/detector/block4/14/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1916
+   },
+   {
+    "name": "node_Conv_64",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3242
+   },
+   {
+    "name": "/detector/block5/convs/1/Conv",
+    "type": "/detector/block5/convs/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1489
+   },
+   {
+    "name": "/detector/block5/Add",
+    "type": "/detector/block5/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/block5/act/Relu",
+    "type": "/detector/block5/act/Relu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1933
+   },
+   {
+    "name": "/detector/flag/Conv",
+    "type": "/detector/flag/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7843
+   },
+   {
+    "name": "/detector/landmarks/Conv",
+    "type": "/detector/landmarks/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2631
+   },
+   {
+    "name": "/detector/flag/Conv_output_0_updated_0123",
+    "type": "/detector/flag/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/Reshape",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/landmarks/Conv_output_0_updated_0123",
+    "type": "/detector/landmarks/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/detector/Reshape_1",
+    "type": "/detector/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1800
+   },
+   {
+    "name": "/detector/Sigmoid",
+    "type": "/detector/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1682
+   },
+   {
+    "name": "/detector/Div",
+    "type": "/detector/Div",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/Slice",
+    "type": "/Slice",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6468
+   },
+   {
+    "name": "Output",
+    "type": "Output",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2440
+   }
+  ]
+ },
+ "yolox": {
+  "execution_summary": {
+   "estimated_inference_time": 2748,
+   "estimated_inference_peak_memory": 16506880,
+   "first_load_time": 285071,
+   "first_load_peak_memory": 14888960,
+   "warm_load_time": 217442,
+   "warm_load_peak_memory": 14733312,
+   "compile_time": 0,
+   "compile_peak_memory": 0,
+   "compile_memory_increase_range": [
+    0,
+    0
+   ],
+   "compile_memory_peak_range": [
+    0,
+    0
+   ],
+   "first_load_memory_increase_range": [
+    10027008,
+    10027008
+   ],
+   "first_load_memory_peak_range": [
+    10027008,
+    10027008
+   ],
+   "warm_load_memory_increase_range": [
+    9863168,
+    9863168
+   ],
+   "warm_load_memory_peak_range": [
+    9863168,
+    9863168
+   ],
+   "inference_memory_increase_range": [
+    1241088,
+    1241088
+   ],
+   "inference_memory_peak_range": [
+    1241088,
+    1241088
+   ],
+   "all_compile_times": [],
+   "all_first_load_times": [
+    285071
+   ],
+   "all_warm_load_times": [
+    217442
+   ],
+   "all_inference_times": [
+    3986,
+    2940,
+    2850,
+    2862,
+    2917,
+    2866,
+    2821,
+    2866,
+    2936,
+    2945,
+    2854,
+    2878,
+    2905,
+    2917,
+    3099,
+    2848,
+    2808,
+    3028,
+    2800,
+    2819,
+    2784,
+    2767,
+    2749,
+    2772,
+    2748,
+    2756,
+    2841,
+    2922,
+    2822,
+    2882,
+    2936,
+    2816,
+    2814,
+    2892,
+    2865,
+    2907,
+    2858,
+    2830,
+    3115,
+    2815,
+    2833,
+    2885,
+    2778,
+    2914,
+    2797,
+    2846,
+    2878,
+    2950,
+    2883,
+    2892,
+    2872,
+    2773,
+    2855,
+    2793,
+    2834,
+    2806,
+    2763,
+    2766,
+    2804,
+    2816,
+    2792,
+    2868,
+    3093,
+    2910,
+    2917,
+    2819,
+    2806,
+    2893,
+    2904,
+    2893,
+    2979,
+    2857,
+    2872,
+    2828,
+    2802,
+    2792,
+    2798,
+    2764,
+    2783,
+    2819,
+    2848,
+    3024,
+    2903,
+    2823,
+    2859,
+    2929,
+    2846,
+    2932,
+    2951,
+    3000,
+    2946,
+    2847,
+    2840,
+    2878,
+    3008,
+    2850,
+    2879,
+    2872,
+    2848,
+    2833
+   ]
+  },
+  "execution_detail": [
+   {
+    "name": "Input",
+    "type": "Input",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13755
+   },
+   {
+    "name": "image_hoist_0231",
+    "type": "image",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 220385
+   },
+   {
+    "name": "/Mul",
+    "type": "/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 248754
+   },
+   {
+    "name": "fused_/backbone/backbone/stem/Slice_/backbone/backbone/stem/Slice_1",
+    "type": "fused",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "fused_/backbone/backbone/stem/Slice_/backbone/backbone/stem/Slice_2",
+    "type": "fused",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "fused_/backbone/backbone/stem/Slice_3_/backbone/backbone/stem/Slice_4",
+    "type": "fused",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "fused_/backbone/backbone/stem/Slice_3_/backbone/backbone/stem/Slice_5",
+    "type": "fused",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/stem/Concat",
+    "type": "/backbone/backbone/stem/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1525056
+   },
+   {
+    "name": "/backbone/backbone/stem/conv/conv/Conv",
+    "type": "/backbone/backbone/stem/conv/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 62317
+   },
+   {
+    "name": "/backbone/backbone/stem/conv/act/Sigmoid",
+    "type": "/backbone/backbone/stem/conv/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/stem/conv/act/Mul",
+    "type": "/backbone/backbone/stem/conv/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 477426
+   },
+   {
+    "name": "/backbone/backbone/dark2/0/conv/Conv",
+    "type": "/backbone/backbone/dark2/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 204812
+   },
+   {
+    "name": "/backbone/backbone/dark2/0/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/0/act/Mul",
+    "type": "/backbone/backbone/dark2/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 234080
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark2/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 15853
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark2/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13535
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark2/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 125463
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark2/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 125252
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark2/1/m/0/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9445
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/1/m/0/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv1/act/Mul",
+    "type": "/backbone/backbone/dark2/1/m/0/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 127119
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark2/1/m/0/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 22191
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/1/m/0/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/conv2/act/Mul",
+    "type": "/backbone/backbone/dark2/1/m/0/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 143744
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/m/0/Add",
+    "type": "/backbone/backbone/dark2/1/m/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 69934
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/Concat",
+    "type": "/backbone/backbone/dark2/1/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv3/conv/Conv",
+    "type": "/backbone/backbone/dark2/1/conv3/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 22468
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv3/act/Sigmoid",
+    "type": "/backbone/backbone/dark2/1/conv3/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark2/1/conv3/act/Mul",
+    "type": "/backbone/backbone/dark2/1/conv3/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 240211
+   },
+   {
+    "name": "/backbone/backbone/dark3/0/conv/Conv",
+    "type": "/backbone/backbone/dark3/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 137308
+   },
+   {
+    "name": "/backbone/backbone/dark3/0/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/0/act/Mul",
+    "type": "/backbone/backbone/dark3/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 127230
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7076
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7500
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark3/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 58869
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark3/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 60340
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/0/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6141
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/0/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv1/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/0/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 60468
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/0/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 23249
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/0/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/conv2/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/0/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 76438
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/0/Add",
+    "type": "/backbone/backbone/dark3/1/m/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 34507
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6321
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 71577
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 23461
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 76985
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/1/Add",
+    "type": "/backbone/backbone/dark3/1/m/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 36031
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/2/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6894
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/2/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv1/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/2/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 68322
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/m/2/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 23507
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/m/2/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/conv2/act/Mul",
+    "type": "/backbone/backbone/dark3/1/m/2/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 80208
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/m/2/Add",
+    "type": "/backbone/backbone/dark3/1/m/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 34663
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/Concat",
+    "type": "/backbone/backbone/dark3/1/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv3/conv/Conv",
+    "type": "/backbone/backbone/dark3/1/conv3/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11629
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv3/act/Sigmoid",
+    "type": "/backbone/backbone/dark3/1/conv3/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark3/1/conv3/act/Mul",
+    "type": "/backbone/backbone/dark3/1/conv3/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 247567
+   },
+   {
+    "name": "/backbone/backbone/dark4/0/conv/Conv",
+    "type": "/backbone/backbone/dark4/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 97034
+   },
+   {
+    "name": "/backbone/backbone/dark4/0/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/0/act/Mul",
+    "type": "/backbone/backbone/dark4/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 67954
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5651
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6296
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark4/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 38309
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark4/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 39477
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/0/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4094
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/0/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv1/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/0/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 36151
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/0/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 27429
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/0/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/conv2/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/0/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 42048
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/0/Add",
+    "type": "/backbone/backbone/dark4/1/m/0/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 20400
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3647
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35819
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 26511
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 47653
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/1/Add",
+    "type": "/backbone/backbone/dark4/1/m/1/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 18853
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/2/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4068
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/2/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv1/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/2/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35535
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/m/2/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 26430
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/m/2/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/conv2/act/Mul",
+    "type": "/backbone/backbone/dark4/1/m/2/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 47978
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/m/2/Add",
+    "type": "/backbone/backbone/dark4/1/m/2/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 19399
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/Concat",
+    "type": "/backbone/backbone/dark4/1/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv3/conv/Conv",
+    "type": "/backbone/backbone/dark4/1/conv3/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10263
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv3/act/Sigmoid",
+    "type": "/backbone/backbone/dark4/1/conv3/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark4/1/conv3/act/Mul",
+    "type": "/backbone/backbone/dark4/1/conv3/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 130436
+   },
+   {
+    "name": "/backbone/backbone/dark5/0/conv/Conv",
+    "type": "/backbone/backbone/dark5/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 89274
+   },
+   {
+    "name": "/backbone/backbone/dark5/0/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/0/act/Mul",
+    "type": "/backbone/backbone/dark5/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41343
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark5/1/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6563
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/1/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv1/act/Mul",
+    "type": "/backbone/backbone/dark5/1/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 47497
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/m.0/MaxPool",
+    "type": "/backbone/backbone/dark5/1/m.0/MaxPool",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 42811
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/m.1/MaxPool",
+    "type": "/backbone/backbone/dark5/1/m.1/MaxPool",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 157501
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/m.2/MaxPool",
+    "type": "/backbone/backbone/dark5/1/m.2/MaxPool",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 249431
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/Concat",
+    "type": "/backbone/backbone/dark5/1/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark5/1/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 26095
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/1/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/1/conv2/act/Mul",
+    "type": "/backbone/backbone/dark5/1/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 40101
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark5/2/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6666
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark5/2/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6896
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/2/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/2/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv1/act/Mul",
+    "type": "/backbone/backbone/dark5/2/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 20857
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv2/act/Mul",
+    "type": "/backbone/backbone/dark5/2/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 22966
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv1/conv/Conv",
+    "type": "/backbone/backbone/dark5/2/m/0/conv1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 4116
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/2/m/0/conv1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv1/act/Mul",
+    "type": "/backbone/backbone/dark5/2/m/0/conv1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 18419
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv2/conv/Conv",
+    "type": "/backbone/backbone/dark5/2/m/0/conv2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 36554
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/2/m/0/conv2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/m/0/conv2/act/Mul",
+    "type": "/backbone/backbone/dark5/2/m/0/conv2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 21255
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/Concat",
+    "type": "/backbone/backbone/dark5/2/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv3/conv/Conv",
+    "type": "/backbone/backbone/dark5/2/conv3/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13499
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv3/act/Sigmoid",
+    "type": "/backbone/backbone/dark5/2/conv3/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/backbone/dark5/2/conv3/act/Mul",
+    "type": "/backbone/backbone/dark5/2/conv3/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 37845
+   },
+   {
+    "name": "/backbone/lateral_conv0/conv/Conv",
+    "type": "/backbone/lateral",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6817
+   },
+   {
+    "name": "/backbone/lateral_conv0/act/Sigmoid",
+    "type": "/backbone/lateral",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/lateral_conv0/act/Mul",
+    "type": "/backbone/lateral",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35642
+   },
+   {
+    "name": "/backbone/upsample/Resize",
+    "type": "/backbone/upsample/Resize",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 37943
+   },
+   {
+    "name": "/backbone/Concat",
+    "type": "/backbone/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9699
+   },
+   {
+    "name": "/backbone/C3_p4/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9686
+   },
+   {
+    "name": "/backbone/C3_p4/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35281
+   },
+   {
+    "name": "/backbone/C3_p4/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 40359
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3528
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 32863
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25713
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/m/0/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 37820
+   },
+   {
+    "name": "/backbone/C3_p4/Concat",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/conv3/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9937
+   },
+   {
+    "name": "/backbone/C3_p4/conv3/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p4/conv3/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 63136
+   },
+   {
+    "name": "/backbone/reduce_conv1/conv/Conv",
+    "type": "/backbone/reduce",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5336
+   },
+   {
+    "name": "/backbone/reduce_conv1/act/Sigmoid",
+    "type": "/backbone/reduce",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/reduce_conv1/act/Mul",
+    "type": "/backbone/reduce",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 58540
+   },
+   {
+    "name": "/backbone/Resize",
+    "type": "/backbone/Resize",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 76227
+   },
+   {
+    "name": "/backbone/Concat_1",
+    "type": "/backbone/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11119
+   },
+   {
+    "name": "/backbone/C3_p3/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10637
+   },
+   {
+    "name": "/backbone/C3_p3/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 66411
+   },
+   {
+    "name": "/backbone/C3_p3/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 65114
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6237
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 71482
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 22974
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/m/0/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 73840
+   },
+   {
+    "name": "/backbone/C3_p3/Concat",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/conv3/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11511
+   },
+   {
+    "name": "/backbone/C3_p3/conv3/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_p3/conv3/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 126528
+   },
+   {
+    "name": "/backbone/bu_conv2/conv/Conv",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 87199
+   },
+   {
+    "name": "/0/conv/Conv",
+    "type": "/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11875
+   },
+   {
+    "name": "/backbone/bu_conv2/act/Sigmoid",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/act/Sigmoid",
+    "type": "/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/bu_conv2/act/Mul",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 38181
+   },
+   {
+    "name": "/0/act/Mul",
+    "type": "/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 141176
+   },
+   {
+    "name": "/backbone/Concat_2",
+    "type": "/backbone/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/0/conv/Conv",
+    "type": "/0/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 90136
+   },
+   {
+    "name": "/0/0/conv_1/Conv",
+    "type": "/0/0/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 90052
+   },
+   {
+    "name": "/backbone/C3_n3/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5500
+   },
+   {
+    "name": "/backbone/C3_n3/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5577
+   },
+   {
+    "name": "/0/0/act/Sigmoid",
+    "type": "/0/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/0/act_1/Sigmoid",
+    "type": "/0/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n3/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n3/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/0/act/Mul",
+    "type": "/0/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 159647
+   },
+   {
+    "name": "/0/0/act_1/Mul",
+    "type": "/0/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 165843
+   },
+   {
+    "name": "/backbone/C3_n3/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 40337
+   },
+   {
+    "name": "/backbone/C3_n3/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 36807
+   },
+   {
+    "name": "/0/1/conv/Conv",
+    "type": "/0/1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 90721
+   },
+   {
+    "name": "/0/1/conv_1/Conv",
+    "type": "/0/1/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 87415
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3651
+   },
+   {
+    "name": "/0/1/act/Sigmoid",
+    "type": "/0/1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/1/act_1/Sigmoid",
+    "type": "/0/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/0/1/act/Mul",
+    "type": "/0/1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 154435
+   },
+   {
+    "name": "/0/1/act_1/Mul",
+    "type": "/0/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 154612
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35379
+   },
+   {
+    "name": "/0/Conv",
+    "type": "/0/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9918
+   },
+   {
+    "name": "/0_1/Conv",
+    "type": "/0",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5094
+   },
+   {
+    "name": "/0_2/Conv",
+    "type": "/0",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5089
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 26504
+   },
+   {
+    "name": "/Sigmoid_1",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 110721
+   },
+   {
+    "name": "/Reshape_3",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 22021
+   },
+   {
+    "name": "/Sigmoid",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 19778
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/Concat",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 57361
+   },
+   {
+    "name": "/backbone/C3_n3/m/0/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 43119
+   },
+   {
+    "name": "/Reshape_6",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 199693
+   },
+   {
+    "name": "/backbone/C3_n3/Concat",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n3/conv3/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11083
+   },
+   {
+    "name": "/backbone/C3_n3/conv3/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n3/conv3/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 81953
+   },
+   {
+    "name": "/backbone/bu_conv1/conv/Conv",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 71495
+   },
+   {
+    "name": "/1/conv/Conv",
+    "type": "/1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5708
+   },
+   {
+    "name": "/backbone/bu_conv1/act/Sigmoid",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/act/Sigmoid",
+    "type": "/1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/bu_conv1/act/Mul",
+    "type": "/backbone/bu",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25430
+   },
+   {
+    "name": "/1/act/Mul",
+    "type": "/1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41150
+   },
+   {
+    "name": "/backbone/Concat_3",
+    "type": "/backbone/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/0/conv/Conv",
+    "type": "/1/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 26298
+   },
+   {
+    "name": "/1/0/conv_1/Conv",
+    "type": "/1/0/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25894
+   },
+   {
+    "name": "/backbone/C3_n4/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7218
+   },
+   {
+    "name": "/backbone/C3_n4/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7159
+   },
+   {
+    "name": "/1/0/act/Sigmoid",
+    "type": "/1/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/0/act_1/Sigmoid",
+    "type": "/1/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n4/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n4/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/0/act/Mul",
+    "type": "/1/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 42210
+   },
+   {
+    "name": "/1/0/act_1/Mul",
+    "type": "/1/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 39099
+   },
+   {
+    "name": "/backbone/C3_n4/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 24437
+   },
+   {
+    "name": "/backbone/C3_n4/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25409
+   },
+   {
+    "name": "/1/1/conv/Conv",
+    "type": "/1/1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25968
+   },
+   {
+    "name": "/1/1/conv_1/Conv",
+    "type": "/1/1/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 25616
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv1/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3684
+   },
+   {
+    "name": "/1/1/act/Sigmoid",
+    "type": "/1/1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/1/act_1/Sigmoid",
+    "type": "/1/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv1/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/1/1/act/Mul",
+    "type": "/1/1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 45234
+   },
+   {
+    "name": "/1/1/act_1/Mul",
+    "type": "/1/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 43712
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv1/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 27683
+   },
+   {
+    "name": "/1/Conv",
+    "type": "/1/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2784
+   },
+   {
+    "name": "/1_1/Conv",
+    "type": "/1",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2101
+   },
+   {
+    "name": "/1_2/Conv",
+    "type": "/1",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1897
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv2/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 38051
+   },
+   {
+    "name": "/Sigmoid_3",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 32939
+   },
+   {
+    "name": "/Reshape_4",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5643
+   },
+   {
+    "name": "/Sigmoid_2",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 5229
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv2/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/Concat_1",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13415
+   },
+   {
+    "name": "/backbone/C3_n4/m/0/conv2/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 21883
+   },
+   {
+    "name": "/Reshape_7",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 49330
+   },
+   {
+    "name": "/backbone/C3_n4/Concat",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n4/conv3/conv/Conv",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 14371
+   },
+   {
+    "name": "/backbone/C3_n4/conv3/act/Sigmoid",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/backbone/C3_n4/conv3/act/Mul",
+    "type": "/backbone/C3",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 38933
+   },
+   {
+    "name": "/2/conv/Conv",
+    "type": "/2/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3637
+   },
+   {
+    "name": "/2/act/Sigmoid",
+    "type": "/2/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/2/act/Mul",
+    "type": "/2/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9669
+   },
+   {
+    "name": "/2/0/conv/Conv",
+    "type": "/2/0/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10809
+   },
+   {
+    "name": "/2/0/conv_1/Conv",
+    "type": "/2/0/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9218
+   },
+   {
+    "name": "/2/0/act/Sigmoid",
+    "type": "/2/0/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/2/0/act_1/Sigmoid",
+    "type": "/2/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/2/0/act/Mul",
+    "type": "/2/0/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10769
+   },
+   {
+    "name": "/2/0/act_1/Mul",
+    "type": "/2/0/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 13695
+   },
+   {
+    "name": "/2/1/conv/Conv",
+    "type": "/2/1/conv/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10806
+   },
+   {
+    "name": "/2/1/conv_1/Conv",
+    "type": "/2/1/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10491
+   },
+   {
+    "name": "/2/1/act/Sigmoid",
+    "type": "/2/1/act/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/2/1/act_1/Sigmoid",
+    "type": "/2/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/2/1/act/Mul",
+    "type": "/2/1/act/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10000
+   },
+   {
+    "name": "/2/1/act_1/Mul",
+    "type": "/2/1/act",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 14316
+   },
+   {
+    "name": "/2/Conv",
+    "type": "/2/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1369
+   },
+   {
+    "name": "/2_1/Conv",
+    "type": "/2",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1092
+   },
+   {
+    "name": "/2_2/Conv",
+    "type": "/2",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1054
+   },
+   {
+    "name": "/Sigmoid_5",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 7673
+   },
+   {
+    "name": "/Reshape_5",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3166
+   },
+   {
+    "name": "/Sigmoid_4",
+    "type": "/Sigmoid",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 2812
+   },
+   {
+    "name": "/Concat_10",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/Concat_2",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3976
+   },
+   {
+    "name": "/Reshape_8",
+    "type": "/Reshape",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 11939
+   },
+   {
+    "name": "node_Slice_867",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 126540
+   },
+   {
+    "name": "node_Slice_870",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 119290
+   },
+   {
+    "name": "/Concat_14",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12816
+   },
+   {
+    "name": "node_Mul_9",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 859750
+   },
+   {
+    "name": "/Exp",
+    "type": "/Exp",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3725
+   },
+   {
+    "name": "node_Add_11",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 16675
+   },
+   {
+    "name": "node_Mul_8",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 798941
+   },
+   {
+    "name": "node_Slice_874",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 104765
+   },
+   {
+    "name": "node_Slice_877",
+    "type": "node",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 163640
+   },
+   {
+    "name": "/Sub",
+    "type": "/Sub",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 6352
+   },
+   {
+    "name": "/Add_1",
+    "type": "/Add",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 8568
+   },
+   {
+    "name": "/Squeeze",
+    "type": "/Squeeze",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/ReduceMax",
+    "type": "/ReduceMax",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 300431
+   },
+   {
+    "name": "/ArgMax",
+    "type": "/ArgMax",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 175064
+   },
+   {
+    "name": "/Cast_1",
+    "type": "/Cast",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/Concat_15",
+    "type": "/Concat",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 71826
+   },
+   {
+    "name": "/Mul_4",
+    "type": "/Mul",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9278
+   },
+   {
+    "name": "Output",
+    "type": "Output",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 41175
+   }
+  ]
+ },
+ "quicksrnetmedium": {
+  "execution_summary": {
+   "estimated_inference_time": 632,
+   "estimated_inference_peak_memory": 14766080,
+   "first_load_time": 329937,
+   "first_load_peak_memory": 15040512,
+   "warm_load_time": 240079,
+   "warm_load_peak_memory": 14839808,
+   "compile_time": 0,
+   "compile_peak_memory": 0,
+   "compile_memory_increase_range": [
+    0,
+    0
+   ],
+   "compile_memory_peak_range": [
+    0,
+    0
+   ],
+   "first_load_memory_increase_range": [
+    10190848,
+    10190848
+   ],
+   "first_load_memory_peak_range": [
+    10190848,
+    10190848
+   ],
+   "warm_load_memory_increase_range": [
+    10006528,
+    10006528
+   ],
+   "warm_load_memory_peak_range": [
+    10006528,
+    10006528
+   ],
+   "inference_memory_increase_range": [
+    65536,
+    65536
+   ],
+   "inference_memory_peak_range": [
+    65536,
+    65536
+   ],
+   "all_compile_times": [],
+   "all_first_load_times": [
+    329937
+   ],
+   "all_warm_load_times": [
+    240079
+   ],
+   "all_inference_times": [
+    1910,
+    743,
+    782,
+    642,
+    641,
+    670,
+    731,
+    778,
+    781,
+    747,
+    711,
+    694,
+    671,
+    707,
+    690,
+    665,
+    665,
+    671,
+    670,
+    663,
+    655,
+    695,
+    835,
+    656,
+    650,
+    647,
+    642,
+    650,
+    637,
+    635,
+    642,
+    636,
+    636,
+    638,
+    634,
+    635,
+    644,
+    646,
+    641,
+    700,
+    697,
+    718,
+    834,
+    767,
+    664,
+    670,
+    709,
+    751,
+    780,
+    677,
+    698,
+    650,
+    661,
+    690,
+    675,
+    670,
+    702,
+    689,
+    710,
+    746,
+    702,
+    654,
+    690,
+    662,
+    812,
+    852,
+    648,
+    645,
+    683,
+    740,
+    731,
+    662,
+    658,
+    644,
+    643,
+    651,
+    659,
+    660,
+    672,
+    643,
+    641,
+    640,
+    651,
+    636,
+    635,
+    637,
+    659,
+    635,
+    637,
+    635,
+    667,
+    634,
+    704,
+    676,
+    632,
+    639,
+    634,
+    635,
+    640,
+    636
+   ]
+  },
+  "execution_detail": [
+   {
+    "name": "Input",
+    "type": "Input",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 3081
+   },
+   {
+    "name": "image_hoist_0231",
+    "type": "image",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 36204
+   },
+   {
+    "name": "/model/cnn/0/Conv",
+    "type": "/model/cnn/0/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/model/cnn/1/Clip",
+    "type": "/model/cnn/1/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 12475
+   },
+   {
+    "name": "/model/cnn/2/Conv",
+    "type": "/model/cnn/2/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/model/cnn/3/Clip",
+    "type": "/model/cnn/3/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10454
+   },
+   {
+    "name": "/model/cnn/4/Conv",
+    "type": "/model/cnn/4/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/model/cnn/5/Clip",
+    "type": "/model/cnn/5/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9724
+   },
+   {
+    "name": "/model/cnn/6/Conv",
+    "type": "/model/cnn/6/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/model/cnn/7/Clip",
+    "type": "/model/cnn/7/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9916
+   },
+   {
+    "name": "/model/cnn/8/Conv",
+    "type": "/model/cnn/8/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 0
+   },
+   {
+    "name": "/model/cnn/9/Clip",
+    "type": "/model/cnn/9/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 9981
+   },
+   {
+    "name": "/model/cnn/10/Conv",
+    "type": "/model/cnn/10/Conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 10039
+   },
+   {
+    "name": "/model/cnn/11/Clip",
+    "type": "/model/cnn/11/Clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 35434
+   },
+   {
+    "name": "/model/conv_last/Conv",
+    "type": "/model/conv",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 20795
+   },
+   {
+    "name": "/model/clip_output/Clip",
+    "type": "/model/clip",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 51760
+   },
+   {
+    "name": "/model/depth_to_space/DepthToSpace",
+    "type": "/model/depth",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 1796483
+   },
+   {
+    "name": "output_0_0231",
+    "type": "output",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 383634
+   },
+   {
+    "name": "Output",
+    "type": "Output",
+    "compute_unit": "NPU",
+    "execution_time": 0,
+    "execution_cycles": 28663
+   }
+  ]
+ }
+}

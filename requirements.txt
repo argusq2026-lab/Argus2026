@@ -1,0 +1,37 @@
+# Argus core dependencies.
+#
+# Everything here installs on ANY host arch and covers the fully-tested path:
+# capture, tracking, triage, all output sinks, and CPU ONNX inference.
+#
+# This venv is deliberately x86-64 even on a Snapdragon X-Elite host. opencv-python
+# has NO win-arm64 wheel -- pip falls back to a from-source numpy/meson build that
+# fails without a C toolchain -- so the capture/draw path and the NPU runtime
+# cannot share one environment. `run.ps1 -Npu` creates the second, ARM64 venv.
+numpy>=1.24
+opencv-python>=4.9
+
+# onnx is not optional: it generates the EPContext wrapper that lets ONNX Runtime
+# load a QNN context binary, and it repairs the duplicate node names in the
+# shipped QuickSRNet export (see argus/provision.py).
+onnx>=1.16
+
+# CPU reference inference. Runs the real INT8 QDQ ONNX detector and super-res
+# artifacts on any arch. The two BlazePose artifacts are QNN context binaries
+# with no CPU path -- pose needs engine.kind = 'qnn-npu' or 'mock'.
+onnxruntime>=1.18
+
+# Test suite.
+pytest>=7.0
+pytest-timeout>=2.1
+
+# --- NPU extras: native ARM64 host + Hexagon NPU. Installed by `run.ps1 -Npu`
+# --- into a SEPARATE .venv-npu, never here.
+#   onnxruntime-qnn>=1.17.0   # Hexagon ONNX Execution Provider (win-arm64 only)
+#   onnxruntime-genai         # Moondream2 / Genie VLM decode (win-arm64 only)
+#
+# --- Model provisioning (optional; `uv pip install -r requirements-provision.txt`)
+#   qai-hub                   # AI Hub client, for `argus bootstrap`
+#
+# qai-hub-models is a BUILD-host dependency ONLY -- it pulls torch/scipy, which
+# have no win-arm64 wheels. Re-exporting a model from PyTorch source needs a
+# non-arm64 host (x86 / WSL / macOS).
