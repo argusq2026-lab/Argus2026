@@ -8,14 +8,14 @@ version = "0.1.0"
 description = "Argus — many eyes, one mind. Deterministic, explainable multi-camera trainee triage on the Snapdragon X Elite Hexagon NPU."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "Apache-2.0" }
+license = { text = "MIT" }
 authors = [{ name = "QUAD Contributors" }]
 keywords = ["computer-vision", "npu", "qnn", "snapdragon", "hexagon", "triage", "pose"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -52,7 +52,7 @@ provision = [
 argus = "argus.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/CBN-AI-TEAM/Argus"
+Homepage = "https://github.com/argusq2026-lab/Argus2026"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/argus"]

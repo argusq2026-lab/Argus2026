@@ -187,3 +187,14 @@ exists for any model, because INT8 calibration used a placeholder set.
 
 [docs/VALIDATION.md](docs/VALIDATION.md) is the honest list, with what each gap
 would take to close.
+
+---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+One vendored file, [`src/argus/engines/ort_qnn.py`](src/argus/engines/ort_qnn.py),
+is Apache-2.0 and keeps that licence; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Model artifacts are not
+distributed here and carry their upstream terms.

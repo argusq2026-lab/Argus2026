@@ -1,3 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file alone is licensed Apache-2.0, not MIT like the rest of Argus.
+# Derived from quad_mcp_client/ort_qnn.py, Copyright QUAD Contributors,
+# github.com/CBN-AI-TEAM/QUAD-Client. See THIRD-PARTY-NOTICES.md.
 """QNN Execution Provider session helper — vendored from QUAD-Client.
 
 Upstream: ``quad_mcp_client/ort_qnn.py`` in github.com/CBN-AI-TEAM/QUAD-Client
