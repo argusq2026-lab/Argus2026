@@ -107,6 +107,16 @@ than an entire BlazePose stage — batch or down-cadence pose when it lands.
   person — `PosePipelineTest` uses a synthetic figure precisely because it
   tests wiring, not accuracy. This is docs/VALIDATION.md §1 restated for the
   phone: no real footage, no accuracy claim.
+- **A depicted person is a person.** The detector fires on any depiction —
+  someone on a monitor, a poster, a photograph, or a reflection. Gyms are full
+  of mirrors, so a badly placed station can acquire a phantom trainee and report
+  it with full confidence; nothing downstream can tell, because the observation
+  is well-formed. `SubjectTracker`'s largest-box rule helps by accident (a real
+  trainee in front of the phone is much larger than a person on a screen across
+  the room) but was not designed for this and does not solve it. Mitigations if
+  it bites, none needing a new model: a minimum box-area floor, centre-weighted
+  selection, or an operator-set region of interest. Observed during bring-up,
+  not yet a problem in any real placement.
 - **One trainee is reported, by design.** A `PROTOCOL.md` observation has one
   `bbox_xyxy` and one 17-keypoint set, and one connection carries one
   `trainee_id`. Multiple people are detected and (up to a budget) landmarked so
