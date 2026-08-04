@@ -58,6 +58,19 @@ class MainActivity : AppCompatActivity() {
     private var poseMsEma = 0.0
     private var lastVisibleKeypoints = 0
     private var lastPoseScore = 0f
+    private val subjectTracker = SubjectTracker()
+
+    /**
+     * How many people get a pose per frame.
+     *
+     * Only the subject's pose is ever *reported* -- the protocol carries one
+     * trainee. The others are landmarked purely so the operator can see, while
+     * placing the phone, who else is in frame and whether the right person is
+     * being tracked. Each extra pose costs ~4 ms (crop + NPU), so this is
+     * bounded rather than "all detections": at 15 fps the frame budget is
+     * 66 ms and detection already spends ~10 ms.
+     */
+    private val posesPerFrame = 3
     private var client: IngestClient? = null
     private var serverStatus: String = "disconnected"
 
@@ -109,7 +122,10 @@ class MainActivity : AppCompatActivity() {
             }
             running.set(now)
             toggleButton.text = if (now) "Stop" else "Start"
-            if (!now) overlay.update(emptyList(), null, 1, 1)
+            if (!now) {
+                overlay.update(emptyList(), null, null, emptyList(), 1, 1)
+                subjectTracker.reset()
+            }
             render()
         }
         findViewById<Button>(R.id.importModel).setOnClickListener {
@@ -220,26 +236,45 @@ class MainActivity : AppCompatActivity() {
                 inferenceMsEma = if (inferenceMsEma == 0.0) ms else 0.9 * inferenceMsEma + 0.1 * ms
                 lastDetections = detections.size
 
-                // One phone, one trainee: pose runs on the best box only.
-                val best = detections.maxByOrNull { it.score }
-                var pose: PoseResult? = null
+                // Which of them is this station's trainee -- by size and with
+                // hysteresis, not per-frame confidence. See SubjectTracker.
+                val subject = subjectTracker.select(detections)
+
+                // Pose the subject first, then the next largest others up to
+                // the budget. Only the subject's pose is reported.
+                var subjectPose: PoseResult? = null
+                val otherPoses = ArrayList<PoseResult>()
                 val estimator = poseEstimator
-                if (best != null && estimator != null) {
+                if (estimator != null && detections.isNotEmpty()) {
+                    val ordered = buildList {
+                        subject?.let { add(it) }
+                        addAll(
+                            detections.filter { it !== subject }
+                                .sortedByDescending { (it.x1 - it.x0) * (it.y1 - it.y0) }
+                        )
+                    }.take(posesPerFrame)
+
                     val poseStarted = System.nanoTime()
-                    pose = estimator.estimate(upright, best)
+                    for (det in ordered) {
+                        val p = estimator.estimate(upright, det) ?: continue
+                        if (det === subject) subjectPose = p else otherPoses.add(p)
+                    }
                     val poseMs = (System.nanoTime() - poseStarted) / 1e6
                     poseMsEma = if (poseMsEma == 0.0) poseMs else 0.9 * poseMsEma + 0.1 * poseMs
-                    lastVisibleKeypoints = pose?.keypointsConf?.count { it >= 0.3f } ?: 0
-                    lastPoseScore = pose?.poseScore ?: 0f
+                    lastVisibleKeypoints = subjectPose?.keypointsConf?.count { it >= 0.3f } ?: 0
+                    lastPoseScore = subjectPose?.poseScore ?: 0f
                 }
 
-                overlay.update(detections, pose, upright.width, upright.height)
+                overlay.update(
+                    detections, subject, subjectPose, otherPoses,
+                    upright.width, upright.height,
+                )
 
-                best?.let {
+                subject?.let {
                     client?.send(
                         Observation.fromDetection(
                             ts = System.currentTimeMillis() / 1000.0,
-                            det = it, pose = pose,
+                            det = it, pose = subjectPose,
                             frameWidth = upright.width, frameHeight = upright.height,
                         )
                     )
@@ -306,8 +341,12 @@ class MainActivity : AppCompatActivity() {
                 if (poseEstimator != null && running.get())
                     // 13 of 17 is the ceiling: the 25-point export has no
                     // knees or ankles, so those four never light up.
-                    "%.1f ms, %d/13 keypoints, score %.2f"
-                        .format(poseMsEma, lastVisibleKeypoints, lastPoseScore)
+                    "%.1f ms, %d/13 keypoints, score %.2f%s"
+                        .format(
+                            poseMsEma, lastVisibleKeypoints, lastPoseScore,
+                            if (subjectTracker.switches > 0)
+                                " — %d subject switch(es)".format(subjectTracker.switches) else "",
+                        )
                 else poseStatus
             ).append('\n')
             append("server    ").append(serverStatus)

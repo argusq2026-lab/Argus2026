@@ -21,7 +21,9 @@ class DetectionOverlayView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     private var detections: List<Detection> = emptyList()
-    private var pose: PoseResult? = null
+    private var subject: Detection? = null
+    private var subjectPose: PoseResult? = null
+    private var otherPoses: List<PoseResult> = emptyList()
     private var frameWidth = 1
     private var frameHeight = 1
 
@@ -55,6 +57,26 @@ class DetectionOverlayView @JvmOverloads constructor(
         color = Color.argb(110, 255, 190, 40); isAntiAlias = true
     }
 
+    // Bystanders: landmarked so the operator can see who else is in frame while
+    // placing the phone, drawn muted because only the subject is ever reported.
+    private val bystanderBoxPaint = Paint().apply {
+        style = Paint.Style.STROKE; strokeWidth = 3f
+        color = Color.argb(140, 120, 170, 255)
+    }
+    private val bystanderBonePaint = Paint().apply {
+        style = Paint.Style.STROKE; strokeWidth = 5f
+        strokeCap = Paint.Cap.ROUND; isAntiAlias = true
+        color = Color.argb(150, 120, 170, 255)
+    }
+    private val bystanderJointPaint = Paint().apply {
+        color = Color.argb(170, 150, 190, 255); isAntiAlias = true
+    }
+    private val bystanderTextPaint = Paint().apply {
+        color = Color.argb(180, 120, 170, 255)
+        textSize = 36f
+        typeface = android.graphics.Typeface.MONOSPACE
+    }
+
     private val boxPaint = Paint().apply {
         style = Paint.Style.STROKE
         strokeWidth = 6f
@@ -68,10 +90,17 @@ class DetectionOverlayView @JvmOverloads constructor(
     private val textBackground = Paint().apply { color = Color.argb(160, 0, 0, 0) }
 
     fun update(
-        detections: List<Detection>, pose: PoseResult?, frameWidth: Int, frameHeight: Int,
+        detections: List<Detection>,
+        subject: Detection?,
+        subjectPose: PoseResult?,
+        otherPoses: List<PoseResult>,
+        frameWidth: Int,
+        frameHeight: Int,
     ) {
         this.detections = detections
-        this.pose = pose
+        this.subject = subject
+        this.subjectPose = subjectPose
+        this.otherPoses = otherPoses
         this.frameWidth = maxOf(frameWidth, 1)
         this.frameHeight = maxOf(frameHeight, 1)
         postInvalidateOnAnimation()
@@ -79,14 +108,40 @@ class DetectionOverlayView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (detections.isEmpty() && pose == null) return
+        if (detections.isEmpty() && subjectPose == null && otherPoses.isEmpty()) return
 
         // FILL_CENTER: uniform scale to cover, then center the overflow.
         val scale = maxOf(width.toFloat() / frameWidth, height.toFloat() / frameHeight)
         val dx = (width - frameWidth * scale) / 2f
         val dy = (height - frameHeight * scale) / 2f
 
-        pose?.let { p ->
+        // Bystanders first and dimmed, so the subject reads on top of them.
+        for (p in otherPoses) drawSkeleton(canvas, p, scale, dx, dy, primary = false)
+        subjectPose?.let { drawSkeleton(canvas, it, scale, dx, dy, primary = true) }
+
+        for (det in detections) {
+            val isSubject = det === subject
+            val x0 = det.x0 * scale + dx
+            val y0 = det.y0 * scale + dy
+            val x1 = det.x1 * scale + dx
+            val y1 = det.y1 * scale + dy
+            canvas.drawRect(x0, y0, x1, y1, if (isSubject) boxPaint else bystanderBoxPaint)
+
+            val label = if (isSubject) "subject %.2f".format(det.score)
+                        else "person %.2f".format(det.score)
+            val paint = if (isSubject) textPaint else bystanderTextPaint
+            val tw = paint.measureText(label)
+            canvas.drawRect(x0, y0 - 52f, x0 + tw + 16f, y0, textBackground)
+            canvas.drawText(label, x0 + 8f, y0 - 12f, paint)
+        }
+    }
+
+    private fun drawSkeleton(
+        canvas: Canvas, p: PoseResult, scale: Float, dx: Float, dy: Float, primary: Boolean,
+    ) {
+        run {
+            val bonePaint = if (primary) this.bonePaint else bystanderBonePaint
+            val jointPaint = if (primary) this.jointPaint else bystanderJointPaint
             for ((a, b) in skeletonEdges) {
                 if (p.keypointsConf[a] < 0.3f || p.keypointsConf[b] < 0.3f) continue
                 canvas.drawLine(
@@ -101,25 +156,12 @@ class DetectionOverlayView @JvmOverloads constructor(
                 val x = p.keypointsXy[k * 2] * scale + dx
                 val y = p.keypointsXy[k * 2 + 1] * scale + dy
                 if (conf >= 0.3f) {
-                    canvas.drawCircle(x, y, 13f, jointPaint)
-                    canvas.drawCircle(x, y, 13f, jointOutline)
-                } else {
+                    canvas.drawCircle(x, y, if (primary) 13f else 8f, jointPaint)
+                    if (primary) canvas.drawCircle(x, y, 13f, jointOutline)
+                } else if (primary) {
                     canvas.drawCircle(x, y, 9f, jointDimPaint)
                 }
             }
-        }
-
-        for (det in detections) {
-            val x0 = det.x0 * scale + dx
-            val y0 = det.y0 * scale + dy
-            val x1 = det.x1 * scale + dx
-            val y1 = det.y1 * scale + dy
-            canvas.drawRect(x0, y0, x1, y1, boxPaint)
-
-            val label = "person %.2f".format(det.score)
-            val tw = textPaint.measureText(label)
-            canvas.drawRect(x0, y0 - 52f, x0 + tw + 16f, y0, textBackground)
-            canvas.drawText(label, x0 + 8f, y0 - 12f, textPaint)
         }
     }
 }

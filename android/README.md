@@ -18,7 +18,8 @@ fields, ever leaves the device.
 | Protocol client (`Protocol.kt`, `IngestClient.kt`) | encodes `hello`/`observation` per PROTOCOL.md, verified against the server's own parser via a shared fixture |
 | User controls | live box + skeleton overlay, start/stop, threshold slider, model import (file picker or adb), server connect dialog, camera flip, keep-screen-on |
 | Connection resilience | auto-reconnect with capped backoff on transport drops; protocol refusals stay terminal and say so |
-| Pose (BlazePose landmarks) on the NPU | **working** — fp16, ~0.6 ms/inference on the person box; real COCO-17 keypoints in observations, skeleton drawn live |
+| Pose (BlazePose landmarks) on the NPU | **working** — fp16; up to 3 people landmarked per frame for display, subject's keypoints reported |
+| Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
 | Form/exercise classifier | not started (`form_reason_codes` always empty) |
 
@@ -106,6 +107,12 @@ than an entire BlazePose stage — batch or down-cadence pose when it lands.
   person — `PosePipelineTest` uses a synthetic figure precisely because it
   tests wiring, not accuracy. This is docs/VALIDATION.md §1 restated for the
   phone: no real footage, no accuracy claim.
+- **One trainee is reported, by design.** A `PROTOCOL.md` observation has one
+  `bbox_xyxy` and one 17-keypoint set, and one connection carries one
+  `trainee_id`. Multiple people are detected and (up to a budget) landmarked so
+  the operator can see who is in frame while placing the phone, but only the
+  subject's pose crosses the wire. Reporting several people would need a
+  protocol change, not an app change.
 - **Only 13 of 17 keypoints can ever light up.** The 25-point BlazePose
   export has no knees or ankles, so COCO 13-16 stay at exactly zero confidence
   and no leg bones are drawn. Their absence on screen is accurate, not a
