@@ -48,7 +48,7 @@ echo "==> installing"
 # line, else whatever was last pushed to /data/local/tmp.
 if [ -n "$MODELS_DIR" ]; then
   echo "==> pushing models from $MODELS_DIR"
-  for f in yolox.onnx yolox.data yolox.json pose_landmark_fp32.onnx; do
+  for f in yolo26_pose_fp32.onnx yolox.onnx yolox.data yolox.json pose_landmark_fp32.onnx; do
     [ -f "$MODELS_DIR/$f" ] && "$ADB" push "$MODELS_DIR/$f" /data/local/tmp/ >/dev/null
   done
 fi
@@ -57,7 +57,7 @@ echo "==> staging into the app sandbox"
 "$ADB" shell "run-as $PKG mkdir -p files/models" || {
   echo "run-as failed: is this a debuggable build?" >&2; exit 1; }
 staged=0
-for f in yolox.onnx yolox.data yolox.json pose_landmark_fp32.onnx; do
+for f in yolo26_pose_fp32.onnx yolox.onnx yolox.data yolox.json pose_landmark_fp32.onnx; do
   if "$ADB" shell "[ -f /data/local/tmp/$f ]"; then
     "$ADB" shell "run-as $PKG cp /data/local/tmp/$f files/models/"
     staged=$((staged + 1))

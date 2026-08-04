@@ -69,7 +69,7 @@ the terms of whichever model they stage.
 |---|---|---|
 | YOLO-X w8a8 detector | AI Hub job `jgo8m0l1p` | Apache-2.0 (YOLOX upstream) |
 | BlazePose landmark | `qai_hub_models.models.mediapipe_pose`, weights via zmurez/MediaPipePyTorch | Apache-2.0 |
-| **YOLO26-pose** (single-stage prototype) | `qai_hub_models.models.yolo26_pose`, weights from Ultralytics | **AGPL-3.0** |
+| **YOLO26-pose** (single-stage — **the pose path the station runs**) | `qai_hub_models.models.yolo26_pose`, weights from Ultralytics | **AGPL-3.0** |
 
 ### On the AGPL model specifically
 
@@ -84,9 +84,14 @@ distributed with those weights is a different question, and the export step
 itself is performed by the AGPL-licensed `ultralytics` package. Whether exported
 weights are a derivative work of the training code is genuinely contested;
 Ultralytics asserts that they are and sells commercial licences accordingly.
-Development, evaluation and internal benchmarking are not conveying, so the
-prototype is usable today without triggering any of this.
+Development, evaluation and internal benchmarking are not conveying, so using
+it today triggers none of this. **Distributing an application built on it
+does**, and this model is now the station's chosen pose path rather than an
+experiment — so that decision is live rather than hypothetical, and wants legal
+review before any release.
 
-Permissively-licensed alternatives with the same COCO-17 coverage exist and are
-recorded in `android/README.md` — `hrnet_pose` is MIT, `rtmpose_body2d` and
-`litehrnet` are Apache-2.0. **Get legal review before shipping the AGPL path.**
+Permissively-licensed alternatives with the same COCO-17 coverage are recorded
+in `android/README.md` — `hrnet_pose` is MIT, `rtmpose_body2d` and `litehrnet`
+are Apache-2.0. The two-model fallback path is deliberately retained in the app
+partly so that switching remains cheap: those alternatives are two-stage and
+would reuse its ROI and crop machinery.

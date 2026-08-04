@@ -11,17 +11,17 @@ fields, ever leaves the device.
 | Piece | State |
 |---|---|
 | Gradle build → installable APK | `./gradlew assembleDebug` |
-| Person detection (YOLO-X w8a8) on the Hexagon NPU | **working on a stock Galaxy S25 Ultra** — 9.6 ms/frame wall-clock at 640², CPU fallback disabled |
+| **Detection + COCO-17 pose (YOLO26-pose)** | **the pose path** — single-stage on the Hexagon NPU, ~22 ms/frame at 640², all people landmarked, CPU fallback disabled. AGPL-3.0, see below |
+| YOLO-X w8a8 detector | fallback path, used when `yolo26_pose_fp32.onnx` is absent — 9.6 ms/frame |
 | Contract sidecar (`Sidecar.kt`) | required per model; generated from the real ONNX by `scripts/gen_yolox_fixture.py` |
 | Decode (`decodeDetections`) | pure function, pinned to the deleted PC reference by fixture cases on host and device |
 | NPU↔CPU parity | measured: worst 11 LSB score / 6 LSB box vs CPU reference; bounded at 16/9 in the fixture |
 | Protocol client (`Protocol.kt`, `IngestClient.kt`) | encodes `hello`/`observation` per PROTOCOL.md, verified against the server's own parser via a shared fixture |
 | User controls | live box + skeleton overlay (held ~400 ms and faded across blurred frames), start/stop, threshold slider, model import (file picker or adb), server connect dialog, camera flip, keep-screen-on |
 | Connection resilience | auto-reconnect with capped backoff on transport drops; protocol refusals stay terminal and say so |
-| Pose (BlazePose landmarks) on the NPU | **working** — fp16; up to 3 people landmarked per frame for display, subject's keypoints reported |
+| BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
-| **YOLO26-pose (single-stage)** | **prototype behind a flag** — stage `yolo26_pose_fp32.onnx` and it replaces both models; COCO-17 with legs, ~22 ms/frame. AGPL-3.0, see below |
 | Form/exercise classifier | not started (`form_reason_codes` always empty) |
 
 ## How detection stays honest
@@ -96,13 +96,20 @@ HIDL neural-networks HAL is gone. Measured dispatch overhead: ~500 µs per NPU
 call on this device (see `NpuEvidenceTest`), ~5% of a YOLO-X frame but larger
 than an entire BlazePose stage — batch or down-cadence pose when it lands.
 
-## The single-stage prototype (YOLO26-pose)
+## The pose path: YOLO26-pose (single-stage)
 
-Selected purely by staging `yolo26_pose_fp32.onnx` into `files/models/`; remove
-the file and the two-model path returns untouched. The status strip names the
-active backend.
+This is what the station runs. `stage.sh` stages it by default; the two-model
+path (YOLO-X + BlazePose) remains as a fallback and takes over automatically if
+`yolo26_pose_fp32.onnx` is absent. The status strip names the active backend, so
+which one is running is never a guess.
 
-Why it exists: the 25-point BlazePose export is upper-body only, and four of the
+The fallback is kept deliberately rather than deleted. If the licence below
+forces a move to `hrnet_pose` (MIT) or `rtmpose_body2d` (Apache-2.0), both are
+**two-stage** top-down models — they would reuse the ROI derivation, the crop,
+and the per-person dispatch that path already implements, including the measured
+2.2x ROI scale that took a sweep to find.
+
+Why it was adopted: the 25-point BlazePose export is upper-body only, and four of the
 seven `form_reason_codes` the protocol defines — `insufficient_depth`,
 `knee_valgus`, `heels_rising`, partly `incomplete_lockout` — need knees or
 ankles it structurally cannot produce. Measured against BlazePose on four images:
