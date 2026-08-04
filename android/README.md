@@ -62,11 +62,25 @@ $ getenforce
 Enforcing
 ```
 
-QNN reaches the Hexagon through `/dev/fastrpc-cdsp`. It is owned by `system:system`
-with no write bit for others, labelled `vendor_qdsp_device`, and SELinux is
-enforcing. An app in `untrusted_app` cannot open it — nor can `shell` (uid 2000),
-which was verified directly. Setting `ADSP_LIBRARY_PATH` does not help, because
-the problem is access to the device node rather than skel resolution.
+Measured directly with `android.system.Os.open` from inside the app, rather
+than inferred from mode bits (`/dev/fastrpc-cdsp` is an ioctl-only character
+device, so `cat` failing on it proves nothing):
+
+```
+DENIED  EACCES  /dev/fastrpc-cdsp
+DENIED  EACCES  /dev/fastrpc-cdsp-secure
+UNAVAILABLE     libcdsprpc.so  (not on the app linker path)
+```
+
+The denial is DAC, not SELinux — `crw-rw-r--` with owner `system:system` denies
+write to others before SELinux is consulted, which is why no AVC denial ever
+appears in the log. Qualcomm's own client library is in `/vendor/lib64` but is
+not exposed to apps. Setting `ADSP_LIBRARY_PATH` does not help, because the
+obstacle is opening the device node rather than resolving the skel.
+
+Root is not an escape on this handset: `ro.boot.flash.locked=1`,
+`verifiedbootstate=green`, `ro.build.type=user`, and `oem_unlock_allowed` is
+absent — a US-model S25 with a permanently locked bootloader.
 
 This is a property of the retail build, not of our code. Samsung ships its own
 `/vendor/lib64/libsnap_qnn.so` for system-level use.
