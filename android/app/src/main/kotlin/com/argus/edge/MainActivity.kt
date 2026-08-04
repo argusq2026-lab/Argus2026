@@ -56,6 +56,8 @@ class MainActivity : AppCompatActivity() {
     private var poseEstimator: PoseEstimator? = null
     private var poseStatus: String = "not staged"
     private var poseMsEma = 0.0
+    private var lastVisibleKeypoints = 0
+    private var lastPoseScore = 0f
     private var client: IngestClient? = null
     private var serverStatus: String = "disconnected"
 
@@ -227,6 +229,8 @@ class MainActivity : AppCompatActivity() {
                     pose = estimator.estimate(upright, best)
                     val poseMs = (System.nanoTime() - poseStarted) / 1e6
                     poseMsEma = if (poseMsEma == 0.0) poseMs else 0.9 * poseMsEma + 0.1 * poseMs
+                    lastVisibleKeypoints = pose?.keypointsConf?.count { it >= 0.3f } ?: 0
+                    lastPoseScore = pose?.poseScore ?: 0f
                 }
 
                 overlay.update(detections, pose, upright.width, upright.height)
@@ -300,7 +304,10 @@ class MainActivity : AppCompatActivity() {
             append("pose      ")
             append(
                 if (poseEstimator != null && running.get())
-                    "%.1f ms — %s".format(poseMsEma, poseStatus)
+                    // 13 of 17 is the ceiling: the 25-point export has no
+                    // knees or ankles, so those four never light up.
+                    "%.1f ms, %d/13 keypoints, score %.2f"
+                        .format(poseMsEma, lastVisibleKeypoints, lastPoseScore)
                 else poseStatus
             ).append('\n')
             append("server    ").append(serverStatus)

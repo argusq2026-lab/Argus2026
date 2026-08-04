@@ -25,20 +25,35 @@ class DetectionOverlayView @JvmOverloads constructor(
     private var frameWidth = 1
     private var frameHeight = 1
 
-    /** COCO skeleton edges among the joints the 25-point export can supply. */
+    /**
+     * COCO skeleton edges among the joints the 25-point export can supply.
+     * Knees and ankles (13-16) have no source landmark, so no leg edges exist
+     * to draw — their absence on screen is accurate, not a rendering bug.
+     */
     private val skeletonEdges = arrayOf(
-        5 to 6,                     // shoulders
-        5 to 7, 7 to 9,             // left arm
-        6 to 8, 8 to 10,            // right arm
-        5 to 11, 6 to 12, 11 to 12, // torso
+        0 to 1, 0 to 2, 1 to 3, 2 to 4, // face: nose-eyes-ears
+        5 to 6,                        // shoulders
+        5 to 7, 7 to 9,                // left arm
+        6 to 8, 8 to 10,               // right arm
+        5 to 11, 6 to 12, 11 to 12,    // torso
     )
     private val bonePaint = Paint().apply {
         style = Paint.Style.STROKE
-        strokeWidth = 5f
-        color = Color.rgb(255, 200, 60)
+        strokeWidth = 9f
+        strokeCap = Paint.Cap.ROUND
+        isAntiAlias = true
+        color = Color.rgb(255, 190, 40)
     }
-    private val jointPaint = Paint().apply { color = Color.rgb(255, 200, 60) }
-    private val jointDimPaint = Paint().apply { color = Color.argb(90, 255, 200, 60) }
+    private val jointPaint = Paint().apply {
+        color = Color.rgb(255, 240, 120); isAntiAlias = true
+    }
+    private val jointOutline = Paint().apply {
+        style = Paint.Style.STROKE; strokeWidth = 3f
+        color = Color.argb(200, 40, 30, 0); isAntiAlias = true
+    }
+    private val jointDimPaint = Paint().apply {
+        color = Color.argb(110, 255, 190, 40); isAntiAlias = true
+    }
 
     private val boxPaint = Paint().apply {
         style = Paint.Style.STROKE
@@ -83,10 +98,14 @@ class DetectionOverlayView @JvmOverloads constructor(
             for (k in 0 until 17) {
                 val conf = p.keypointsConf[k]
                 if (conf <= 0f) continue // unmapped joints never draw
-                canvas.drawCircle(
-                    p.keypointsXy[k * 2] * scale + dx, p.keypointsXy[k * 2 + 1] * scale + dy,
-                    10f, if (conf >= 0.3f) jointPaint else jointDimPaint,
-                )
+                val x = p.keypointsXy[k * 2] * scale + dx
+                val y = p.keypointsXy[k * 2 + 1] * scale + dy
+                if (conf >= 0.3f) {
+                    canvas.drawCircle(x, y, 13f, jointPaint)
+                    canvas.drawCircle(x, y, 13f, jointOutline)
+                } else {
+                    canvas.drawCircle(x, y, 9f, jointDimPaint)
+                }
             }
         }
 
