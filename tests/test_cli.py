@@ -7,13 +7,45 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _wait_until_listening(
+    port: int, process: subprocess.Popen, timeout: float = 20.0
+) -> None:
+    """Block until the server accepts a connection on `port`.
+
+    The server binds asynchronously after `Popen` returns, so connecting
+    immediately is a race: it passes on a fast machine and fails on a loaded CI
+    runner with ECONNREFUSED, which reads like a broken server rather than a
+    test that started too early. Poll the port instead of sleeping a guessed
+    interval -- a fixed sleep is the same race with a longer fuse.
+
+    Fails fast if the process dies first, surfacing its output rather than
+    waiting out the timeout on a server that already exited (a port collision,
+    for instance).
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            out = process.stdout.read() if process.stdout else ""
+            raise AssertionError(
+                f"server exited with {process.returncode} before listening on {port}:\n{out}"
+            )
+        with socket.socket() as probe:
+            probe.settimeout(0.5)
+            if probe.connect_ex(("127.0.0.1", port)) == 0:
+                return
+        time.sleep(0.05)
+    raise AssertionError(f"server did not listen on {port} within {timeout}s")
 
 
 def _run_cli(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
@@ -84,6 +116,10 @@ def test_cli_run_end_to_end_with_the_replay_client(tmp_path):
         text=True,
     )
     try:
+        # The phone cannot connect before the laptop is listening; neither can
+        # the client that stands in for it.
+        _wait_until_listening(18765, run_proc)
+
         replay = subprocess.run(
             [sys.executable, "demo/replay_client.py", "--fixture", str(fixture), "--ws-port", "18765"],
             cwd=REPO_ROOT,

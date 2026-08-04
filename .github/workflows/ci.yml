@@ -42,7 +42,18 @@ jobs:
           python -m argus.cli demo --out demo/ci_fixture.json --ticks 40
           python -m argus.cli run --ws-port 18765 --json-log out/ci.jsonl --max-ticks 30 --quiet &
           run_pid=$!
-          sleep 1
+
+          # Wait for the port rather than sleeping a guessed interval. The
+          # server binds asynchronously, so a fixed sleep is a race with a
+          # longer fuse: it passes on an idle runner and fails on a loaded one
+          # with ECONNREFUSED, which reads like a broken server rather than a
+          # client that started too early.
+          for _ in $(seq 1 200); do
+            python -c "import socket,sys; s=socket.socket(); s.settimeout(0.5); sys.exit(s.connect_ex(('127.0.0.1',18765)))" && break
+            kill -0 "$run_pid" 2>/dev/null || { echo "server exited before listening"; exit 1; }
+            sleep 0.1
+          done
+
           python demo/replay_client.py --fixture demo/ci_fixture.json --ws-port 18765
           wait "$run_pid"
           python -m argus.cli doctor --ws-port 18765
