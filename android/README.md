@@ -134,7 +134,11 @@ export ANDROID_HOME=~/Library/Android/sdk
 cd android
 ./gradlew assembleDebug testDebugUnitTest        # host: build + decode/protocol tests
 ./gradlew connectedDebugAndroidTest              # device: NPU + parity (needs staged model)
+./stage.sh --models <dir-with-yolox.onnx>        # build, install, stage, launch
 ```
 
-`connectedDebugAndroidTest` reinstalls the APK, which wipes `files/models/` —
-restage after it if you then want to run the app itself.
+> **`connectedDebugAndroidTest` uninstalls the app when it finishes** — both the
+> app and the test APK, which also destroys `files/models/`. On the phone the
+> symptom is simply that nothing happens: no app, no model, no explanation.
+> Always re-run `./stage.sh` after a device-test run. That is what the script is
+> for.
