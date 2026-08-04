@@ -9,6 +9,17 @@ streams the numeric result to a laptop over WebSocket — no video ever leaves
 the phone. The laptop ranks every connected trainee with a pure, auditable
 scorer and gives the trainer a live view.
 
+> **Scope: this is a hackathon build.** It is a working system, not a shipped
+> product — the engineering is real and the measurements are real, but three
+> things would need revisiting before it went anywhere near a gym floor. The
+> scoring weights have never been fitted to an incident
+> ([VALIDATION.md](docs/VALIDATION.md) §2). No pose or detection accuracy claim
+> is supported, because no real trainee footage exists (§1). And the phone's
+> pose model is AGPL-3.0, which is fine to demo and develop against but is a
+> licensing decision before distributing an application built on it — see
+> [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), where the permissively
+> licensed alternatives are already scouted.
+
 **Privacy is a property of the wiring.** No frame ever exists past a phone's
 own camera pipeline, and every sink's signature accepts only
 `TriageRecord{trainee_id, score, reason_codes, ts}` — the modules on that

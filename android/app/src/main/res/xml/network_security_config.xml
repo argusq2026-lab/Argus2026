@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ingest server is a laptop on the same floor, addressed by LAN IP over
+  ws:// (docs/PROTOCOL.md). Android has blocked cleartext by default since API
+  28, which is why an unconfigured build fails with "CLEARTEXT communication to
+  <host> not permitted by network security policy" rather than connecting.
+
+  Cleartext is permitted here, and that is a real weakening stated rather than
+  hidden. Three things bound it:
+
+    * Only observations cross this link: a trainee id, a normalized bounding
+      box, 17 keypoints, and closed-vocabulary form codes. No frame, no image,
+      no free text. The protocol has no field that could carry one.
+    * The link is a gym LAN, not the internet.
+    * The upgrade path is wss:// with a pinned certificate on the laptop, at
+      which point base-config below flips to false and this file becomes the
+      trust anchor list instead.
+
+  It cannot be scoped more tightly today: Android's domain-config matches
+  hostnames, and a station is pointed at whatever LAN IP the laptop happens to
+  have. localhost is called out separately because that is the adb-reverse path
+  used for development.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true"/>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>
