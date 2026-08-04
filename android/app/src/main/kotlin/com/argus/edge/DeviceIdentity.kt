@@ -42,7 +42,8 @@ object DeviceIdentity {
     }
 
     private fun generate(): String {
+        // hex only — no '-', so the id reads unambiguously in logs and ranks.
         val hex = UUID.randomUUID().toString().replace("-", "").take(12)
-        return "phone$hex".also { checkDeviceId(it) }
+        return "phone$hex"
     }
 }

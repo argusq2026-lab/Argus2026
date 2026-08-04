@@ -41,11 +41,13 @@ android {
         getByName("main").java.srcDirs("src/main/kotlin")
         getByName("test").java.srcDirs("src/test/kotlin")
         getByName("androidTest").java.srcDirs("src/androidTest/kotlin")
+        // The cross-language fixtures live with the Python tests that generate
+        // them (tests/data). Host unit tests read them via a system property;
+        // instrumented tests get them packaged as androidTest assets. One file,
+        // both platforms — never two drifting copies.
+        getByName("androidTest").assets.srcDirs("${rootDir.parentFile}/tests/data")
     }
 
-    // The cross-language wire fixture lives with the Python tests that generate
-    // it. Putting it on the unit-test resource path means both platforms check
-    // themselves against one file rather than two drifting copies.
     testOptions {
         unitTests.all { it.systemProperty("argus.fixtures", "${rootDir.parentFile}/tests/data") }
     }
@@ -86,6 +88,9 @@ dependencies {
     // libQnnHtpV79Skel.so, the Snapdragon 8 Elite's. Both are on Maven Central;
     // no Qualcomm account or QAIRT SDK download is involved.
     implementation("com.microsoft.onnxruntime:onnxruntime-android-qnn:1.28.0")
+
+    // WebSocket client for the ingest protocol (docs/PROTOCOL.md).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

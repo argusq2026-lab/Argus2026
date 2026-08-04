@@ -1,163 +1,118 @@
 # Argus Edge — Android station
 
-The phone half of the multi-edge design: a capture-and-compute node that scores
-locally and reports only redacted records to the PC aggregator.
-
-This module is **not** finished. What is here is the contract, the identity, the
-capture loop, and a working NPU path — all of it building, tested, and running on
-a stock Galaxy S25 Ultra. What is not here is the detector decode, for one reason
-stated plainly below, and everything an end user would actually need.
+The phone half of the system described in `docs/PROTOCOL.md`: one phone watches
+one trainee, runs perception on its own NPU, and streams structured numeric
+observations to the laptop's WebSocket ingest server. The laptop scores and
+ranks; no frame, and nothing derived from a frame except the observation
+fields, ever leaves the device.
 
 ## Status
 
 | Piece | State |
 |---|---|
-| Gradle build → installable APK | done, `./gradlew assembleDebug` |
-| Wire contract (`Wire.kt`) | done, checked against Python via a shared fixture |
-| Station identity (`DeviceIdentity.kt`) | done |
-| Camera capture (`MainActivity.kt`) | done, CameraX 640² analysis stream |
-| NPU session bring-up (`Detector.kt`) | **works on real hardware** — graph runs on Hexagon v79, no CPU fallback |
-| Detector post-processing | **not written** — see below |
-| Tracking, pose, triage scoring | not started; pending the split-point decision |
-| Transport to the PC | interface only (`EdgeTransport`) |
+| Gradle build → installable APK | `./gradlew assembleDebug` |
+| Person detection (YOLO-X w8a8) on the Hexagon NPU | **working on a stock Galaxy S25 Ultra** — 9.6 ms/frame wall-clock at 640², CPU fallback disabled |
+| Contract sidecar (`Sidecar.kt`) | required per model; generated from the real ONNX by `scripts/gen_yolox_fixture.py` |
+| Decode (`decodeDetections`) | pure function, pinned to the deleted PC reference by fixture cases on host and device |
+| NPU↔CPU parity | measured: worst 11 LSB score / 6 LSB box vs CPU reference; bounded at 16/9 in the fixture |
+| Protocol client (`Protocol.kt`, `IngestClient.kt`) | encodes `hello`/`observation` per PROTOCOL.md, verified against the server's own parser via a shared fixture |
+| User controls | live box overlay, start/stop, threshold slider, model import (file picker or adb), server connect dialog, camera flip, keep-screen-on |
+| Pose model → real keypoints | **not started** — observations carry the protocol's zero-confidence keypoints, as PROTOCOL.md specifies for a phone with no pose estimate |
+| Form/exercise classifier | not started (`form_reason_codes` always empty) |
 
-## Resolved: the NPU runs, and what it took
+## How detection stays honest
 
-`QnnSessionTest` passes on a stock **Galaxy S25 Ultra** (`SM-S938U1`,
-`ro.soc.model=SM8750`, Hexagon v79, Android 16, locked bootloader, SELinux
-enforcing). A graph executes on the NPU with **CPU fallback explicitly
-disabled**, so the pass cannot be an accidental CPU run.
+Three fixtures, all generated from the real artifact by scripts in this repo,
+all shared verbatim between the Python and Kotlin test suites (`tests/data` is
+mounted into both — never copied):
 
-No root, no unlock, no platform signing, no Qualcomm account, and no QAIRT SDK
-download. Two things were required, and neither is obvious:
+- **`<model>.json` sidecar** — I/O names, shapes, and output quantization
+  parameters read from the graph's own QuantizeLinear initializers. The app
+  refuses a model without a sidecar and refuses a session whose live I/O
+  disagrees with it. Nothing about the tensor contract is hardcoded in Kotlin;
+  scale `4.4157/51` lives in the artifact's sidecar, not the code.
+- **`tests/data/yolox_parity.json`** — CPU-reference raw outputs on a
+  procedural input (`(x*7 + y*13 + c*31) % 256`), plus crafted decode cases
+  with known person anchors. `DecodeTest` (host) pins the Kotlin decode to the
+  Python reference exactly; `NpuParityTest` (device) re-runs the frozen input
+  on the Hexagon and holds it to the measured tolerance.
+- **`tests/data/protocol_vectors.json`** — canonical protocol messages passed
+  through `argus.ingest.protocol` *at generation time*. `ProtocolTest` (host)
+  proves the Kotlin encoder reproduces them; `tests/test_protocol_vectors.py`
+  proves the server parses them. One file, both ends of the wire.
 
-### 1. Declare the vendor libraries in the manifest
+The measured NPU↔CPU divergence (11 LSB ≈ 0.042 in score units) is stated, not
+hidden: a borderline detection near the 0.35 threshold can legitimately differ
+between the phone and a CPU replay of the same frame.
 
-```xml
-<uses-native-library android:name="libcdsprpc.so" android:required="false"/>
-<uses-native-library android:name="libadsprpc.so" android:required="false"/>
-```
+## Staging a model
 
-This is the whole fix for the `QNN_DEVICE_ERROR_INVALID_CONFIG` failure. QNN
-`dlopen`s the vendor cDSP client at runtime. Bundled `.so` files live in the
-app's linker namespace, which cannot see `/vendor` by default; `libcdsprpc.so`
-is listed in `/vendor/etc/public.libraries.txt`, and since API 31 an app must
-*declare* such a library to be granted namespace access to it. Without the
-declaration the load fails deep inside QNN and surfaces only as an invalid
-device config, which points nowhere near the real cause.
-
-### 2. Extract native libraries to disk
-
-```kotlin
-packaging { jniLibs { useLegacyPackaging = true } }
-```
-
-QNN takes a filesystem `backend_path`. Android has not unpacked `.so` files by
-default since API 23, so without this there is no path to hand it, the execution
-provider silently fails to register, and every node lands on CPU. The only
-reason that surfaced is that CPU fallback is disabled — with fallback on it
-would have presented as a working app quietly running at CPU speed.
-
-### A red herring worth recording
-
-`DspAccessTest` still reports `EACCES` opening `/dev/fastrpc-cdsp` directly, and
-that is *fine*. The app never opens the node itself; the vendor client does,
-from the vendor namespace. Reasoning from the mode bits on that node led to the
-confident and wrong conclusion that retail hardware was closed to third-party
-NPU use. It is not. Both tests are kept precisely because they disagree, and the
-disagreement is the point: node permissions are not the access mechanism.
-
-### Also ruled out along the way
-
-NNAPI is not a route on Android 16. It runs, but:
-
-```
-Cannot list manifest for android.hardware.neuralnetworks@1.1::IDevice
-compilation finished successfully on nnapi-reference
-```
-
-`nnapi-reference` is the CPU fallback driver; the HIDL neural-networks HAL is
-gone, so there is no vendor driver to dispatch to. Irrelevant now that QNN
-works, but worth not re-testing.
-
-## Why post-processing is deliberately absent
-
-`QnnDetector.detect` throws `NotImplementedError`. That is a decision, not an
-oversight.
-
-The PC path reads every tensor contract from the artifact's own `metadata.json`
-(`argus.engines.metadata`) rather than hardcoding shapes, because the prototype
-hardcoded three and all three were wrong — NHWC where the detector wants NCHW,
-one fused output tensor where there are three, a heatmap decode for a model that
-emits no heatmaps. None of it was caught, because the real inference path had
-never executed. `ARCHITECTURE.md` records this and `docs/VALIDATION.md` §7
-records the related habit of shipping plausible code that has never run.
-
-No SM8750 artifact exists yet, so there is no `metadata.json` here to read a
-contract *from*. Writing a decode against a guessed shape would repeat the exact
-mistake this repository was built to correct. It gets written when there is a
-real artifact to write it against.
-
-## What the phone needs staged, and what it does not
-
-**Does not need staging:** the QNN backend. `onnxruntime-android-qnn` depends on
-`com.qualcomm.qti:qnn-runtime`, published by Qualcomm to Maven Central, so
-Gradle packages `libQnnHtp.so`, `libQnnSystem.so`, and the per-Hexagon skels —
-including `libQnnHtpV79Skel.so`, which is the Snapdragon 8 Elite's — straight
-into the APK. No Qualcomm account and no QAIRT SDK download is involved.
-
-**Does need staging:** the model, at
-`/data/data/com.argus.edge/files/models/yolox_sm8750.onnx`.
+Models are gitignored artifacts. Generate the sidecar and fixture once:
 
 ```bash
-adb push yolox_sm8750.onnx /data/local/tmp/
-adb shell run-as com.argus.edge mkdir -p files/models
-adb shell "run-as com.argus.edge cp /data/local/tmp/yolox_sm8750.onnx files/models/"
+python scripts/gen_yolox_fixture.py path/to/yolox.onnx   # writes yolox.json next to it
 ```
 
-## Target and versions
+Then either use the **Model** button in the app (multi-select `yolox.onnx`,
+`yolox.data`, `yolox.json` in the system picker) or stage over adb:
 
-| | |
-|---|---|
-| Device | Snapdragon 8 Elite — `sm8750` (QRD) / `sm8750-ac` (Galaxy S25) |
-| Hexagon | **v79** — the PC artifacts are v73 and will not load here |
-| Bundled QAIRT | 2.33.0, via `qnn-runtime` |
-| minSdk / compileSdk | 31 / 35, `arm64-v8a` only |
+```bash
+adb push yolox.onnx yolox.data yolox.json /data/local/tmp/
+adb shell "run-as com.argus.edge mkdir -p files/models && \
+  run-as com.argus.edge cp /data/local/tmp/yolox.onnx /data/local/tmp/yolox.data \
+  /data/local/tmp/yolox.json files/models/"
+```
 
-A QNN *context binary* is tied to its producing runtime, so one compiled against
-a QAIRT other than 2.33.0 reproduces the version skew `docs/VALIDATION.md` §4
-describes. Compiling to plain QDQ ONNX avoids the pinning — the execution
-provider builds the graph for whatever HTP it finds at session init — at the
-cost of a slower first load. That is why the staged artifact above is `.onnx`.
+The current artifact is the source model of AI Hub job `jgo8m0l1p`
+(`yolox-onnx-w8a8-clean`, sha `1d9ae4a4…`): QDQ ONNX, so the QNN EP compiles it
+for whatever Hexagon it finds at session init — the same file serves v73 and
+v79. (The *compiled* target of that job is an `sc8380xp` context binary and
+will not load on a phone; use the source, not the target.)
 
-## The two contracts this module is held to
+## How the NPU became reachable (kept for the next device bring-up)
 
-Both are shared files, checked by both languages, so the platforms cannot drift:
+A stock retail phone can run QNN on the Hexagon with no root, no Qualcomm
+account, and no QAIRT SDK. Two non-obvious requirements, both found the hard
+way on this S25 Ultra (`SM-S938U1`, Android 16, locked bootloader, SELinux
+enforcing):
 
-- `tests/data/wire_vectors.json` — what a station may say. Kotlin's encoder must
-  produce it (`WireVectorsTest`); Python's decoder must read it
-  (`tests/test_wire_vectors.py`). Regenerate: `python scripts/gen_wire_vectors.py`.
-- `tests/data/scorer_vectors.json` — what a score means. Binding once scoring
-  moves on-device. Regenerate: `python scripts/gen_scorer_vectors.py`.
+1. **`<uses-native-library>` for `libcdsprpc.so`/`libadsprpc.so`** in the
+   manifest. QNN dlopens the vendor cDSP client; app linker namespaces cannot
+   see `/vendor` unless the library is declared (API 31+). Undeclared, the
+   failure surfaces as `QNN_DEVICE_ERROR_INVALID_CONFIG` — nowhere near the
+   cause. (Direct `open("/dev/fastrpc-cdsp")` still returns EACCES; that is
+   irrelevant, the vendor client opens it. `DspAccessTest` and `QnnSessionTest`
+   are kept side by side precisely because they disagree.)
+2. **`useLegacyPackaging = true`** so the `.so` files exist on disk for QNN's
+   filesystem `backend_path`. Unextracted, the EP silently fails to register —
+   visible only because CPU fallback is disabled.
 
-Equality is on decoded values, not bytes: Kotlin and Python format doubles
-differently, and the PC parses the payload rather than comparing it.
+Also ruled out: NNAPI on Android 16 binds to `nnapi-reference` (CPU) — the
+HIDL neural-networks HAL is gone. Measured dispatch overhead: ~500 µs per NPU
+call on this device (see `NpuEvidenceTest`), ~5% of a YOLO-X frame but larger
+than an entire BlazePose stage — batch or down-cadence pose when it lands.
 
-## Open question this module cannot settle
+## Open
 
-`Preprocess.kt` letterboxes with a textbook bilinear filter; the PC uses
-`cv2.resize(INTER_LINEAR)`, a fixed-point kernel. These are not guaranteed to
-agree bit for bit, and the detector is w8a8, so a one-LSB input difference can
-move an anchor across a quantisation step. Since phone-vs-PC comparison is how
-this port gets validated, that has to be settled — either mandate OpenCV-Android
-here for exactness, or accept a tolerance and measure its detection-level impact
-on real footage. Until then, treat any phone/PC detection difference as
-unexplained rather than blaming the model.
+- **Resampler parity**: Android's bilinear vs OpenCV's `INTER_LINEAR` are not
+  bit-identical; with a w8a8 detector this can move borderline anchors. The
+  parity fixture bypasses the resampler deliberately; quantifying its
+  detection-level effect needs real footage on both platforms.
+- **Pose + form models**: the next on-device milestones; the protocol fields
+  are already carried, zeroed.
+- The AI Hub profile job on `Snapdragon 8 Elite QRD` (`jp2e44lxp`) failed with
+  an infra-side "unexpected device error"; on-device measurement supersedes it
+  for now.
 
-## Build
+## Build & test
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=~/Library/Android/sdk
-cd android && ./gradlew assembleDebug testDebugUnitTest
+cd android
+./gradlew assembleDebug testDebugUnitTest        # host: build + decode/protocol tests
+./gradlew connectedDebugAndroidTest              # device: NPU + parity (needs staged model)
 ```
+
+`connectedDebugAndroidTest` reinstalls the APK, which wipes `files/models/` —
+restage after it if you then want to run the app itself.
