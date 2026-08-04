@@ -60,6 +60,20 @@ class MainActivity : AppCompatActivity() {
     private var lastPoseScore = 0f
     private val subjectTracker = SubjectTracker()
 
+    /** The last frame that actually produced something, for the brief hold. */
+    private class Snapshot(
+        val detections: List<Detection>,
+        val subject: Detection?,
+        val subjectPose: PoseResult?,
+        val otherPoses: List<PoseResult>,
+        val width: Int,
+        val height: Int,
+        val atNanos: Long,
+    )
+    private var lastGood: Snapshot? = null
+    private var framesWithDetection = 0L
+    private var framesInferred = 0L
+
     /**
      * How many people get a pose per frame.
      *
@@ -125,6 +139,8 @@ class MainActivity : AppCompatActivity() {
             if (!now) {
                 overlay.update(emptyList(), null, null, emptyList(), 1, 1)
                 subjectTracker.reset()
+                lastGood = null
+                framesInferred = 0; framesWithDetection = 0
             }
             render()
         }
@@ -265,10 +281,36 @@ class MainActivity : AppCompatActivity() {
                     lastPoseScore = subjectPose?.poseScore ?: 0f
                 }
 
-                overlay.update(
-                    detections, subject, subjectPose, otherPoses,
-                    upright.width, upright.height,
-                )
+                framesInferred += 1
+                if (detections.isNotEmpty()) framesWithDetection += 1
+
+                // Camera motion blurs a frame and the detector drops under
+                // threshold, so empty frames are common while the phone is
+                // being aimed. Clearing on each one flickers; holding the last
+                // result briefly does not, and the overlay fades it so a held
+                // skeleton reads as held. Only live frames are ever reported.
+                if (detections.isNotEmpty()) {
+                    lastGood = Snapshot(
+                        detections, subject, subjectPose, otherPoses,
+                        upright.width, upright.height, System.nanoTime(),
+                    )
+                    overlay.update(
+                        detections, subject, subjectPose, otherPoses,
+                        upright.width, upright.height, ageMs = 0L,
+                    )
+                } else {
+                    val held = lastGood
+                    val ageMs = held?.let { (System.nanoTime() - it.atNanos) / 1_000_000 } ?: Long.MAX_VALUE
+                    if (held != null && ageMs < DetectionOverlayView.HOLD_MS) {
+                        overlay.update(
+                            held.detections, held.subject, held.subjectPose, held.otherPoses,
+                            held.width, held.height, ageMs = ageMs,
+                        )
+                    } else {
+                        lastGood = null
+                        overlay.update(emptyList(), null, null, emptyList(), 1, 1)
+                    }
+                }
 
                 subject?.let {
                     client?.send(
@@ -332,8 +374,14 @@ class MainActivity : AppCompatActivity() {
             append("camera    %.1f fps, frame %d".format(fpsEma, frameCount)).append('\n')
             append("inference ")
             append(
-                if (running.get()) "%.1f ms, %d person(s), thr %.2f"
-                    .format(inferenceMsEma, lastDetections, scoreThreshold)
+                if (running.get())
+                    // Hit rate is the number to watch when the overlay looks
+                    // intermittent: a low value is the detector losing the
+                    // person on blurred frames, not the pipeline being slow.
+                    "%.1f ms, %d person(s), thr %.2f, hit %d%%".format(
+                        inferenceMsEma, lastDetections, scoreThreshold,
+                        if (framesInferred > 0) framesWithDetection * 100 / framesInferred else 0,
+                    )
                 else "stopped"
             ).append('\n')
             append("pose      ")

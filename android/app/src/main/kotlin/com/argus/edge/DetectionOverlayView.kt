@@ -28,6 +28,20 @@ class DetectionOverlayView @JvmOverloads constructor(
     private var frameHeight = 1
 
     /**
+     * How stale what is being drawn is, in milliseconds.
+     *
+     * Camera motion blurs a frame, the detector's confidence drops under
+     * threshold, and that frame yields nothing — so an overlay that cleared on
+     * every empty frame flickered badly while the phone was being aimed. The
+     * last result is therefore held briefly, which is a display decision and
+     * not a claim: [HOLD_MS] bounds how long, and the drawing fades toward
+     * nothing across that window so a held skeleton visibly *reads* as held.
+     * Nothing stale is ever reported — only the live frame's subject becomes an
+     * observation.
+     */
+    private var ageMs = 0L
+
+    /**
      * COCO skeleton edges among the joints the 25-point export can supply.
      * Knees and ankles (13-16) have no source landmark, so no leg edges exist
      * to draw — their absence on screen is accurate, not a rendering bug.
@@ -89,6 +103,20 @@ class DetectionOverlayView @JvmOverloads constructor(
     }
     private val textBackground = Paint().apply { color = Color.argb(160, 0, 0, 0) }
 
+    /** Everything whose opacity tracks staleness. Reset per draw. */
+    private val fadeable by lazy {
+        listOf(
+            bonePaint, jointPaint, jointOutline, jointDimPaint,
+            bystanderBoxPaint, bystanderBonePaint, bystanderJointPaint, bystanderTextPaint,
+            boxPaint, textPaint,
+        )
+    }
+
+    companion object {
+        /** How long a result may be shown after the frame that produced it. */
+        const val HOLD_MS = 400L
+    }
+
     fun update(
         detections: List<Detection>,
         subject: Detection?,
@@ -96,7 +124,9 @@ class DetectionOverlayView @JvmOverloads constructor(
         otherPoses: List<PoseResult>,
         frameWidth: Int,
         frameHeight: Int,
+        ageMs: Long = 0L,
     ) {
+        this.ageMs = ageMs
         this.detections = detections
         this.subject = subject
         this.subjectPose = subjectPose
@@ -114,6 +144,13 @@ class DetectionOverlayView @JvmOverloads constructor(
         val scale = maxOf(width.toFloat() / frameWidth, height.toFloat() / frameHeight)
         val dx = (width - frameWidth * scale) / 2f
         val dy = (height - frameHeight * scale) / 2f
+
+        // Held results fade out rather than vanishing or lingering at full
+        // strength: a faint skeleton is honest about being a moment old.
+        val freshness = (1f - ageMs.toFloat() / HOLD_MS).coerceIn(0f, 1f)
+        val alpha = (60 + 195 * freshness).toInt()
+
+        for (paint in fadeable) paint.alpha = alpha
 
         // Bystanders first and dimmed, so the subject reads on top of them.
         for (p in otherPoses) drawSkeleton(canvas, p, scale, dx, dy, primary = false)
