@@ -1,12 +1,15 @@
 """Argus — many eyes, one mind.
 
 Deterministic, explainable triage of who on a training floor needs a human
-instructor now. Detection, pose, and super-resolution run on the Snapdragon X
-Elite Hexagon NPU; a small VLM samples only already-flagged trainees.
+instructor now. One phone per trainee runs its own on-device pose and
+form/exercise classifier and streams structured numeric results to this
+process over WebSocket (see `argus.ingest` and `docs/PROTOCOL.md`); Argus
+ranks who needs attention and gives the trainer a live view.
 
-Privacy is a property of the wiring, not of a filter: raw frames and raw VLM
-captions have no path to a sink, because every sink's signature accepts only
-:class:`~argus.triage.TriageRecord`.
+Privacy is a property of the wiring, not of a filter: no frame or free-text
+caption has a path to a sink, because every sink's signature accepts only
+:class:`~argus.triage.TriageRecord` — and no frame ever exists past the
+phone's own camera pipeline in the first place.
 """
 
 from argus.config import ArgusConfig, ConfigError, load_config

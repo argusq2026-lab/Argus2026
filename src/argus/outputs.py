@@ -33,6 +33,59 @@ def to_json_dict(record: TriageRecord) -> dict:
     return payload
 
 
+#: The trainer dashboard: a static page that polls `/triage` client-side and
+#: renders a table. It reads nothing this module does not already serve, so
+#: it widens no boundary -- the four `TriageRecord` fields are still the only
+#: thing that ever left the perception layer.
+_DASHBOARD_HTML = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Argus — trainer view</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 2rem; }
+  h1 { font-size: 1.1rem; font-weight: 600; color: #999; }
+  table { border-collapse: collapse; width: 100%; max-width: 720px; }
+  th, td { text-align: left; padding: 0.4rem 0.8rem; border-bottom: 1px solid #333; }
+  th { color: #999; font-weight: 500; font-size: 0.85rem; }
+  tr.flagged { background: #3a1414; }
+  td.score { font-variant-numeric: tabular-nums; }
+  #empty { color: #666; padding: 1rem 0; }
+  #ts { color: #666; font-size: 0.8rem; }
+</style>
+</head>
+<body>
+<h1>Argus — who needs attention <span id="ts"></span></h1>
+<table id="ranked"><thead>
+  <tr><th>trainee</th><th>score</th><th>reasons</th></tr>
+</thead><tbody></tbody></table>
+<div id="empty" style="display:none">No trainee is currently connected.</div>
+<script>
+async function refresh() {
+  const res = await fetch("/triage");
+  const payload = await res.json();
+  const body = document.querySelector("#ranked tbody");
+  body.innerHTML = "";
+  document.querySelector("#empty").style.display = payload.records.length ? "none" : "block";
+  document.querySelector("#ts").textContent = "(t=" + payload.ts.toFixed(1) + ")";
+  for (const r of payload.records) {
+    const row = document.createElement("tr");
+    if (r.reason_codes.length) row.className = "flagged";
+    row.innerHTML =
+      "<td>" + r.trainee_id + "</td>" +
+      "<td class=score>" + r.score.toFixed(2) + "</td>" +
+      "<td>" + (r.reason_codes.join(", ") || "–") + "</td>";
+    body.appendChild(row);
+  }
+}
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
+"""
+
+
 class JsonLogSink:
     """Appends one JSON line per frame: {"ts": ..., "records": [...]}."""
 
@@ -53,14 +106,11 @@ class JsonLogSink:
 
 class _TriageRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802 (stdlib method name)
-        if self.path not in ("/triage", "/healthz"):
-            self.send_response(404)
-            self.end_headers()
-            return
-
-        if self.path == "/healthz":
-            payload = b'{"status":"ok"}'
-        else:
+        if self.path == "/":
+            self._respond(200, _DASHBOARD_HTML.encode("utf-8"), "text/html; charset=utf-8")
+        elif self.path == "/healthz":
+            self._respond(200, b'{"status":"ok"}', "application/json")
+        elif self.path == "/triage":
             with self.server.state_lock:  # type: ignore[attr-defined]
                 payload = json.dumps(
                     {
@@ -71,9 +121,14 @@ class _TriageRequestHandler(BaseHTTPRequestHandler):
                         ],
                     }
                 ).encode("utf-8")
+            self._respond(200, payload, "application/json")
+        else:
+            self.send_response(404)
+            self.end_headers()
 
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
+    def _respond(self, status: int, payload: bytes, content_type: str) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
@@ -86,11 +141,14 @@ class TriageHTTPServer:
     """Background HTTP server exposing the latest triage ranking as JSON.
 
     `GET /triage` -> {"ts": float, "records": [{trainee_id, score,
-    reason_codes, ts}, ...]}. `GET /healthz` -> liveness. Nothing else is
-    served: an instructor console polls this, it is not a general-purpose API.
+    reason_codes, ts}, ...]}. `GET /healthz` -> liveness. `GET /` -> a static
+    dashboard page that polls `/triage` client-side and renders it as a
+    table — the trainer's live view of who needs attention, and nothing more
+    than a rendering of the same four redacted fields. Nothing else is
+    served: this is not a general-purpose API.
 
     Binds to 127.0.0.1 by default. The records are already redacted, but the
-    endpoint still describes who in a building needs attention, so it is
+    endpoint still describes who on a floor needs attention, so it is
     loopback-only unless an operator opts out in config.
     """
 

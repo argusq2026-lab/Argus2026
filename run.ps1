@@ -7,29 +7,19 @@
     Creates a local .venv and installs every package listed in
     requirements.txt using uv. Run this once before running the app.
 
-    The default venv covers the fully-tested path: capture, tracking, triage,
-    every output sink, CPU ONNX inference, and the whole pytest suite.
-
-    It is created from an x86-64 interpreter even on a Snapdragon X-Elite
-    host. opencv-python has NO win-arm64 wheel and falls back to a from-source
-    numpy/meson build that fails without a C toolchain, so the capture path
-    and the NPU runtime cannot share one environment. It runs fine under
-    emulation.
-
-    Pass -Npu to ALSO create a second, separate native-ARM64 venv (.venv-npu)
-    with onnxruntime-qnn / onnxruntime-genai for real Hexagon NPU sessions --
-    no opencv, no pytest in that venv.
+    There is only one venv now: Argus has no model runtime, no OpenCV, and no
+    camera dependency of its own (pose and form/exercise classification run
+    on each trainee's phone -- see docs/PROTOCOL.md), so it runs on any host
+    architecture the same way.
 
 .EXAMPLE
     .\run.ps1
     .\run.ps1 -Python 3.11
-    .\run.ps1 -Npu
 #>
 
 [CmdletBinding()]
 param(
-    [string]$Python = "3.11",
-    [switch]$Npu
+    [string]$Python = "3.11"
 )
 
 Set-StrictMode -Version Latest
@@ -45,25 +35,6 @@ $VenvDir = Join-Path $PSScriptRoot ".venv"
 if (-not (Test-Path $ReqFile)) {
     Write-Error "requirements.txt not found: $ReqFile"
     exit 1
-}
-
-function Get-NativeArm64Python {
-    $root = Join-Path $env:LOCALAPPDATA "Programs\Python"
-    if (-not (Test-Path $root)) { return $null }
-    Get-ChildItem $root -Recurse -Filter "python.exe" -ErrorAction SilentlyContinue |
-        ForEach-Object {
-            $arch = & $_.FullName -c "import platform; print(platform.machine())" 2>$null
-            if ($arch -eq "ARM64") { return $_.FullName }
-        }
-    return $null
-}
-
-if (Test-Path $VenvDir) {
-    $venvArch = & (Join-Path $VenvDir "Scripts\python.exe") -c "import platform; print(platform.machine())" 2>$null
-    if ($venvArch -eq "ARM64") {
-        Write-Warn "Existing .venv is ARM64 -- opencv-python has no win-arm64 wheel and will fail to install here. Recreating from x86-64 Python $Python (venv only, system Python untouched)."
-        Remove-Item -Recurse -Force $VenvDir
-    }
 }
 
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
@@ -96,37 +67,11 @@ uv pip install --system-certs --python "$VenvDir\Scripts\python.exe" -e "$PSScri
 if ($LASTEXITCODE -ne 0) { Write-Error "editable install failed."; exit 1 }
 Write-Ok "All dependencies installed"
 
-if ($Npu) {
-    Write-Info "-Npu passed -- provisioning a SEPARATE native-ARM64 venv (.venv-npu) for real Hexagon NPU sessions ..."
-    $npuPythonExe = Get-NativeArm64Python
-    if (-not $npuPythonExe) {
-        Write-Warn "No native ARM64 Python found under $env:LOCALAPPDATA\Programs\Python. Install arm64 Python from python.org and re-run with -Npu. Skipping NPU venv -- the core app still works via .venv above."
-    } else {
-        Write-Ok "Native ARM64 Python found: $npuPythonExe"
-        $NpuVenvDir = Join-Path $PSScriptRoot ".venv-npu"
-        if (-not (Test-Path $NpuVenvDir)) {
-            uv venv "$NpuVenvDir" --python $npuPythonExe
-            if ($LASTEXITCODE -ne 0) { Write-Warn "uv venv (NPU) failed -- skipping NPU extras." }
-        }
-        if (Test-Path $NpuVenvDir) {
-            foreach ($pkg in @("onnxruntime-qnn>=1.17.0", "onnxruntime-genai", "onnx>=1.16", "numpy>=1.24")) {
-                uv pip install --system-certs --python "$NpuVenvDir\Scripts\python.exe" $pkg
-                if ($LASTEXITCODE -ne 0) {
-                    Write-Warn "Failed to install '$pkg' into .venv-npu -- continuing (optional extra)."
-                } else {
-                    Write-Ok "Installed $pkg into .venv-npu"
-                }
-            }
-            uv pip install --system-certs --python "$NpuVenvDir\Scripts\python.exe" --no-deps -e "$PSScriptRoot"
-            Write-Info "Run real-NPU inference with:"
-            Write-Info "  .venv-npu\Scripts\python.exe -m argus.cli run --engine qnn-npu"
-        }
-    }
-}
-
-Write-Info "Provision models (a fresh clone has none -- models/ is gitignored):"
-Write-Info "  .venv\Scripts\python.exe scripts\fetch_models.py"
-Write-Info "Run the app with:"
-Write-Info "  .venv\Scripts\python.exe -m argus.cli run --engine mock --max-ticks 60"
+Write-Info "Diagnose the host and the configured ingest port:"
+Write-Info "  .venv\Scripts\python.exe -m argus.cli doctor"
+Write-Info "Run the ingest server (no phone needed -- generate and replay a fixture):"
+Write-Info "  .venv\Scripts\python.exe -m argus.cli demo --ticks 60"
+Write-Info "  .venv\Scripts\python.exe -m argus.cli run --http-port 8080 &"
+Write-Info "  .venv\Scripts\python.exe demo\replay_client.py"
 Write-Info "Run the tests with:"
 Write-Info "  .venv\Scripts\python.exe -m pytest tests\ -q"

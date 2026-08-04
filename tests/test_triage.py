@@ -9,10 +9,10 @@ import pytest
 
 from argus.triage import (
     REASON_FALL,
+    REASON_FORM_ERROR,
     REASON_OCCLUSION,
     REASON_OFF_TASK,
     REASON_STILLNESS,
-    REASON_VLM,
     KP_LEFT_SHOULDER,
     KP_LEFT_WRIST,
     KP_NOSE,
@@ -23,10 +23,10 @@ from argus.triage import (
     needs_instructor,
     rank_trainees,
     score_fall,
+    score_form_codes,
     score_occlusion,
     score_off_task,
     score_stillness,
-    score_vlm_caption,
 )
 from tests.conftest import make_observation, standing_pose_kp_xy
 
@@ -144,45 +144,66 @@ def test_off_task_reference_angle_can_be_overridden_per_camera(scoring, track_st
     assert rotated[0] == pytest.approx(1.0)
 
 
-# -- VLM vocabulary ---------------------------------------------------------
+# -- form-error vocabulary ----------------------------------------------------
 
 
-def test_vocabulary_match_is_case_insensitive(scoring):
-    assert score_vlm_caption("A trainee has FALLEN near the press", scoring) == 1.0
+def test_form_code_scores_its_configured_weight(scoring):
+    assert score_form_codes(["knee_valgus"], scoring) == scoring.form_error_vocab["knee_valgus"]
 
 
-def test_highest_scoring_vocabulary_hit_wins(scoring):
-    assert score_vlm_caption("no gloves and smoke visible", scoring) == 1.0
+def test_highest_scoring_code_wins(scoring):
+    codes = ["insufficient_depth", "knee_valgus"]
+    assert score_form_codes(codes, scoring) == max(scoring.form_error_vocab[c] for c in codes)
 
 
-def test_free_text_without_vocabulary_scores_zero(scoring):
-    assert score_vlm_caption("a person stands calmly by a workbench", scoring) == 0.0
+def test_no_codes_scores_zero(scoring):
+    assert score_form_codes([], scoring) == 0.0
 
 
-def test_caption_is_scored_but_never_retained(scoring, track_state):
-    track_state.apply_caption("smoke near the bench", scoring)
-    assert track_state.last_vlm_anomaly_score == 1.0
-    assert not hasattr(track_state, "caption")
-    assert all(obs.vlm_caption is None for obs in track_state.history)
+def test_a_code_outside_the_vocabulary_scores_zero(scoring):
+    """`argus.ingest.protocol` rejects this before it ever reaches the scorer;
+    this module still defaults safely if it somehow arrived anyway."""
+    assert score_form_codes(["not_a_real_code"], scoring) == 0.0
+
+
+def test_form_codes_are_scored_on_push(scoring, track_state):
+    track_state.push(make_observation(ts=0.0, form_reason_codes=("knee_valgus",)), scoring)
+    assert track_state.last_form_error_score == scoring.form_error_vocab["knee_valgus"]
+
+
+def test_only_the_latest_observations_codes_apply(scoring, track_state):
+    """Mirrors the old VLM-sample cadence: a code is scored per observation,
+    not accumulated -- a trainee who corrects their form stops being flagged."""
+    track_state.push(make_observation(ts=0.0, form_reason_codes=("knee_valgus",)), scoring)
+    track_state.push(make_observation(ts=1.0, form_reason_codes=()), scoring)
+    assert track_state.last_form_error_score == 0.0
 
 
 # -- combination ------------------------------------------------------------
 
 
 def test_reason_codes_explain_the_score(scoring, track_state):
+    """Stillness + occlusion + off-task + a form-error code, stacked, must
+    together clear the alert threshold -- each reason contributes its own
+    weight, and the combination is what an instructor's alert explains."""
     for i in range(scoring.history_len):
+        kp = standing_pose_kp_xy()
+        kp[KP_LEFT_SHOULDER] = (130.0, 120.0)  # shoulder line rotated: off-task
+        kp[KP_RIGHT_SHOULDER] = (130.0, 160.0)
         conf = [0.9] * 17
         for idx in (KP_NOSE, KP_LEFT_WRIST, KP_RIGHT_WRIST):
             conf[idx] = 0.05
-        track_state.push(make_observation(ts=float(i), kp_conf=conf), scoring)
-    track_state.apply_caption("trainee unresponsive", scoring)
+        codes = ("knee_valgus",) if i == scoring.history_len - 1 else ()
+        track_state.push(
+            make_observation(ts=float(i), kp_xy=kp, kp_conf=conf, form_reason_codes=codes), scoring
+        )
 
     record = compute_triage("t0", track_state, 1.0, scoring)
     assert REASON_STILLNESS in record.reason_codes
     assert REASON_OCCLUSION in record.reason_codes
-    assert REASON_VLM in record.reason_codes
+    assert REASON_OFF_TASK in record.reason_codes
+    assert REASON_FORM_ERROR in record.reason_codes
     assert REASON_FALL not in record.reason_codes
-    assert REASON_OFF_TASK not in record.reason_codes
     assert record.score >= scoring.alert_threshold
 
 
@@ -233,6 +254,6 @@ def test_retuning_weights_changes_the_score_without_touching_code(scoring, track
     retuned = dataclasses.replace(
         scoring,
         weights={"fall": 0.0, "stillness": 1.0, "occlusion": 0.0,
-                 "off_task": 0.0, "vlm_anomaly": 0.0},
+                 "off_task": 0.0, "form_error": 0.0},
     )
     assert compute_triage("t0", track_state, 1.0, retuned).score != baseline

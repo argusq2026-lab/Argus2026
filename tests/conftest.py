@@ -24,33 +24,6 @@ from argus.config import ArgusConfig, ScoringConfig, load_config  # noqa: E402
 from argus.triage import FrameObservation, TrackState  # noqa: E402
 
 
-def _npu_available() -> tuple[bool, str]:
-    """Whether a real Hexagon NPU session could actually be created here.
-
-    Auto-detected rather than opt-in, so the `npu` tests run for free on the
-    X-Elite and skip with a reason everywhere else — including in the emulated
-    x86-64 venv the rest of the suite uses.
-    """
-    import importlib.util
-    import platform
-
-    if platform.machine().lower() not in ("arm64", "aarch64"):
-        return False, f"needs a native ARM64 interpreter (this one is {platform.machine()})"
-    if importlib.util.find_spec("onnxruntime_qnn") is None:
-        return False, "onnxruntime-qnn is not installed (see `run.ps1 -Npu`)"
-    return True, ""
-
-
-def pytest_collection_modifyitems(config, items):
-    available, reason = _npu_available()
-    if available:
-        return
-    skip = pytest.mark.skip(reason=f"NPU unavailable: {reason}")
-    for item in items:
-        if "npu" in item.keywords:
-            item.add_marker(skip)
-
-
 @pytest.fixture(scope="session")
 def default_config() -> ArgusConfig:
     return load_config()
@@ -84,7 +57,7 @@ def make_observation(
     bbox: tuple[float, float, float, float] = (100.0, 100.0, 160.0, 240.0),
     kp_xy: list[tuple[float, float]] | None = None,
     kp_conf: list[float] | None = None,
-    vlm_caption: str | None = None,
+    form_reason_codes: tuple[str, ...] = (),
     torso_y: float = 140.0,
 ) -> FrameObservation:
     """A well-formed 17-keypoint observation, fully confident by default."""
@@ -93,27 +66,10 @@ def make_observation(
         bbox_xyxy=bbox,
         keypoints_xy=kp_xy if kp_xy is not None else standing_pose_kp_xy(torso_y),
         keypoints_conf=kp_conf if kp_conf is not None else [0.9] * 17,
-        vlm_caption=vlm_caption,
+        form_reason_codes=form_reason_codes,
     )
 
 
 @pytest.fixture
 def track_state(scoring: ScoringConfig) -> TrackState:
     return TrackState(history_len=scoring.history_len)
-
-
-@pytest.fixture(scope="session")
-def demo_video(tmp_path_factory) -> Path:
-    """A short synthetic clip, generated fresh so no repo asset is required."""
-    from demo.make_demo_video import make_demo_video
-
-    out = tmp_path_factory.mktemp("demo") / "demo.mp4"
-    return make_demo_video(out, n_frames=40)
-
-
-@pytest.fixture(scope="session")
-def models_root(default_config: ArgusConfig) -> Path:
-    root = Path(default_config.models.root)
-    if not root.is_absolute():
-        root = default_config.models.base_dir / root
-    return root

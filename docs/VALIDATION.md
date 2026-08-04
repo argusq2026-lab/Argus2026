@@ -1,41 +1,37 @@
 # Validation gaps
 
 What Argus has **not** been shown to do. Each entry says what is unverified,
-why it matters, and what closing it would take. Nothing here is a known bug —
-these are claims the product cannot currently make.
+why it matters, and what closing it would take. Nothing here is a known bug
+— these are claims the product cannot currently make.
 
 Ordered by how much a wrong assumption would cost.
 
 ---
 
-## 1. No real trainee-floor footage exists
+## 1. The phone app does not exist yet
 
-**Status:** blocking for any accuracy claim.
+**Status:** blocking for everything else on this list.
 
-Nothing in this repository has ever seen a real training floor.
+This repository is the laptop side only. [`docs/PROTOCOL.md`](PROTOCOL.md)
+specifies exactly what a phone app must send, and
+[`demo/replay_client.py`](../demo/replay_client.py) is a reference
+implementation of the client half of that protocol — but no on-device pose
+model, no form/exercise classifier, and no real camera has ever driven this
+server. Every test in this repository exercises the ingest -> triage -> alert
+path against a synthetic observation fixture (`argus.synthetic`), not a real
+trainee.
 
-* **INT8 calibration used a flagged placeholder set.** Quantization scales were
-  fitted to data that is not the deployment distribution, so every accuracy
-  figure that would follow from these artifacts is unverified.
-* The consequence is already measurable, not hypothetical. `pose_detector.bin`'s
-  `box_scores_*` were calibrated to an entirely non-positive logit range (scale
-  5.5528, zero_point 255), leaving the detector with effectively two confidence
-  values: 0.5 at the top quantization step and 0.004 at the next. See
-  [PIPELINE.md §5](PIPELINE.md#5-what-the-placeholder-calibration-actually-did).
-* `demo/trainees_demo.mp4` is procedurally drawn rectangles. It is a **pipeline
-  fixture**: it exercises capture → track → triage → emit deterministically and
-  offline, and a real YOLO-X will not fire on it. It cannot support an accuracy
-  number of any kind.
+**To close:** build the phone app against `docs/PROTOCOL.md`; pick and
+validate an on-device pose model and a form/exercise classifier; run it
+against real trainees and confirm the wire contract holds up (frame rate,
+keypoint layout, timestamp behaviour) under a real Wi-Fi network, not a
+loopback socket in a test.
 
-**To close:** capture representative footage across the shifts, lighting, PPE,
-and camera placements the product will actually run under; re-quantize against
-it; re-run the AI Hub profile jobs; then measure detection and pose accuracy on
-a held-out split.
-
-**Owner decision needed:** how much footage, from which sites, and under what
-consent and retention terms. Argus's privacy design keeps frames out of the
-alert path at runtime, but a calibration corpus is stored imagery and needs its
-own answer.
+**Owner decision needed:** which on-device pose model and form-classifier
+architecture, and which specific form errors the closed vocabulary in
+`[scoring.form_error_vocab]` should actually cover for the exercises this
+floor runs — the seven entries shipped in the default config are
+illustrative, not the result of any domain review.
 
 ---
 
@@ -43,147 +39,97 @@ own answer.
 
 **Status:** blocking for operational trust in the rank.
 
-`fall 0.40 / stillness 0.20 / occlusion 0.15 / vlm_anomaly 0.15 / off_task 0.10`
-are the prototype author's priors. No incident has ever been scored with them.
-`alert_threshold = 0.5` is equally unvalidated: nobody has measured how many
-alerts an instructor would receive per hour, or what fraction would be real.
+`fall 0.40 / stillness 0.20 / occlusion 0.15 / form_error 0.15 / off_task
+0.10` are the prototype author's priors, carried forward unchanged through
+the move to phone-based ingestion. No incident has ever been scored with
+them. `alert_threshold = 0.5` is equally unvalidated: nobody has measured how
+many alerts an instructor would receive per hour, or what fraction would be
+real.
 
-The weights now live in `configs/argus.default.toml` rather than in code, so
-retuning is a config edit and a `config_version` bump — the mechanism is ready,
-the evidence is not.
+The weights live in `configs/argus.default.toml` rather than in code, so
+retuning is a config edit and a `config_version` bump — the mechanism is
+ready, the evidence is not.
 
-**To close:** build the labelled-clip harness. Concretely:
+**To close:** build a labelled-clip harness once real phone data exists: a
+corpus of observation streams each labelled with what happened and whether an
+instructor was in fact needed, a replay path that emits the full per-feature
+breakdown (not just the final score), and a fitting step that searches the
+weight simplex against a chosen operating point.
 
-1. A corpus of clips, each labelled with what happened and whether an
-   instructor was in fact needed.
-2. A replay path that runs a clip through the pipeline and emits the full
-   per-feature breakdown, not just the final score.
-3. A fitting step that searches the weight simplex against a chosen operating
-   point, and reports precision/recall at each threshold.
-
-The pieces this needs already exist: the scorer is pure, its inputs are numeric
-and serialisable, and `FrameClock` makes replay reproducible. What is missing
-is the corpus and the labels.
-
-**Owner decision needed:** what counts as "needed an instructor" — the
-label definition is the experiment, and it cannot be inferred from the code.
+**Owner decision needed:** what counts as "needed an instructor" — the label
+definition is the experiment, and it cannot be inferred from the code.
 
 ---
 
-## 3. Latency, power, and thermals under sustained multi-camera load
+## 3. The WebSocket ingest server has no authentication or transport security
 
-**Status:** blocking for a capacity claim ("how many cameras per box").
+**Status:** open risk for any deployment beyond a trusted private LAN.
 
-Measured today: single-graph NPU latency from AI Hub — 2,748 µs for YOLO-X,
-421 + 425 µs for the two pose stages, 632 µs for super-resolution, all at 100%
-NPU placement. Those are real ([PIPELINE.md §3](PIPELINE.md#3-measured-npu-performance)).
+`ws://` is plaintext, and any device that can reach `ingest.ws_port` can send
+a `hello` claiming *any* `trainee_id` — there is no credential binding a
+specific phone to a specific trainee identity, only the "first connection to
+claim an id wins, and it's exclusive while connected" rule in
+`argus.ingest.session`. That rule stops two simultaneous claims from
+colliding silently; it does not stop a misconfigured or malicious device on
+the same network from impersonating a trainee it has no relationship to.
 
-Never measured:
-
-* End-to-end wall-clock frame time including CPU post-processing, tracking, and
-  drawing.
-* Behaviour with N > 1 cameras contending for one HTP.
-* Sustained thermal behaviour over a shift, and where the SoC begins to throttle.
-* Power draw in any mode. The prototype's `performance / balanced / efficiency`
-  table (9.8 ms / 2,150 mW etc.) was invented; it has been deleted rather than
-  carried forward.
-
-**To close:** run the pipeline on the X-Elite against N real streams for hours,
-recording frame time percentiles, NPU utilisation, package power, and skin
-temperature. `argus run` already records per-camera frame counts and VLM call
-counts; a latency histogram per stage is the missing instrumentation.
+**To close:** at minimum, run this on a network the gym controls (not open
+Wi-Fi); for anything beyond that, add `wss://` (TLS) and a per-phone
+credential (e.g. a token issued at trainee check-in) checked at `hello`
+time — the protocol has a natural extension point there, since `hello`
+already carries identity claims.
 
 ---
 
-## 4. The NPU path has not executed on hardware
+## 4. No cross-phone clock synchronization
 
-**Status:** blocking for the product's core premise.
+**Status:** open risk for cross-trainee timing comparisons.
 
-The tensor contracts are now correct and enforced — read from each artifact's
-`metadata.json`, checked on every call, and verified against the real files by
-`tests/test_artifacts.py`, which loads and runs both ONNX artifacts. But:
+Each `observation` message's `ts` is the phone's own clock
+(`docs/PROTOCOL.md`); nothing enforces or measures agreement between two
+phones' clocks. The merged rank's own timestamp comes from the laptop's
+clock at each rank tick, so *ranking* is unaffected — but any feature that
+someday compared two trainees' event timing directly (e.g. "did they start
+their rep within N ms of each other") would inherit whatever clock skew
+exists between their phones, unmeasured.
 
-* The two BlazePose stages are **QNN context binaries** and cannot run without
-  the NPU. Their tests are marked `npu` and skip on any non-ARM64 host.
-* The development host's QAIRT is **2.32.6.250402**; the artifacts were built
-  with **2.45.0**. A context binary is tied to its producing runtime, so these
-  two are expected to be incompatible. `argus doctor` reports the skew and
-  `QnnNpuBackend` refuses rather than emitting an opaque QNN error.
-* The `EPContext` wrapper path is written against ORT's documented mechanism
-  and unit-tested for structure, but has not been executed against a real
-  context binary on hardware.
-
-**To close, in order:** install QAIRT 2.45.x (or recompile the pose artifacts
-against 2.32.6); create the ARM64 venv with `run.ps1 -Npu`; run
-`pytest -m npu`; then `argus run --engine qnn-npu` over real footage.
+**To close:** if a feature ever needs cross-trainee timing precision, add an
+NTP-style offset estimate to the handshake and either correct or flag skew
+beyond a threshold.
 
 ---
 
-## 5. Re-identification is colour-histogram based, not learned
+## 5. Ingest capacity under many concurrent phones is unmeasured
 
-**Status:** known limitation, quantified only by construction.
+**Status:** blocking for a capacity claim ("how many trainees per laptop").
 
-`trainee_id` is a triage key — an instructor is dispatched to a *specific*
-person — so an ID swap is a correctness failure. The tracker combines a Kalman
-motion model with an HSV torso histogram, which is enough to hold identity
-through occlusion and to separate trainees of different colours (both tested in
-`tests/test_tracking.py`).
+The ingest server is a single asyncio event loop; `IngestServer.tick()`
+recomputes the full merged rank every `ingest.rank_interval_s` over every
+connected session. Nothing about this has been load-tested: not the number
+of concurrent WebSocket connections one process can hold open, not the CPU
+cost of `rank_trainees` at real class sizes, not behaviour when a rank tick
+takes longer than `rank_interval_s` to compute (there is no back-pressure or
+skip-if-still-running guard on the periodic task today).
 
-It will confuse **two trainees in identical PPE** who cross paths, and no
-measurement of how often that happens on a real floor exists.
-
-**To close:** either measure the swap rate on labelled real footage and accept
-it, or replace `argus.tracking.appearance.signature` with a learned re-ID
-embedding (OSNet-class, exported via AI Hub as a fourth NPU graph). The
-interface is a drop-in; the cost is one more per-trainee inference.
-
----
-
-## 6. The VLM is a mock
-
-**Status:** the `vlm_anomaly` feature contributes 0.0 today.
-
-`MockVLMCaptioner` returns a phrase containing no vocabulary term, so the
-15%-weighted `vlm_anomaly` feature is inert and the rank is driven entirely by
-pose and motion. Everything around it is real and tested: the prefilter gate,
-the cadence, the top-K bound, the closed-vocabulary matcher, and
-`GenieVLMCaptioner` itself.
-
-**To close:** build a Genie / `onnxruntime-genai` bundle (Moondream2 or an
-alternative) and point `vlm.bundle_dir` at it. This needs a **non-arm64 build
-host** — `qai-hub-models` pulls torch, which has no win-arm64 wheel — so the
-bundle is built elsewhere and staged onto the X-Elite.
-
-Note that the closed vocabulary stays authoritative either way. A real VLM's
-decoding is not deterministic, but only whether its caption contains one of
-nine fixed phrases ever reaches the score, which is what keeps the rank
-reproducible.
-
-**Owner decision needed:** the vocabulary itself. Nine phrases were chosen by
-the prototype author; which anomalies actually matter on this floor, and what
-an instructor should be told about each, is a domain question.
+**To close:** run a synthetic load test — many concurrent
+`demo/replay_client.py`-style connections streaming at a realistic rate —
+and measure rank-tick latency and memory as trainee count grows; add a
+guard against overlapping ticks if it becomes an issue in practice.
 
 ---
 
-## 7. The C++ runner was dropped, not ported
+## 6. No accuracy figure exists for pose or form/exercise classification
 
-**Status:** deliberate omission.
+**Status:** inherited from §1 — there is no model to measure yet.
 
-The prototype's `cpp/argus_infer.cpp` was an unbuilt skeleton — real QNN C-API
-wiring in shape, but never compiled, and its `#include <opencv2/opencv.hpp>`
-plus QNN headers were never resolved against an SDK.
+Whatever on-device pose model and form classifier the phone app eventually
+uses will need its own accuracy validation (keypoint error, exercise
+classification precision/recall, false-positive rate on
+`form_reason_codes`) against real trainee footage before any claim about
+correctness can be made. None of that exists today because the model choice
+itself hasn't been made.
 
-It is not carried into this repo. Neither `cmake` nor an MSVC toolchain is
-present on the development host, so it could not be compiled, and shipping a
-second unbuildable skeleton would repeat the prototype's central problem:
-plausible-looking code that has never run.
-
-**To close, if it is wanted:** the QAIRT SDK is installed at
-`C:\Qualcomm\AIStack\QAIRT\qairt\2.32.6.250402` with headers under `include/QNN`
-and `QnnHtp.dll` under `lib/arm64x-windows-msvc`, so the build is viable once a
-toolchain is installed. The Python path is the reference; a C++ runner should
-be written against the same `metadata.json` contracts and gated on the same
-real-artifact tests.
-
-**Owner decision needed:** whether a C++ runner is a product requirement at
-all, or whether the Python path plus the NPU-resident graphs is sufficient.
+**Owner decision needed:** same as §1 — this is one gap, not two, restated
+here because it is the reason §2's weight-fitting work can't start yet
+either: there is no real per-feature signal to fit weights against until a
+real classifier exists.

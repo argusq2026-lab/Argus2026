@@ -1,20 +1,24 @@
 """Deterministic triage scorer for Argus.
 
-Pure functions of numeric pose/detection/VLM-flag history — no model calls, no
-randomness, no wall-clock reads other than the caller-supplied timestamp. The
-same input history always produces the same rank, independent of anything
-non-deterministic upstream (a VLM's free-form decoding included), so the "who
-needs a human instructor" ranking is reproducible and auditable.
+Pure functions of numeric pose/bbox/form-classification history — no model
+calls, no randomness, no wall-clock reads other than the caller-supplied
+timestamp. The same input history always produces the same rank. Every phone
+in front of a trainee runs its own on-device pose and form/exercise
+classifier and streams only structured numeric results here (see
+`argus.ingest` and `docs/PROTOCOL.md`); nothing upstream of this module is
+free text or imagery, so there is nothing non-deterministic left to
+neutralize — unlike the prototype's VLM-caption design, this scorer's inputs
+were never anything but numbers.
 
-Privacy by wiring: nothing in this module ever holds a frame, a crop, or a raw
-caption string — only numeric keypoints, boxes, and a fixed-vocabulary anomaly
-score. That is what makes :class:`TriageRecord` safe to cross the alert
-boundary in :mod:`argus.alerts`.
+Privacy by wiring: nothing in this module ever holds a frame, a crop, or free
+text — only numeric keypoints, boxes, and a fixed-vocabulary form-error score.
+That is what makes :class:`TriageRecord` safe to cross the alert boundary in
+:mod:`argus.alerts`.
 
-The algorithm is carried over verbatim from the Argus prototype; the only
-change is that the weights, thresholds, vocabulary, and history length now
-arrive as a :class:`~argus.config.ScoringConfig` argument instead of being
-module constants, so tuning is a config edit rather than a code edit.
+The five-feature algorithm is carried over verbatim from the Argus prototype;
+the weights, thresholds, vocabulary, and history length arrive as a
+:class:`~argus.config.ScoringConfig` argument instead of being module
+constants, so tuning is a config edit rather than a code edit.
 """
 
 from __future__ import annotations
@@ -27,9 +31,9 @@ from typing import Iterable
 from argus.config import ScoringConfig
 
 # Pose keypoint indices this module cares about, in COCO-17 order. Only
-# indices are ever used -- never pixel data. The pose stage is responsible for
-# delivering COCO-17 regardless of what layout the underlying model emits
-# (see argus.vision.keypoints).
+# indices are ever used -- never pixel data. The phone's on-device pose model
+# is responsible for delivering COCO-17 regardless of what layout it emits
+# internally (see docs/PROTOCOL.md).
 KP_NOSE = 0
 KP_LEFT_SHOULDER = 5
 KP_RIGHT_SHOULDER = 6
@@ -44,27 +48,34 @@ REASON_FALL = "possible_fall"
 REASON_STILLNESS = "prolonged_stillness"
 REASON_OCCLUSION = "hands_face_occluded"
 REASON_OFF_TASK = "off_task_orientation"
-REASON_VLM = "vlm_anomaly"
+REASON_FORM_ERROR = "form_error"
 
 
 @dataclass
 class FrameObservation:
-    """One frame's numeric observation for one tracked trainee. No pixels."""
+    """One tick's numeric observation for one trainee. No pixels, no text.
+
+    `form_reason_codes` are the phone's own on-device form/exercise
+    classifier output — a closed vocabulary agreed with `ingest.form_error_
+    vocab`, not free text. The ingest layer rejects a code outside that
+    vocabulary before it ever reaches this dataclass (see
+    `argus.ingest.protocol`); this module only ever scores what it is given.
+    """
 
     ts: float
     bbox_xyxy: tuple[float, float, float, float]
     keypoints_xy: list[tuple[float, float]]  # len 17, COCO order
     keypoints_conf: list[float]  # len 17
-    vlm_caption: str | None = None  # only present on VLM-sampled frames
+    form_reason_codes: tuple[str, ...] = ()
 
 
 @dataclass
 class TrackState:
-    """Rolling per-trainee history. Owned by the caller, one per track id."""
+    """Rolling per-trainee history. Owned by the caller, one per trainee id."""
 
     history_len: int = 30
     history: deque[FrameObservation] = field(default_factory=deque)
-    last_vlm_anomaly_score: float = 0.0
+    last_form_error_score: float = 0.0
 
     def __post_init__(self) -> None:
         # deque(maxlen=...) cannot be expressed as a field default that depends
@@ -74,20 +85,7 @@ class TrackState:
 
     def push(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
         self.history.append(obs)
-        if obs.vlm_caption is not None:
-            self.last_vlm_anomaly_score = score_vlm_caption(obs.vlm_caption, cfg)
-
-    def apply_caption(self, caption: str, cfg: ScoringConfig) -> float:
-        """Score a caption into this track and return the numeric result.
-
-        Used by the pipeline, where the VLM is sampled *after* the frame's
-        observation has been pushed — the prefilter gate needs the trainee's
-        current triage score to decide whether to sample at all. The caption
-        string is scored and dropped; it is never stored on the track, so a
-        caption cannot reach a sink even by accident.
-        """
-        self.last_vlm_anomaly_score = score_vlm_caption(caption, cfg)
-        return self.last_vlm_anomaly_score
+        self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
 
 
 @dataclass(frozen=True)
@@ -170,7 +168,7 @@ def score_stillness(
         cx0, cy0 = _centroid(prev.bbox_xyxy)
         cx1, cy1 = _centroid(cur.bbox_xyxy)
         disp = ((cx1 - cx0) ** 2 + (cy1 - cy0) ** 2) ** 0.5
-        if disp < cfg.stillness_motion_threshold_px:
+        if disp < cfg.stillness_motion_threshold_frac:
             still_frames += 1
 
     fraction = still_frames / max(len(obs_list) - 1, 1)
@@ -237,15 +235,16 @@ def score_off_task(
     return score, triggered
 
 
-def score_vlm_caption(caption: str, cfg: ScoringConfig) -> float:
-    """Deterministic substring match against the fixed anomaly vocabulary.
+def score_form_codes(codes: Iterable[str], cfg: ScoringConfig) -> float:
+    """Highest weight among the phone-reported form-error codes present.
 
-    The highest-scoring vocabulary hit wins. The VLM's exact phrasing never
-    otherwise influences the score, which keeps the rank reproducible even
-    though the VLM's own decoding is not.
+    `codes` is the phone's own closed-vocabulary classifier output, not free
+    text — there is no matching left to do, only a lookup. A code the config
+    does not recognise contributes 0 here (an evolving vocabulary should not
+    break scoring); the ingest layer is where an unrecognised code is treated
+    as a protocol error instead (see `argus.ingest.protocol`).
     """
-    lowered = caption.lower()
-    hits = [w for phrase, w in cfg.anomaly_vocab.items() if phrase in lowered]
+    hits = [cfg.form_error_vocab[c] for c in codes if c in cfg.form_error_vocab]
     return max(hits) if hits else 0.0
 
 
@@ -261,7 +260,7 @@ def compute_triage(
     still, still_hit = score_stillness(track.history, cfg)
     occl, occl_hit = score_occlusion(track.history, cfg)
     off_task, off_task_hit = score_off_task(track.history, cfg, reference_angle_deg)
-    vlm = track.last_vlm_anomaly_score
+    form_error = track.last_form_error_score
 
     w = cfg.weights
     score = (
@@ -269,7 +268,7 @@ def compute_triage(
         + w["stillness"] * still
         + w["occlusion"] * occl
         + w["off_task"] * off_task
-        + w["vlm_anomaly"] * vlm
+        + w["form_error"] * form_error
     )
 
     reasons: list[str] = []
@@ -281,8 +280,8 @@ def compute_triage(
         reasons.append(REASON_OCCLUSION)
     if off_task_hit:
         reasons.append(REASON_OFF_TASK)
-    if vlm >= 0.5:
-        reasons.append(REASON_VLM)
+    if form_error >= 0.5:
+        reasons.append(REASON_FORM_ERROR)
 
     return TriageRecord(
         trainee_id=trainee_id,
@@ -302,8 +301,8 @@ def rank_trainees(
     """Deterministic descending rank; ties broken by trainee_id for stability.
 
     `reference_angles` maps trainee_id -> the station-facing angle of the
-    camera that trainee was seen on, so a merged multi-camera rank still
-    scores off-task orientation per-camera.
+    phone that trainee is streaming from, so the merged rank across every
+    connected station still scores off-task orientation per-station.
     """
     angles = reference_angles or {}
     records = [

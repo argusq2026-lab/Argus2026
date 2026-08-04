@@ -13,7 +13,7 @@ from argus.outputs import JsonLogSink, TriageHTTPServer
 from argus.triage import TriageRecord
 
 
-def rec(trainee_id="cam0-t0", score=0.75, reasons=("possible_fall",), ts=1.0):
+def rec(trainee_id="t0", score=0.75, reasons=("possible_fall",), ts=1.0):
     return TriageRecord(trainee_id, score, tuple(reasons), ts)
 
 
@@ -28,7 +28,7 @@ def test_json_sink_writes_one_line_per_frame(tmp_path):
 
     lines = (tmp_path / "out" / "triage.jsonl").read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
-    assert json.loads(lines[0])["records"][0]["trainee_id"] == "cam0-t0"
+    assert json.loads(lines[0])["records"][0]["trainee_id"] == "t0"
     assert json.loads(lines[1])["records"] == []
 
 
@@ -108,6 +108,15 @@ def test_nothing_else_is_served(server):
     assert exc.value.code == 404
 
 
+def test_dashboard_is_served_at_root(server):
+    with urllib.request.urlopen(f"http://127.0.0.1:{server.port}/", timeout=5) as response:
+        assert response.status == 200
+        assert "text/html" in response.headers["Content-Type"]
+        body = response.read().decode("utf-8")
+    assert "<table" in body
+    assert "/triage" in body  # the page polls the JSON endpoint client-side
+
+
 def test_binds_loopback_by_default(server):
     assert server._server.server_address[0] == "127.0.0.1"
 
@@ -124,9 +133,9 @@ def test_update_snapshots_the_list(server):
 
 
 def test_alert_format_names_the_reasons():
-    line = format_alert(rec(reasons=("possible_fall", "vlm_anomaly")))
-    assert "cam0-t0" in line
-    assert "possible_fall, vlm_anomaly" in line
+    line = format_alert(rec(reasons=("possible_fall", "form_error")))
+    assert "t0" in line
+    assert "possible_fall, form_error" in line
     assert "0.75" in line
 
 
@@ -140,8 +149,8 @@ def test_console_sink_suppresses_an_unchanged_repeat(capsys):
 def test_console_sink_re_alerts_when_the_situation_changes(capsys):
     sink = ConsoleAlertSink()
     sink(rec(score=0.75))
-    sink(rec(score=0.75, reasons=("possible_fall", "vlm_anomaly")))
-    sink(rec(score=0.95, reasons=("possible_fall", "vlm_anomaly")))
+    sink(rec(score=0.75, reasons=("possible_fall", "form_error")))
+    sink(rec(score=0.95, reasons=("possible_fall", "form_error")))
     assert capsys.readouterr().err.count("[ALERT]") == 3
 
 

@@ -1,26 +1,16 @@
-# Model artifacts are large and are provisioned, never committed.
-# `argus bootstrap` (scripts/fetch_models.py) reproduces this tree from the
-# AI Hub job IDs recorded in models/argus_jobs.json.
-models/**
-!models/argus_jobs.json
-!models/argus_cu_jobs.json
-!models/argus_summary.json
-!models/argus_profiles_raw.json
-!models/README.md
+# Leftover local model artifacts from the retired on-device vision pipeline
+# (see docs/VALIDATION.md) -- nothing in this repo reads models/ anymore.
+models/
 
-# Venvs -- both halves of the two-venv split (see run.ps1).
+# Venv (see run.ps1).
 .venv/
-.venv-npu/
-
-# QNN HTP context cache: regenerated on first run, machine-specific.
-.qnn_cache/
-*.onnxruntime_profile_*.json
 
 # Runtime output
 out/
 *.jsonl
-*.mp4
-!demo/*.mp4
+
+# `argus demo` regenerates this fixture; it is build output, not an asset.
+demo/synthetic_stream.json
 
 __pycache__/
 *.py[cod]

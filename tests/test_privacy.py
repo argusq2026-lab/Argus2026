@@ -5,6 +5,12 @@ next person who adds an argument — but "can any type that could hold pixels or
 free text reach a sink at all". These tests inspect module imports and the type
 annotations of every public callable on the boundary, so widening it fails CI
 rather than review.
+
+The boundary used to be "no camera frame or raw VLM caption may reach a
+sink"; it is now stronger, not weaker: no frame ever exists past a phone's own
+on-device pose/form model in the first place, and there is no free text
+anywhere in the system — a phone's form-error codes are already a closed
+vocabulary by the time `argus.ingest.protocol` accepts them.
 """
 
 from __future__ import annotations
@@ -18,12 +24,15 @@ from pathlib import Path
 import pytest
 
 import argus.alerts as alerts
+import argus.ingest.protocol as ingest_protocol
+import argus.ingest.server as ingest_server
+import argus.ingest.session as ingest_session
 import argus.outputs as outputs
 from argus.triage import TriageRecord
 
 #: Modules that sit on or outside the alert boundary. Nothing here may hold a
-#: frame, a crop, or a caption.
-BOUNDARY_MODULES = (alerts, outputs)
+#: frame, a crop, or free text.
+BOUNDARY_MODULES = (alerts, outputs, ingest_protocol, ingest_session, ingest_server)
 
 #: Types that can carry imagery or free-form model output.
 FORBIDDEN_TYPE_NAMES = {"ndarray", "Mat", "Image", "bytes", "bytearray", "memoryview"}
@@ -50,7 +59,7 @@ def test_boundary_modules_import_no_image_library(module):
     assert not leaked, f"{module.__name__} imports {leaked}, widening the boundary"
 
 
-@pytest.mark.parametrize("module", BOUNDARY_MODULES, ids=lambda m: m.__name__)
+@pytest.mark.parametrize("module", (alerts, outputs), ids=lambda m: m.__name__)
 def test_no_public_callable_accepts_an_image_type(module):
     """Every parameter on the boundary must be a scalar, a path, or a record."""
     offenders = []
@@ -93,18 +102,6 @@ def test_triage_record_is_frozen():
         record.trainee_id = "t1"  # type: ignore[misc]
 
 
-def test_track_state_never_retains_a_caption(scoring):
-    """A caption is scored into a number and dropped, not stored."""
-    from argus.triage import TrackState
-
-    state = TrackState(history_len=scoring.history_len)
-    state.apply_caption("smoke and no helmet", scoring)
-    assert state.last_vlm_anomaly_score > 0.0
-    serialised = repr(state)
-    assert "smoke" not in serialised
-    assert "helmet" not in serialised
-
-
 def test_triage_module_holds_no_pixels():
     """The scorer must not be able to touch imagery even accidentally."""
     import argus.triage as triage
@@ -124,7 +121,7 @@ def test_json_payload_carries_only_the_four_fields(tmp_path):
     import json
 
     sink = outputs.JsonLogSink(tmp_path / "triage.jsonl")
-    sink.write(1.0, [TriageRecord("cam0-t0", 0.75, ("possible_fall",), 1.0)])
+    sink.write(1.0, [TriageRecord("t0", 0.75, ("possible_fall",), 1.0)])
     sink.close()
 
     payload = json.loads((tmp_path / "triage.jsonl").read_text(encoding="utf-8"))
@@ -132,12 +129,31 @@ def test_json_payload_carries_only_the_four_fields(tmp_path):
         assert set(record) == {"trainee_id", "score", "reason_codes", "ts"}
 
 
-def test_pipeline_does_not_store_frames_on_a_track():
-    """The runner keeps frames as locals; a Track must hold none of them."""
-    from argus.tracking.tracker import Track
+def test_station_session_holds_no_image_capable_field(scoring):
+    """The ingest layer's per-trainee state must not be able to hold pixels
+    either -- the network-era equivalent of the old per-camera Track check."""
+    from argus.ingest.session import StationSession
+    from argus.triage import TrackState
 
-    field_types = {f.name: str(f.type) for f in dataclasses.fields(Track)}
-    for name, annotation in field_types.items():
-        if name == "signature":
-            continue  # a normalised histogram, not recoverable imagery
-        assert "ndarray" not in annotation, f"Track.{name} can hold pixels"
+    session = StationSession(
+        station_id="s0", trainee_id="t0", track=TrackState(history_len=scoring.history_len),
+        last_seen_ts=0.0,
+    )
+    for field in dataclasses.fields(session):
+        assert "ndarray" not in str(field.type), f"StationSession.{field.name} can hold pixels"
+
+
+def test_ingest_protocol_rejects_a_form_code_outside_the_closed_vocabulary():
+    """A phone cannot smuggle free text into the score through a reason code:
+    only codes drawn from the configured vocabulary are ever accepted."""
+    from argus.ingest.protocol import ProtocolError, parse_observation
+
+    raw = {
+        "type": "observation", "ts": 0.0,
+        "bbox_xyxy": [0.0, 0.0, 1.0, 1.0],
+        "keypoints_xy": [[0.0, 0.0]] * 17,
+        "keypoints_conf": [0.0] * 17,
+        "form_reason_codes": ["trainee looks unwell, possible medical event"],
+    }
+    with pytest.raises(ProtocolError):
+        parse_observation(raw, {"knee_valgus": 0.8})
