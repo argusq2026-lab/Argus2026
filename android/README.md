@@ -21,6 +21,7 @@ fields, ever leaves the device.
 | Pose (BlazePose landmarks) on the NPU | **working** — fp16; up to 3 people landmarked per frame for display, subject's keypoints reported |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
+| **YOLO26-pose (single-stage)** | **prototype behind a flag** — stage `yolo26_pose_fp32.onnx` and it replaces both models; COCO-17 with legs, ~22 ms/frame. AGPL-3.0, see below |
 | Form/exercise classifier | not started (`form_reason_codes` always empty) |
 
 ## How detection stays honest
@@ -94,6 +95,47 @@ Also ruled out: NNAPI on Android 16 binds to `nnapi-reference` (CPU) — the
 HIDL neural-networks HAL is gone. Measured dispatch overhead: ~500 µs per NPU
 call on this device (see `NpuEvidenceTest`), ~5% of a YOLO-X frame but larger
 than an entire BlazePose stage — batch or down-cadence pose when it lands.
+
+## The single-stage prototype (YOLO26-pose)
+
+Selected purely by staging `yolo26_pose_fp32.onnx` into `files/models/`; remove
+the file and the two-model path returns untouched. The status strip names the
+active backend.
+
+Why it exists: the 25-point BlazePose export is upper-body only, and four of the
+seven `form_reason_codes` the protocol defines — `insufficient_depth`,
+`knee_valgus`, `heels_rising`, partly `incomplete_lockout` — need knees or
+ankles it structurally cannot produce. Measured against BlazePose on four images:
+
+| | BlazePose | YOLO26-pose |
+|---|---|---|
+| keypoints | 13/17 | 16/17 |
+| legs (COCO 13-16) | **0/4, structurally** | **4/4** |
+
+It is also much simpler. One pass, one coordinate space, confidences already
+activated: no ROI to derive (the bug that made pose look broken), no crop, no
+25-to-COCO remap, no visibility-logit convention, no quantization parameters,
+and one NPU dispatch rather than two.
+
+**Licence.** The weights are Ultralytics YOLO26, **AGPL-3.0**, against this
+repository's MIT. Shipping it commercially means releasing the app under AGPL or
+buying an Ultralytics licence — a business decision, and the reason this is a
+flag rather than a replacement. `rtmpose_body2d` is the Apache-2.0 alternative
+(COCO-17 with legs) if that is unacceptable; it needs `mmcv`, which is a
+difficult build, and it is two-stage so the ROI question returns.
+
+Export it with:
+
+```python
+from qai_hub_models.models.yolo26_pose.model import Yolo26PoseDetector
+import torch
+m = Yolo26PoseDetector.from_pretrained().eval()
+torch.onnx.export(m, torch.zeros(1,3,640,640), "yolo26_pose_fp32.onnx",
+                  opset_version=17, dynamo=False,
+                  input_names=["image"], output_names=["boxes","scores","keypoints"])
+```
+
+Note the input is float32 in [0, 1], not the w8a8 detector's raw uint8.
 
 ## Open
 

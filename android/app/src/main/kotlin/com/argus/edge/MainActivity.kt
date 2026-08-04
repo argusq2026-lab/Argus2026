@@ -54,6 +54,9 @@ class MainActivity : AppCompatActivity() {
     private var detector: QnnDetector? = null
     private var detectorStatus: String = "no model"
     private var poseEstimator: PoseEstimator? = null
+    /** Single-stage prototype; when present it replaces both models above. */
+    private var yolo26: Yolo26PoseEstimator? = null
+    private var backendLabel: String = "yolox+blazepose"
     private var poseStatus: String = "not staged"
     private var poseMsEma = 0.0
     private var lastVisibleKeypoints = 0
@@ -105,6 +108,7 @@ class MainActivity : AppCompatActivity() {
     ) { uris ->
         if (uris.isNotEmpty()) {
             val summary = modelStore.importFromUris(uris)
+            openYolo26()
             openDetector()
             openPoseEstimator()
             render(summary)
@@ -125,12 +129,15 @@ class MainActivity : AppCompatActivity() {
 
         deviceId = DeviceIdentity.deviceId(this)
         modelStore = ModelStore(this)
+        openYolo26()          // if staged, it supersedes the two-model path
         openDetector()
         openPoseEstimator()
 
         toggleButton.setOnClickListener {
             val now = !running.get()
-            if (now && detector == null) {
+            // Either backend is sufficient; the single-stage model does not
+            // need the two-model path to be staged at all.
+            if (now && detector == null && yolo26 == null) {
                 render("cannot start: $detectorStatus")
                 return@setOnClickListener
             }
@@ -190,6 +197,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The single-stage prototype, selected purely by its artifact being staged.
+     *
+     * A file-presence flag rather than a setting: staging it is already a
+     * deliberate act, and it keeps the two-model path untouched underneath so a
+     * bad result is one `adb shell rm` away from being reverted.
+     */
+    private fun openYolo26() {
+        yolo26?.close()
+        yolo26 = null
+        val model = java.io.File(modelStore.modelsDir, "yolo26_pose_fp32.onnx")
+        if (!model.isFile) { backendLabel = "yolox+blazepose"; return }
+        try {
+            val backend = java.io.File(applicationInfo.nativeLibraryDir, "libQnnHtp.so")
+            yolo26 = Yolo26PoseEstimator(model, backend)
+            backendLabel = "yolo26-pose (single-stage)"
+        } catch (e: NpuUnavailableException) {
+            backendLabel = "yolo26 FAILED — ${e.message?.take(90)}"
+        }
+    }
+
     /** Pose is optional: absent model degrades to zero-conf keypoints, stated. */
     private fun openPoseEstimator() {
         poseEstimator?.close()
@@ -238,16 +266,30 @@ class MainActivity : AppCompatActivity() {
             lastFrameNanos = nowNanos
 
             val det = detector
-            if (running.get() && det != null) {
+            val single = yolo26
+            if (running.get() && (single != null || det != null)) {
                 val upright = rotateUpright(image.toBitmap(), image.imageInfo.rotationDegrees)
-                val (canvas, info) = letterbox(upright, det.inputSize, det.sidecar.letterboxPadValue)
-                val tensor = toNchwRgbBytes(canvas)
-                canvas.recycle()
 
+                val detections: List<Detection>
+                var singlePoses: Map<Detection, PoseResult> = emptyMap()
                 val started = System.nanoTime()
-                val detections = det.detect(
-                    tensor, info, upright.width, upright.height, scoreThreshold,
-                )
+                if (single != null) {
+                    val (canvas, info) = letterbox(upright, single.inputSize, YOLOX_PAD_VALUE)
+                    val tensor = toNchwRgbFloats(canvas)   // float [0,1], not uint8
+                    canvas.recycle()
+                    val pairs = single.detectAndPose(
+                        tensor, info, upright.width, upright.height, scoreThreshold.toFloat(),
+                    )
+                    detections = pairs.map { it.first }
+                    singlePoses = pairs.toMap()
+                } else {
+                    val (canvas, info) = letterbox(upright, det!!.inputSize, det.sidecar.letterboxPadValue)
+                    val tensor = toNchwRgbBytes(canvas)
+                    canvas.recycle()
+                    detections = det.detect(
+                        tensor, info, upright.width, upright.height, scoreThreshold,
+                    )
+                }
                 val ms = (System.nanoTime() - started) / 1e6
                 inferenceMsEma = if (inferenceMsEma == 0.0) ms else 0.9 * inferenceMsEma + 0.1 * ms
                 lastDetections = detections.size
@@ -261,7 +303,16 @@ class MainActivity : AppCompatActivity() {
                 var subjectPose: PoseResult? = null
                 val otherPoses = ArrayList<PoseResult>()
                 val estimator = poseEstimator
-                if (estimator != null && detections.isNotEmpty()) {
+                if (single != null) {
+                    // Poses already came back with the detections; no second pass.
+                    subjectPose = subject?.let { singlePoses[it] }
+                    detections.filter { it !== subject }.forEach { d ->
+                        singlePoses[d]?.let { otherPoses.add(it) }
+                    }
+                    lastVisibleKeypoints = subjectPose?.keypointsConf?.count { it >= 0.3f } ?: 0
+                    lastPoseScore = subjectPose?.poseScore ?: 0f
+                    poseMsEma = 0.0   // folded into the single inference above
+                } else if (estimator != null && detections.isNotEmpty()) {
                     val ordered = buildList {
                         subject?.let { add(it) }
                         addAll(
@@ -370,7 +421,11 @@ class MainActivity : AppCompatActivity() {
     private fun render(extra: String? = null) {
         statusView.text = buildString {
             append("station   ").append(deviceId).append('\n')
-            append("model     ").append(detectorStatus).append('\n')
+            append("backend   ").append(backendLabel).append('\n')
+            // Only name the two-model artifacts when they are the ones running.
+            // Showing "model 'yolox'" while the single-stage backend does the
+            // work states something untrue about what produced the boxes.
+            if (yolo26 == null) append("model     ").append(detectorStatus).append('\n')
             append("camera    %.1f fps, frame %d".format(fpsEma, frameCount)).append('\n')
             append("inference ")
             append(
@@ -386,7 +441,13 @@ class MainActivity : AppCompatActivity() {
             ).append('\n')
             append("pose      ")
             append(
-                if (poseEstimator != null && running.get())
+                if (yolo26 != null && running.get())
+                    "in-model, %d/17 keypoints, score %.2f%s".format(
+                        lastVisibleKeypoints, lastPoseScore,
+                        if (subjectTracker.switches > 0)
+                            " — %d subject switch(es)".format(subjectTracker.switches) else "",
+                    )
+                else if (poseEstimator != null && running.get())
                     // 13 of 17 is the ceiling: the 25-point export has no
                     // knees or ankles, so those four never light up.
                     "%.1f ms, %d/13 keypoints, score %.2f%s"
@@ -407,6 +468,7 @@ class MainActivity : AppCompatActivity() {
         client?.disconnect()
         detector?.close()
         poseEstimator?.close()
+        yolo26?.close()
         analysisExecutor.shutdown()
     }
 }
