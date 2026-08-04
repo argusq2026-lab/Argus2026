@@ -89,6 +89,16 @@ class PoseRealPersonTest {
             // confident, and landing on the person rather than elsewhere in the
             // ROI. Both are needed -- confident-but-misplaced is the silent
             // failure this test exists to catch.
+            // The network's own pose score is the assertion that matters, and
+            // its absence here was a real gap: with a wrong ROI this test still
+            // passed at 25/25 visible while poseScore was 0.003. Per-joint
+            // visibility stays high on garbage landmarks; the pose score does
+            // not. Check the thing that actually discriminates.
+            assertTrue(
+                "pose score %.3f -- the network rejects this framing; check the ROI"
+                    .format(pose.poseScore),
+                pose.poseScore >= 0.5f,
+            )
             assertTrue("only $visible/13 keypoints were confident on a real person", visible >= 10)
             assertTrue("only $inside/13 keypoints landed on the person", inside >= 10)
         } finally {

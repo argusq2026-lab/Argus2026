@@ -89,9 +89,36 @@ data class PoseResult(
 /** An axis-aligned square ROI around a detection, clamped to sane bounds. */
 data class PoseRoi(val x0: Float, val y0: Float, val side: Float)
 
-fun squareRoiFor(det: Detection, scale: Float = 1.25f): PoseRoi {
+/**
+ * How much larger than the detection box the landmark ROI must be.
+ *
+ * **Measured, not chosen.** MediaPipe derives this ROI from its own pose
+ * *detector* stage, which this app skips because YOLO already found the person.
+ * The assumption was that a YOLO box supplies the same centre and scale. It
+ * supplies roughly the centre and nowhere near the scale: sweeping ROI scale
+ * against the network's own pose score, over four different framings of a real
+ * person, a 1.25x box scored **0.000** every time while 2.0x-3.0x scored
+ * 0.998-1.000. The network wants far more context around the subject than a
+ * tight person box gives it.
+ *
+ * 2.2x sits in the middle of that plateau rather than at its edge, and the
+ * smaller end is preferred within it because a wider crop spends more of the
+ * 256x256 input on background instead of on the person.
+ *
+ * The upward shift matters for the same reason: MediaPipe's ROI is built around
+ * the mid-hip with the body extending upward, so centring on the box's middle
+ * sits the subject too low in the crop.
+ */
+const val POSE_ROI_SCALE = 2.2f
+const val POSE_ROI_Y_OFFSET = -0.10f
+
+fun squareRoiFor(
+    det: Detection,
+    scale: Float = POSE_ROI_SCALE,
+    yOffset: Float = POSE_ROI_Y_OFFSET,
+): PoseRoi {
     val cx = (det.x0 + det.x1) / 2f
-    val cy = (det.y0 + det.y1) / 2f
+    val cy = (det.y0 + det.y1) / 2f + yOffset * (det.y1 - det.y0)
     val side = maxOf(det.x1 - det.x0, det.y1 - det.y0) * scale
     return PoseRoi(cx - side / 2f, cy - side / 2f, maxOf(side, 1f))
 }

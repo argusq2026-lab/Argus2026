@@ -84,12 +84,24 @@ class PoseDecodeTest {
     }
 
     @Test
-    fun `square roi is centred on the box and scaled`() {
-        val roi = squareRoiFor(Detection(100f, 100f, 200f, 400f, 0.9f), scale = 1.25f)
-        // Tall box: side = 300 * 1.25 = 375, centred on (150, 250).
-        assertEquals(375f, roi.side, 1e-3f)
-        assertEquals(150f - 187.5f, roi.x0, 1e-3f)
-        assertEquals(250f - 187.5f, roi.y0, 1e-3f)
+    fun `square roi is scaled and shifted upward off the box centre`() {
+        val det = Detection(100f, 100f, 200f, 400f, 0.9f)   // 100 x 300, tall
+        val roi = squareRoiFor(det, scale = 2.0f, yOffset = -0.10f)
+        assertEquals("side = longest edge x scale", 600f, roi.side, 1e-3f)
+        assertEquals(150f - 300f, roi.x0, 1e-3f)
+        // Centre shifts up by 10% of box height: 250 - 30 = 220.
+        assertEquals(220f - 300f, roi.y0, 1e-3f)
+    }
+
+    @Test
+    fun `the default roi is the measured one, not a tight box`() {
+        // A 1.25x box scores 0.000 on the landmark network across every framing
+        // tried; the usable plateau is 2.0x-3.0x with a slight upward shift.
+        // Pinned so the default cannot drift back without this failing.
+        assertEquals(2.2f, POSE_ROI_SCALE, 1e-6f)
+        assertEquals(-0.10f, POSE_ROI_Y_OFFSET, 1e-6f)
+        val roi = squareRoiFor(Detection(0f, 0f, 100f, 200f, 0.9f))
+        assertEquals(440f, roi.side, 1e-3f)
     }
 
     @Test
