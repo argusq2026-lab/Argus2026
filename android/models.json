@@ -1,0 +1,64 @@
+{
+  "comment": [
+    "Provenance and reproduction recipe for the artifacts the Android station",
+    "runs. The models are NOT in this repository: each carries its own licence,",
+    "one of them is AGPL-3.0, and this repository is public and MIT — so",
+    "committing them would mean redistributing under terms it cannot offer.",
+    "This file plus scripts/fetch_edge_models.py is the substitute, and it is a",
+    "complete one: the local exports are byte-identical across runs given the",
+    "pinned versions below, which the recorded sha256s verify.",
+    "",
+    "  python scripts/fetch_edge_models.py --out models/edge",
+    "  cd android && ./stage.sh --models ../models/edge",
+    "",
+    "No Qualcomm AI Hub account is required. AI Hub job IDs are recorded as",
+    "provenance, but they are scoped to the account that created them, so they",
+    "are not a reproduction path for anyone else — the local export is."
+  ],
+  "pinned_versions": {
+    "qai-hub-models": "0.59.0",
+    "qai-hub": "0.54.0",
+    "ultralytics": "8.4.115",
+    "torch": "2.11.0",
+    "onnx": "1.18.0"
+  },
+  "models": {
+    "yolox": {
+      "role": "person detector (w8a8), two-model path",
+      "source": "qai-hub",
+      "aihub_job": "jgo8m0l1p",
+      "use": "source_model",
+      "note": "Use the compile job's SOURCE model. Its target is an sc8380xp QNN context binary and will not load on a phone; the source is QDQ ONNX, so the QNN EP compiles it for whatever Hexagon it finds at session init.",
+      "export_command": "python -m qai_hub_models.models.yolox.export --target-runtime onnx --quantize w8a8 --device 'Snapdragon 8 Elite QRD'",
+      "automated": false,
+      "automation_note": "Needs the `yolox` pip extra, whose build requires torch to already be installed; run it deliberately rather than from the fetch script.",
+      "files": ["yolox.onnx", "yolox.data"],
+      "sidecar": "python scripts/gen_yolox_fixture.py <dir>/yolox.onnx",
+      "licence": "Apache-2.0 (YOLOX upstream)"
+    },
+    "pose_landmark": {
+      "role": "BlazePose landmarks, two-model path",
+      "source": "local-export",
+      "module": "qai_hub_models.models.mediapipe_pose.model.PoseLandmarkDetector",
+      "automated": true,
+      "sha256": "8dbd3573d0968867db53c14f27fff0ae19bd1b074e25c0915662dd2441e48ef0",
+      "note": "qai-hub-models has de-published mediapipe_pose as a packaged model but still ships the code and fetches the zmurez/MediaPipePyTorch weights. Float32 on purpose: pose quantization is where docs/VALIDATION.md §1's placeholder-calibration damage landed, and this HTP runs fp16 natively.",
+      "files": ["pose_landmark_fp32.onnx"],
+      "licence": "Apache-2.0"
+    },
+    "yolo26_pose": {
+      "role": "single-stage detector + COCO-17 pose (prototype, behind a file flag)",
+      "source": "local-export",
+      "module": "qai_hub_models.models.yolo26_pose.model.Yolo26PoseDetector",
+      "automated": true,
+      "sha256": "b346729e678d667f0c88c86afee31a5487f5f9ea4a48eb91b5d9a970eb8c42c5",
+      "aihub_job": "j56wd30yg",
+      "aihub_device": "Snapdragon 8 Elite QRD",
+      "aihub_options": "--target_runtime onnx",
+      "aihub_sha256": "f30dfee6f058bb5bb2f5897f1935bf2c1c753a297fad8383879beb921e51098b",
+      "note": "The AI Hub build is the device-optimised variant and is optional. It renames graph outputs to output_0/1/2; the fetch script restores the canonical boxes/scores/keypoints names the app's contract check expects, rather than loosening a check that exists to catch exactly this.",
+      "files": ["yolo26_pose_fp32.onnx"],
+      "licence": "AGPL-3.0 (Ultralytics) — read THIRD-PARTY-NOTICES.md before shipping"
+    }
+  }
+}
