@@ -4,8 +4,9 @@ The phone half of the multi-edge design: a capture-and-compute node that scores
 locally and reports only redacted records to the PC aggregator.
 
 This module is **not** finished. What is here is the contract, the identity, the
-NPU seam, and the capture loop — all of it building, tested, and installable.
-What is not here is inference itself, for one reason stated plainly below.
+capture loop, and a working NPU path — all of it building, tested, and running on
+a stock Galaxy S25 Ultra. What is not here is the detector decode, for one reason
+stated plainly below, and everything an end user would actually need.
 
 ## Status
 
@@ -15,112 +16,69 @@ What is not here is inference itself, for one reason stated plainly below.
 | Wire contract (`Wire.kt`) | done, checked against Python via a shared fixture |
 | Station identity (`DeviceIdentity.kt`) | done |
 | Camera capture (`MainActivity.kt`) | done, CameraX 640² analysis stream |
-| NPU session bring-up (`Detector.kt`) | written; **does not yet work on hardware** — see below |
+| NPU session bring-up (`Detector.kt`) | **works on real hardware** — graph runs on Hexagon v79, no CPU fallback |
 | Detector post-processing | **not written** — see below |
 | Tracking, pose, triage scoring | not started; pending the split-point decision |
 | Transport to the PC | interface only (`EdgeTransport`) |
 
-## Open: the NPU has not executed a graph on hardware
+## Resolved: the NPU runs, and what it took
 
-`QnnSessionTest` runs on a connected device and currently **fails**. That is the
-accurate status, not a broken build: it is the Android counterpart of
-`docs/VALIDATION.md` §4, and it will keep failing until the Hexagon is actually
-reachable.
+`QnnSessionTest` passes on a stock **Galaxy S25 Ultra** (`SM-S938U1`,
+`ro.soc.model=SM8750`, Hexagon v79, Android 16, locked bootloader, SELinux
+enforcing). A graph executes on the NPU with **CPU fallback explicitly
+disabled**, so the pass cannot be an accidental CPU run.
 
-Measured on a Galaxy S25 Ultra (`SM-S938U1`, `ro.soc.model=SM8750`, Android 16):
+No root, no unlock, no platform signing, no Qualcomm account, and no QAIRT SDK
+download. Two things were required, and neither is obvious:
 
-```
-QNN SetupBackend failed Failed to create device.
-Error: QNN_DEVICE_ERROR_INVALID_CONFIG: Invalid config values
-```
+### 1. Declare the vendor libraries in the manifest
 
-Eight provider configurations were tried — bare `backend_path`, three
-`htp_performance_mode` values, explicit `htp_arch=79`, `htp_arch` with
-`device_id`, a deliberate `htp_arch=75` mismatch, and fp16 precision. All fail
-identically. Bumping the runtime from QAIRT 2.33.0 to 2.42.0 changed nothing.
-
-Two things this *has* established:
-
-- The backend library loads. The QNN GPU backend, used as a control through the
-  same wiring, fails differently (`QNN_COMMON_ERROR_PLATFORM_NOT_SUPPORTED`), so
-  HTP is initialising and it is specifically device creation that is rejected.
-- Native libraries must be extracted to disk. QNN takes a filesystem
-  `backend_path`, and Android has not unpacked `.so` files by default since API
-  23, so without `useLegacyPackaging = true` the EP silently fails to register
-  and every node lands on CPU. The only reason that surfaced is that CPU
-  fallback is explicitly disabled — with fallback on, this would have looked
-  like a working app running at CPU speed.
-
-### Root cause: a retail handset does not let an app touch the DSP
-
-Measured on the device:
-
-```
-$ ls -lZ /dev/fastrpc-cdsp
-crw-rw-r-- 1 system system u:object_r:vendor_qdsp_device:s0  /dev/fastrpc-cdsp
-$ getenforce
-Enforcing
+```xml
+<uses-native-library android:name="libcdsprpc.so" android:required="false"/>
+<uses-native-library android:name="libadsprpc.so" android:required="false"/>
 ```
 
-Measured directly with `android.system.Os.open` from inside the app, rather
-than inferred from mode bits (`/dev/fastrpc-cdsp` is an ioctl-only character
-device, so `cat` failing on it proves nothing):
+This is the whole fix for the `QNN_DEVICE_ERROR_INVALID_CONFIG` failure. QNN
+`dlopen`s the vendor cDSP client at runtime. Bundled `.so` files live in the
+app's linker namespace, which cannot see `/vendor` by default; `libcdsprpc.so`
+is listed in `/vendor/etc/public.libraries.txt`, and since API 31 an app must
+*declare* such a library to be granted namespace access to it. Without the
+declaration the load fails deep inside QNN and surfaces only as an invalid
+device config, which points nowhere near the real cause.
 
+### 2. Extract native libraries to disk
+
+```kotlin
+packaging { jniLibs { useLegacyPackaging = true } }
 ```
-DENIED  EACCES  /dev/fastrpc-cdsp
-DENIED  EACCES  /dev/fastrpc-cdsp-secure
-UNAVAILABLE     libcdsprpc.so  (not on the app linker path)
-```
 
-The denial is DAC, not SELinux — `crw-rw-r--` with owner `system:system` denies
-write to others before SELinux is consulted, which is why no AVC denial ever
-appears in the log. Qualcomm's own client library is in `/vendor/lib64` but is
-not exposed to apps. Setting `ADSP_LIBRARY_PATH` does not help, because the
-obstacle is opening the device node rather than resolving the skel.
+QNN takes a filesystem `backend_path`. Android has not unpacked `.so` files by
+default since API 23, so without this there is no path to hand it, the execution
+provider silently fails to register, and every node lands on CPU. The only
+reason that surfaced is that CPU fallback is disabled — with fallback on it
+would have presented as a working app quietly running at CPU speed.
 
-Root is not an escape on this handset: `ro.boot.flash.locked=1`,
-`verifiedbootstate=green`, `ro.build.type=user`, and `oem_unlock_allowed` is
-absent — a US-model S25 with a permanently locked bootloader.
+### A red herring worth recording
 
-This is a property of the retail build, not of our code. Samsung ships its own
-`/vendor/lib64/libsnap_qnn.so` for system-level use.
+`DspAccessTest` still reports `EACCES` opening `/dev/fastrpc-cdsp` directly, and
+that is *fine*. The app never opens the node itself; the vendor client does,
+from the vendor namespace. Reasoning from the mode bits on that node led to the
+confident and wrong conclusion that retail hardware was closed to third-party
+NPU use. It is not. Both tests are kept precisely because they disagree, and the
+disagreement is the point: node permissions are not the access mechanism.
 
-### NNAPI is not a way round it on Android 16
+### Also ruled out along the way
 
-NNAPI exists to let apps reach vendor accelerators through a system HAL. Tested
-here with the standard `onnxruntime-android` build (the `-qnn` build has no
-NNAPI support compiled in), it runs — but:
+NNAPI is not a route on Android 16. It runs, but:
 
 ```
 Cannot list manifest for android.hardware.neuralnetworks@1.1::IDevice
-ExecutionPlan::SimpleBody::finish: compilation finished successfully on nnapi-reference
+compilation finished successfully on nnapi-reference
 ```
 
-`nnapi-reference` is NNAPI's CPU fallback driver. Android 16 removed the HIDL
-neural-networks HAL, so there is no vendor NN driver left to dispatch to. NNAPI
-on this device is a slower path to the same CPU.
-
-### What this leaves
-
-Nothing in this module can unblock it; the options are hardware or partnership
-decisions:
-
-| Route | Reaches NPU | Cost |
-|---|---|---|
-| Snapdragon 8 Elite QRD / dev device | yes | procurement; not a retail phone |
-| Platform-signed or `userdebug` build | yes | OEM relationship or unlocked device |
-| Samsung ENN SDK | yes | Samsung partner programme |
-| LiteRT via Play Services | untested | worth a spike before anything else |
-| Adreno GPU (Vulkan/OpenCL delegate) | no, but is a real accelerator | app-accessible today |
-| AI Hub device farm | yes, off-device | already working; profiling only |
-
-The last row is the one to lean on now: AI Hub runs jobs on real 8 Elite
-hardware, so the model can be compiled, profiled, and numerically validated on
-v79 without solving on-device access at all. That decouples the model question
-from the deployment question, and the deployment question is the one that needs
-a decision from outside this repository.
-
-Until then, no phone-side inference number means anything.
+`nnapi-reference` is the CPU fallback driver; the HIDL neural-networks HAL is
+gone, so there is no vendor driver to dispatch to. Irrelevant now that QNN
+works, but worth not re-testing.
 
 ## Why post-processing is deliberately absent
 

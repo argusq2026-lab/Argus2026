@@ -11,6 +11,15 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.DayNight.NoActionBar">
+
+        <!-- QNN dlopens the vendor cDSP client at runtime. Bundled .so files
+             live in the app linker namespace and cannot see /vendor by
+             default; these are listed in /vendor/etc/public.libraries.txt,
+             and API 31+ requires declaring them to get namespace access. -->
+        <uses-native-library android:name="libcdsprpc.so" android:required="false"/>
+        <uses-native-library android:name="libadsprpc.so" android:required="false"/>
+        <uses-native-library android:name="libOpenCL.so" android:required="false"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
