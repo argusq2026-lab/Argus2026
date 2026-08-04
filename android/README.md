@@ -15,10 +15,49 @@ What is not here is inference itself, for one reason stated plainly below.
 | Wire contract (`Wire.kt`) | done, checked against Python via a shared fixture |
 | Station identity (`DeviceIdentity.kt`) | done |
 | Camera capture (`MainActivity.kt`) | done, CameraX 640² analysis stream |
-| NPU session bring-up (`Detector.kt`) | done — opens a QNN session or refuses |
+| NPU session bring-up (`Detector.kt`) | written; **does not yet work on hardware** — see below |
 | Detector post-processing | **not written** — see below |
 | Tracking, pose, triage scoring | not started; pending the split-point decision |
 | Transport to the PC | interface only (`EdgeTransport`) |
+
+## Open: the NPU has not executed a graph on hardware
+
+`QnnSessionTest` runs on a connected device and currently **fails**. That is the
+accurate status, not a broken build: it is the Android counterpart of
+`docs/VALIDATION.md` §4, and it will keep failing until the Hexagon is actually
+reachable.
+
+Measured on a Galaxy S25 Ultra (`SM-S938U1`, `ro.soc.model=SM8750`, Android 16):
+
+```
+QNN SetupBackend failed Failed to create device.
+Error: QNN_DEVICE_ERROR_INVALID_CONFIG: Invalid config values
+```
+
+Eight provider configurations were tried — bare `backend_path`, three
+`htp_performance_mode` values, explicit `htp_arch=79`, `htp_arch` with
+`device_id`, a deliberate `htp_arch=75` mismatch, and fp16 precision. All fail
+identically. Bumping the runtime from QAIRT 2.33.0 to 2.42.0 changed nothing.
+
+Two things this *has* established:
+
+- The backend library loads. The QNN GPU backend, used as a control through the
+  same wiring, fails differently (`QNN_COMMON_ERROR_PLATFORM_NOT_SUPPORTED`), so
+  HTP is initialising and it is specifically device creation that is rejected.
+- Native libraries must be extracted to disk. QNN takes a filesystem
+  `backend_path`, and Android has not unpacked `.so` files by default since API
+  23, so without `useLegacyPackaging = true` the EP silently fails to register
+  and every node lands on CPU. The only reason that surfaced is that CPU
+  fallback is explicitly disabled — with fallback on, this would have looked
+  like a working app running at CPU speed.
+
+Next hypotheses, untested: the HTP may require the unsigned protection domain
+for a non-platform-signed app; the DSP may not be reachable from a third-party
+app on a retail Samsung build; or ORT's device-config construction may not match
+what QAIRT expects for v79. Confirming any of these needs Qualcomm's own
+`qnn-net-run` on the device as a reference point.
+
+Until this is resolved, no phone-side inference number means anything.
 
 ## Why post-processing is deliberately absent
 

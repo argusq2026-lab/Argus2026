@@ -40,6 +40,7 @@ android {
     sourceSets {
         getByName("main").java.srcDirs("src/main/kotlin")
         getByName("test").java.srcDirs("src/test/kotlin")
+        getByName("androidTest").java.srcDirs("src/androidTest/kotlin")
     }
 
     // The cross-language wire fixture lives with the Python tests that generate
@@ -50,10 +51,20 @@ android {
     }
 
     packaging {
-        // The QNN backend .so set from the QAIRT SDK is dropped in here by
-        // whoever has Qualcomm portal access; see android/README.md. It is
-        // deliberately not vendored into the repo.
-        jniLibs.pickFirsts += "**/libQnn*.so"
+        jniLibs {
+            // Extract native libraries to disk at install time.
+            //
+            // Since API 23 the platform default is to leave uncompressed .so
+            // files inside the APK and map them from there, which is why this
+            // has to be asked for explicitly. QNN does not work that way: the
+            // execution provider takes a filesystem `backend_path` and dlopens
+            // libQnnHtp.so, which in turn loads the per-Hexagon skel onto the
+            // DSP. With the libraries unextracted there is no such path, the EP
+            // silently fails to register, every node falls back to CPU, and the
+            // only reason that surfaces at all is that CPU fallback is
+            // explicitly disabled. Found by QnnSessionTest on a real S25 Ultra.
+            useLegacyPackaging = true
+        }
     }
 }
 
@@ -69,11 +80,15 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$camerax")
     implementation("androidx.camera:camera-view:$camerax")
 
-    // ONNX Runtime with the QNN execution provider compiled in. The Qualcomm
-    // backend libraries it dlopens at runtime are NOT in this artifact -- see
-    // QnnDetector for what happens when they are absent.
-    implementation("com.microsoft.onnxruntime:onnxruntime-android-qnn:1.22.0")
+    // ONNX Runtime with the QNN execution provider compiled in. This pulls
+    // com.qualcomm.qti:qnn-runtime transitively, which is where libQnnHtp.so,
+    // libQnnSystem.so and the per-Hexagon skels come from -- including
+    // libQnnHtpV79Skel.so, the Snapdragon 8 Elite's. Both are on Maven Central;
+    // no Qualcomm account or QAIRT SDK download is involved.
+    implementation("com.microsoft.onnxruntime:onnxruntime-android-qnn:1.28.0")
 
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
     testImplementation("org.json:json:20240303")
 }
