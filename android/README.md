@@ -98,8 +98,23 @@ than an entire BlazePose stage — batch or down-cadence pose when it lands.
   bit-identical; with a w8a8 detector this can move borderline anchors. The
   parity fixture bypasses the resampler deliberately; quantifying its
   detection-level effect needs real footage on both platforms.
-- **Pose + form models**: the next on-device milestones; the protocol fields
-  are already carried, zeroed.
+- **Pose**: feasibility is settled — the BlazePose landmark model (float32
+  export of `qai_hub_models.models.mediapipe_pose.PoseLandmarkDetector`, which
+  current qai-hub-models has de-published as a packaged model but still ships
+  the code for) runs on this phone's NPU in fp16 at **622 µs/inference**
+  (`PoseFeasibilityTest`, CPU fallback disabled). Float-not-w8a8 is deliberate:
+  pose quantization is where docs/VALIDATION.md §1's placeholder-calibration
+  damage happened, and the HTP runs fp16 natively. Integration path: YOLO box
+  → 1.25× square ROI → 256² crop → landmarks `(25, 4)` → the historical
+  BlazePose→COCO-17 remap (`d3bd15e:src/argus/vision/keypoints.py`; knees and
+  ankles have no source landmark and stay zero-confidence, which the scorer's
+  feature set tolerates by design). One decode detail to pin with a fixture
+  before shipping: the visibility channel's activation (raw values look like
+  logits; the historical `blazepose.py` decode is the reference). The BlazePose
+  *detector* stage is unnecessary — it only ever supplied centre/scale, which
+  the YOLO box already provides, and the old pipeline had already dropped ROI
+  rotation.
+- **Form classifier**: not started; `form_reason_codes` always empty.
 - The AI Hub profile job on `Snapdragon 8 Elite QRD` (`jp2e44lxp`) failed with
   an infra-side "unexpected device error"; on-device measurement supersedes it
   for now.
