@@ -15,10 +15,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import android.content.res.Configuration
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,6 +50,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var thresholdLabel: TextView
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    private var imageAnalysis: ImageAnalysis? = null
     private val running = AtomicBoolean(false)
 
     private lateinit var deviceId: String
@@ -121,6 +125,7 @@ class MainActivity : AppCompatActivity() {
         // A station is propped on a tripod for a whole class; a screen that
         // dozes off mid-set silently stops the camera feed with it.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyWindowInsets()
         previewView = findViewById(R.id.preview)
         overlay = findViewById(R.id.overlay)
         statusView = findViewById(R.id.status)
@@ -174,6 +179,41 @@ class MainActivity : AppCompatActivity() {
             == PackageManager.PERMISSION_GRANTED
         ) bindCamera() else requestCamera.launch(Manifest.permission.CAMERA)
         render()
+    }
+
+    /**
+     * Keep the controls out from under the system bars.
+     *
+     * targetSdk 35 means the window is laid out edge to edge by default, so
+     * without this the button row sits beneath the navigation bar: visible,
+     * and not reliably tappable. It is worse than it looks in one orientation,
+     * because the bar moves — bottom in portrait, side in landscape — so a
+     * fixed margin fixes one and breaks the other. Insets are asked for
+     * instead, and re-applied on rotation because the activity is not recreated.
+     *
+     * The preview deliberately keeps its full bleed; only the chrome is inset.
+     */
+    private fun applyWindowInsets() {
+        val status = findViewById<TextView>(R.id.status)
+        val controls = findViewById<LinearLayout>(R.id.controls)
+        val thresholdRow = findViewById<LinearLayout>(R.id.thresholdRow)
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { _, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            status.setPadding(
+                status.paddingLeft.coerceAtLeast(bars.left + 12),
+                bars.top + 12, status.paddingRight, status.paddingBottom,
+            )
+            for (row in listOf(thresholdRow, controls)) {
+                row.setPadding(bars.left + 8, row.paddingTop, bars.right + 8, row.paddingBottom)
+            }
+            controls.setPadding(
+                controls.paddingLeft, controls.paddingTop,
+                controls.paddingRight, bars.bottom + 8,
+            )
+            insets
+        }
     }
 
     /** Open the active model on the NPU, or record exactly why not. */
@@ -243,9 +283,13 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder().build()
                 .also { it.surfaceProvider = previewView.surfaceProvider }
             val analysis = ImageAnalysis.Builder()
+                // Frames must arrive oriented for the *current* display, not
+                // for whatever it was at bind time.
+                .setTargetRotation(display.rotation)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .also { it.setAnalyzer(analysisExecutor, ::onFrame) }
+                .also { imageAnalysis = it }
             provider.unbindAll()
             provider.bindToLifecycle(
                 this,
@@ -253,6 +297,30 @@ class MainActivity : AppCompatActivity() {
                 preview, analysis,
             )
         }, ContextCompat.getMainExecutor(this))
+    }
+
+    /**
+     * Rotation, without tearing anything down.
+     *
+     * The activity survives the configuration change (see the manifest), so all
+     * that is needed is to tell CameraX which way the display now faces.
+     * `ImageProxy.imageInfo.rotationDegrees` is expressed relative to the
+     * analysis use case's target rotation, so leaving it stale is precisely how
+     * the overlay ends up drawn against a frame the preview is rendering a
+     * quarter-turn away from — the boxes land in the wrong place rather than
+     * disappearing, which is harder to spot.
+     *
+     * The last held overlay is dropped: it was computed in the previous
+     * orientation's pixel space and would be mapped through the new one.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        imageAnalysis?.targetRotation = display.rotation
+        // The bars move with the display; ask for the new insets.
+        ViewCompat.requestApplyInsets(findViewById(R.id.root))
+        lastGood = null
+        overlay.update(emptyList(), null, null, emptyList(), 1, 1)
+        render()
     }
 
     private fun onFrame(image: ImageProxy) {
