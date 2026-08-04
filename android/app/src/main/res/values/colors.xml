@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Camera-first palette: the preview is the content, chrome recedes. -->
+    <color name="surface">#0E1113</color>
+    <color name="surface_raised">#CC161A1D</color>
+    <color name="on_surface">#F2F5F7</color>
+    <color name="on_surface_dim">#96A0A8</color>
+
+    <!-- State colours, used consistently: live, attention, fault. -->
+    <color name="live">#3DDC97</color>
+    <color name="live_dim">#333DDC97</color>
+    <color name="attention">#FFBE3D</color>
+    <color name="fault">#FF6B6B</color>
+
+    <color name="action">#2A3138</color>
+    <color name="action_pressed">#39424A</color>
+    <color name="scrim">#B3000000</color>
+</resources>
