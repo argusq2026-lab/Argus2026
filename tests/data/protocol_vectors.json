@@ -1,0 +1,673 @@
+{
+  "form_error_vocab_keys": [
+    "asymmetric_form",
+    "excessive_forward_lean",
+    "heels_rising",
+    "incomplete_lockout",
+    "insufficient_depth",
+    "knee_valgus",
+    "rounded_back"
+  ],
+  "generated_by": "scripts/gen_protocol_vectors.py",
+  "invalid": [
+    {
+      "message": {
+        "protocol_version": 2,
+        "station_id": "s",
+        "trainee_id": "t",
+        "type": "hello"
+      },
+      "name": "hello_wrong_protocol_version",
+      "why": "no negotiation: a mismatch is rejected outright, not downgraded"
+    },
+    {
+      "message": {
+        "protocol_version": 1,
+        "station_id": "s",
+        "trainee_id": "",
+        "type": "hello"
+      },
+      "name": "hello_empty_trainee_id",
+      "why": "trainee_id is the triage key; an empty one cannot be dispatched against"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "form_reason_codes": [
+          "trainee looks unwell"
+        ],
+        "keypoints_conf": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "keypoints_xy": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "ts": 0.0,
+        "type": "observation"
+      },
+      "name": "observation_free_text_form_code",
+      "why": "the closed vocabulary is the privacy boundary: free text in a reason code is rejected, not scored"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "keypoints_conf": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "keypoints_xy": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "ts": 0.0,
+        "type": "observation"
+      },
+      "name": "observation_sixteen_keypoints",
+      "why": "all 17 slots are always present; a missing keypoint is low-confidence, not absent"
+    },
+    {
+      "message": {
+        "keypoints_conf": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "keypoints_xy": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "ts": 0.0,
+        "type": "observation"
+      },
+      "name": "observation_missing_bbox"
+    }
+  ],
+  "protocol_version": 1,
+  "valid": [
+    {
+      "message": {
+        "protocol_version": 1,
+        "station_id": "station-3",
+        "trainee_id": "phoneA1B2",
+        "type": "hello"
+      },
+      "name": "hello_minimal"
+    },
+    {
+      "message": {
+        "exercise_plan": "squat",
+        "protocol_version": 1,
+        "station_id": "squat-rack-1",
+        "trainee_id": "phoneA1B2",
+        "type": "hello"
+      },
+      "name": "hello_with_plan"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.12,
+          0.08,
+          0.61,
+          0.97
+        ],
+        "keypoints_conf": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "keypoints_xy": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "ts": 1730649600.125,
+        "type": "observation"
+      },
+      "name": "observation_detection_only",
+      "why": "a phone with no pose model yet reports all 17 keypoints at zero confidence, exactly as PROTOCOL.md instructs \u2014 never omitted, never invented"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.1,
+          0.05,
+          0.6,
+          0.95
+        ],
+        "exercise": "squat",
+        "form_ok": false,
+        "form_reason_codes": [
+          "insufficient_depth",
+          "knee_valgus"
+        ],
+        "keypoints_conf": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ],
+        "keypoints_xy": [
+          [
+            0.3,
+            0.1
+          ],
+          [
+            0.31,
+            0.14
+          ],
+          [
+            0.32,
+            0.18
+          ],
+          [
+            0.32999999999999996,
+            0.22
+          ],
+          [
+            0.33999999999999997,
+            0.26
+          ],
+          [
+            0.35,
+            0.30000000000000004
+          ],
+          [
+            0.36,
+            0.33999999999999997
+          ],
+          [
+            0.37,
+            0.38
+          ],
+          [
+            0.38,
+            0.42000000000000004
+          ],
+          [
+            0.39,
+            0.45999999999999996
+          ],
+          [
+            0.4,
+            0.5
+          ],
+          [
+            0.41,
+            0.54
+          ],
+          [
+            0.42,
+            0.58
+          ],
+          [
+            0.43,
+            0.62
+          ],
+          [
+            0.44,
+            0.66
+          ],
+          [
+            0.44999999999999996,
+            0.7
+          ],
+          [
+            0.45999999999999996,
+            0.74
+          ]
+        ],
+        "rep_count": 12,
+        "ts": 1730649601.0,
+        "type": "observation"
+      },
+      "name": "observation_full"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ],
+        "form_reason_codes": [],
+        "keypoints_conf": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "keypoints_xy": [
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0
+          ]
+        ],
+        "ts": 0.0,
+        "type": "observation"
+      },
+      "name": "observation_boundary_coords",
+      "why": "exactly 0.0 and 1.0 are inside the normalized contract"
+    }
+  ],
+  "vectors_version": 1
+}
