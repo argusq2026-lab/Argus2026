@@ -51,13 +51,62 @@ Two things this *has* established:
   fallback is explicitly disabled — with fallback on, this would have looked
   like a working app running at CPU speed.
 
-Next hypotheses, untested: the HTP may require the unsigned protection domain
-for a non-platform-signed app; the DSP may not be reachable from a third-party
-app on a retail Samsung build; or ORT's device-config construction may not match
-what QAIRT expects for v79. Confirming any of these needs Qualcomm's own
-`qnn-net-run` on the device as a reference point.
+### Root cause: a retail handset does not let an app touch the DSP
 
-Until this is resolved, no phone-side inference number means anything.
+Measured on the device:
+
+```
+$ ls -lZ /dev/fastrpc-cdsp
+crw-rw-r-- 1 system system u:object_r:vendor_qdsp_device:s0  /dev/fastrpc-cdsp
+$ getenforce
+Enforcing
+```
+
+QNN reaches the Hexagon through `/dev/fastrpc-cdsp`. It is owned by `system:system`
+with no write bit for others, labelled `vendor_qdsp_device`, and SELinux is
+enforcing. An app in `untrusted_app` cannot open it — nor can `shell` (uid 2000),
+which was verified directly. Setting `ADSP_LIBRARY_PATH` does not help, because
+the problem is access to the device node rather than skel resolution.
+
+This is a property of the retail build, not of our code. Samsung ships its own
+`/vendor/lib64/libsnap_qnn.so` for system-level use.
+
+### NNAPI is not a way round it on Android 16
+
+NNAPI exists to let apps reach vendor accelerators through a system HAL. Tested
+here with the standard `onnxruntime-android` build (the `-qnn` build has no
+NNAPI support compiled in), it runs — but:
+
+```
+Cannot list manifest for android.hardware.neuralnetworks@1.1::IDevice
+ExecutionPlan::SimpleBody::finish: compilation finished successfully on nnapi-reference
+```
+
+`nnapi-reference` is NNAPI's CPU fallback driver. Android 16 removed the HIDL
+neural-networks HAL, so there is no vendor NN driver left to dispatch to. NNAPI
+on this device is a slower path to the same CPU.
+
+### What this leaves
+
+Nothing in this module can unblock it; the options are hardware or partnership
+decisions:
+
+| Route | Reaches NPU | Cost |
+|---|---|---|
+| Snapdragon 8 Elite QRD / dev device | yes | procurement; not a retail phone |
+| Platform-signed or `userdebug` build | yes | OEM relationship or unlocked device |
+| Samsung ENN SDK | yes | Samsung partner programme |
+| LiteRT via Play Services | untested | worth a spike before anything else |
+| Adreno GPU (Vulkan/OpenCL delegate) | no, but is a real accelerator | app-accessible today |
+| AI Hub device farm | yes, off-device | already working; profiling only |
+
+The last row is the one to lean on now: AI Hub runs jobs on real 8 Elite
+hardware, so the model can be compiled, profiled, and numerically validated on
+v79 without solving on-device access at all. That decouples the model question
+from the deployment question, and the deployment question is the one that needs
+a decision from outside this repository.
+
+Until then, no phone-side inference number means anything.
 
 ## Why post-processing is deliberately absent
 

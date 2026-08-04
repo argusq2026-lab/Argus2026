@@ -108,6 +108,13 @@ class QnnSessionTest {
                 "backend_path" to File(backend.parentFile, "libQnnGpu.so").absolutePath,
             ),
         )
+
+        // The skel (libQnnHtpV79Skel.so) is loaded onto the DSP, not into this
+        // process, and the DSP resolves it through ADSP_LIBRARY_PATH rather than
+        // through the app's linker namespace. Unset, the device has nowhere to
+        // find it -- which is a plausible reading of INVALID_CONFIG. Set before
+        // any session is created, since QNN reads it when the backend comes up.
+        android.system.Os.setenv("ADSP_LIBRARY_PATH", backend.parent, true)
         val outcome = StringBuilder()
         var anyWorked = false
         for ((label, config) in candidates) {
@@ -124,6 +131,52 @@ class QnnSessionTest {
         }
         assertTrue("no QNN configuration placed the graph on the NPU:$outcome", anyWorked)
         println("QNN configuration support on this device:$outcome")
+    }
+
+    /**
+     * The vendor-neutral route to the same accelerator.
+     *
+     * Direct QNN needs `/dev/fastrpc-cdsp`, which on a retail handset is
+     * `system:system` under SELinux label `vendor_qdsp_device` with SELinux
+     * enforcing — unreachable from `untrusted_app`, and unreachable even from
+     * `shell`. NNAPI exists precisely to bridge that: the app hands the graph to
+     * a system service, and the vendor HAL — which *does* have DSP access —
+     * dispatches it to the NPU or DSP on the app's behalf.
+     *
+     * If this passes, the edge design survives on stock hardware and only the
+     * mechanism changes. If it does not, on-device acceleration needs either a
+     * platform-signed build or a developer device, which is a hardware and
+     * procurement decision rather than a coding one.
+     */
+    @Test
+    fun reportWhetherNnapiCanReachAnAccelerator() {
+        val env = OrtEnvironment.getEnvironment()
+        val report = StringBuilder()
+        var worked = false
+
+        for ((label, build) in listOf<Pair<String, (OrtSession.SessionOptions) -> Unit>>(
+            "NNAPI (default)" to { o -> o.addNnapi() },
+            "CPU baseline" to { _ -> },
+        )) {
+            val result = runCatching {
+                val options = OrtSession.SessionOptions()
+                build(options)
+                env.createSession(modelBytes(), options).use { session ->
+                    val input = FloatBuffer.allocate(1 * 3 * 32 * 32).apply {
+                        repeat(capacity()) { put(0.5f) }; rewind()
+                    }
+                    OnnxTensor.createTensor(env, input, longArrayOf(1, 3, 32, 32)).use { t ->
+                        session.run(mapOf("x" to t)).use { it[0].value as Array<*> }
+                    }
+                }
+            }
+            worked = worked || (label.startsWith("NNAPI") && result.isSuccess)
+            report.append("\n  ").append(if (result.isSuccess) "OK   " else "FAIL ").append(label)
+                .append(result.exceptionOrNull()?.let { " -- ${it.message?.take(120)}" } ?: "")
+        }
+
+        println("accelerator availability:$report")
+        assertTrue("no execution path ran the graph at all:$report", report.contains("OK"))
     }
 
     @Test
