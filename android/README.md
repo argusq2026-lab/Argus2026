@@ -17,7 +17,8 @@ fields, ever leaves the device.
 | NPU↔CPU parity | measured: worst 11 LSB score / 6 LSB box vs CPU reference; bounded at 16/9 in the fixture |
 | Protocol client (`Protocol.kt`, `IngestClient.kt`) | encodes `hello`/`observation` per PROTOCOL.md, verified against the server's own parser via a shared fixture |
 | User controls | live box overlay, start/stop, threshold slider, model import (file picker or adb), server connect dialog, camera flip, keep-screen-on |
-| Pose model → real keypoints | **not started** — observations carry the protocol's zero-confidence keypoints, as PROTOCOL.md specifies for a phone with no pose estimate |
+| Pose (BlazePose landmarks) on the NPU | **working** — fp16, ~0.6 ms/inference on the person box; real COCO-17 keypoints in observations, skeleton drawn live |
+| End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
 | Form/exercise classifier | not started (`form_reason_codes` always empty) |
 
 ## How detection stays honest
@@ -98,22 +99,16 @@ than an entire BlazePose stage — batch or down-cadence pose when it lands.
   bit-identical; with a w8a8 detector this can move borderline anchors. The
   parity fixture bypasses the resampler deliberately; quantifying its
   detection-level effect needs real footage on both platforms.
-- **Pose**: feasibility is settled — the BlazePose landmark model (float32
-  export of `qai_hub_models.models.mediapipe_pose.PoseLandmarkDetector`, which
-  current qai-hub-models has de-published as a packaged model but still ships
-  the code for) runs on this phone's NPU in fp16 at **622 µs/inference**
-  (`PoseFeasibilityTest`, CPU fallback disabled). Float-not-w8a8 is deliberate:
-  pose quantization is where docs/VALIDATION.md §1's placeholder-calibration
-  damage happened, and the HTP runs fp16 natively. Integration path: YOLO box
-  → 1.25× square ROI → 256² crop → landmarks `(25, 4)` → the historical
-  BlazePose→COCO-17 remap (`d3bd15e:src/argus/vision/keypoints.py`; knees and
-  ankles have no source landmark and stay zero-confidence, which the scorer's
-  feature set tolerates by design). One decode detail to pin with a fixture
-  before shipping: the visibility channel's activation (raw values look like
-  logits; the historical `blazepose.py` decode is the reference). The BlazePose
-  *detector* stage is unnecessary — it only ever supplied centre/scale, which
-  the YOLO box already provides, and the old pipeline had already dropped ROI
-  rotation.
+- **Pose accuracy is unvalidated.** The path runs and the invariants hold
+  (confidences in [0,1], keypoints inside their ROI, unmapped joints exactly
+  zero), but nothing here shows the landmarks are anatomically right on a real
+  person — `PosePipelineTest` uses a synthetic figure precisely because it
+  tests wiring, not accuracy. This is docs/VALIDATION.md §1 restated for the
+  phone: no real footage, no accuracy claim.
+- **No ROI rotation.** MediaPipe rotates the landmark ROI to the hip→shoulder
+  axis; this takes an axis-aligned square, the same simplification the PC
+  pipeline made and recorded. A trainee lying down is fed upright-boxed, which
+  is exactly the case fall detection cares about.
 - **Form classifier**: not started; `form_reason_codes` always empty.
 - The AI Hub profile job on `Snapdragon 8 Elite QRD` (`jp2e44lxp`) failed with
   an infra-side "unexpected device error"; on-device measurement supersedes it

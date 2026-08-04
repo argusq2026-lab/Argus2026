@@ -64,19 +64,40 @@ data class Observation(
     }
 
     companion object {
-        /** Normalize a detector box (source-frame pixels) into protocol space. */
+        /**
+         * Normalize a detection (and its pose, when the pose model produced
+         * one) into protocol space. Without a pose the observation carries the
+         * protocol's zero-confidence keypoints; unmapped joints (knees/ankles
+         * in the 25-point export) arrive the same way, so the laptop's
+         * confidence gate excludes them rather than scoring a fabricated
+         * position.
+         */
         fun fromDetection(
-            ts: Double, det: Detection, frameWidth: Int, frameHeight: Int,
+            ts: Double, det: Detection, pose: PoseResult?,
+            frameWidth: Int, frameHeight: Int,
         ): Observation {
             val w = frameWidth.toDouble()
             val h = frameHeight.toDouble()
             fun clamp01(v: Double) = v.coerceIn(0.0, 1.0)
+            val keypointsXy = pose?.let { p ->
+                List(NUM_KEYPOINTS) { k ->
+                    listOf(
+                        clamp01(p.keypointsXy[k * 2].toDouble() / w),
+                        clamp01(p.keypointsXy[k * 2 + 1].toDouble() / h),
+                    )
+                }
+            } ?: List(NUM_KEYPOINTS) { listOf(0.0, 0.0) }
+            val keypointsConf = pose?.let { p ->
+                List(NUM_KEYPOINTS) { k -> p.keypointsConf[k].toDouble().coerceIn(0.0, 1.0) }
+            } ?: List(NUM_KEYPOINTS) { 0.0 }
             return Observation(
                 ts = ts,
                 bboxNorm = listOf(
                     clamp01(det.x0 / w), clamp01(det.y0 / h),
                     clamp01(det.x1 / w), clamp01(det.y1 / h),
                 ),
+                keypointsXy = keypointsXy,
+                keypointsConf = keypointsConf,
             )
         }
     }

@@ -53,6 +53,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var modelStore: ModelStore
     private var detector: QnnDetector? = null
     private var detectorStatus: String = "no model"
+    private var poseEstimator: PoseEstimator? = null
+    private var poseStatus: String = "not staged"
+    private var poseMsEma = 0.0
     private var client: IngestClient? = null
     private var serverStatus: String = "disconnected"
 
@@ -74,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         if (uris.isNotEmpty()) {
             val summary = modelStore.importFromUris(uris)
             openDetector()
+            openPoseEstimator()
             render(summary)
         }
     }
@@ -93,6 +97,7 @@ class MainActivity : AppCompatActivity() {
         deviceId = DeviceIdentity.deviceId(this)
         modelStore = ModelStore(this)
         openDetector()
+        openPoseEstimator()
 
         toggleButton.setOnClickListener {
             val now = !running.get()
@@ -102,7 +107,7 @@ class MainActivity : AppCompatActivity() {
             }
             running.set(now)
             toggleButton.text = if (now) "Stop" else "Start"
-            if (!now) overlay.update(emptyList(), 1, 1)
+            if (!now) overlay.update(emptyList(), null, 1, 1)
             render()
         }
         findViewById<Button>(R.id.importModel).setOnClickListener {
@@ -151,6 +156,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Pose is optional: absent model degrades to zero-conf keypoints, stated. */
+    private fun openPoseEstimator() {
+        poseEstimator?.close()
+        poseEstimator = null
+        val model = java.io.File(modelStore.modelsDir, "pose_landmark_fp32.onnx")
+        poseStatus = if (!model.isFile) {
+            "not staged (pose_landmark_fp32.onnx)"
+        } else {
+            try {
+                val backend = java.io.File(applicationInfo.nativeLibraryDir, "libQnnHtp.so")
+                poseEstimator = PoseEstimator(model, backend)
+                "on NPU fp16"
+            } catch (e: NpuUnavailableException) {
+                "NPU UNAVAILABLE — ${e.message?.take(120)}"
+            }
+        }
+    }
+
     private fun bindCamera() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
@@ -195,14 +218,24 @@ class MainActivity : AppCompatActivity() {
                 inferenceMsEma = if (inferenceMsEma == 0.0) ms else 0.9 * inferenceMsEma + 0.1 * ms
                 lastDetections = detections.size
 
-                overlay.update(detections, upright.width, upright.height)
+                // One phone, one trainee: pose runs on the best box only.
+                val best = detections.maxByOrNull { it.score }
+                var pose: PoseResult? = null
+                val estimator = poseEstimator
+                if (best != null && estimator != null) {
+                    val poseStarted = System.nanoTime()
+                    pose = estimator.estimate(upright, best)
+                    val poseMs = (System.nanoTime() - poseStarted) / 1e6
+                    poseMsEma = if (poseMsEma == 0.0) poseMs else 0.9 * poseMsEma + 0.1 * poseMs
+                }
 
-                // One phone, one trainee: the best box is the observation.
-                detections.maxByOrNull { it.score }?.let { best ->
+                overlay.update(detections, pose, upright.width, upright.height)
+
+                best?.let {
                     client?.send(
                         Observation.fromDetection(
                             ts = System.currentTimeMillis() / 1000.0,
-                            det = best,
+                            det = it, pose = pose,
                             frameWidth = upright.width, frameHeight = upright.height,
                         )
                     )
@@ -264,6 +297,12 @@ class MainActivity : AppCompatActivity() {
                     .format(inferenceMsEma, lastDetections, scoreThreshold)
                 else "stopped"
             ).append('\n')
+            append("pose      ")
+            append(
+                if (poseEstimator != null && running.get())
+                    "%.1f ms — %s".format(poseMsEma, poseStatus)
+                else poseStatus
+            ).append('\n')
             append("server    ").append(serverStatus)
             extra?.let { append('\n').append(it) }
         }
@@ -273,6 +312,7 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         client?.disconnect()
         detector?.close()
+        poseEstimator?.close()
         analysisExecutor.shutdown()
     }
 }

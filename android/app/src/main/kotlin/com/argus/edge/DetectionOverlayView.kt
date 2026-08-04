@@ -21,8 +21,24 @@ class DetectionOverlayView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     private var detections: List<Detection> = emptyList()
+    private var pose: PoseResult? = null
     private var frameWidth = 1
     private var frameHeight = 1
+
+    /** COCO skeleton edges among the joints the 25-point export can supply. */
+    private val skeletonEdges = arrayOf(
+        5 to 6,                     // shoulders
+        5 to 7, 7 to 9,             // left arm
+        6 to 8, 8 to 10,            // right arm
+        5 to 11, 6 to 12, 11 to 12, // torso
+    )
+    private val bonePaint = Paint().apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 5f
+        color = Color.rgb(255, 200, 60)
+    }
+    private val jointPaint = Paint().apply { color = Color.rgb(255, 200, 60) }
+    private val jointDimPaint = Paint().apply { color = Color.argb(90, 255, 200, 60) }
 
     private val boxPaint = Paint().apply {
         style = Paint.Style.STROKE
@@ -36,8 +52,11 @@ class DetectionOverlayView @JvmOverloads constructor(
     }
     private val textBackground = Paint().apply { color = Color.argb(160, 0, 0, 0) }
 
-    fun update(detections: List<Detection>, frameWidth: Int, frameHeight: Int) {
+    fun update(
+        detections: List<Detection>, pose: PoseResult?, frameWidth: Int, frameHeight: Int,
+    ) {
         this.detections = detections
+        this.pose = pose
         this.frameWidth = maxOf(frameWidth, 1)
         this.frameHeight = maxOf(frameHeight, 1)
         postInvalidateOnAnimation()
@@ -45,12 +64,31 @@ class DetectionOverlayView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (detections.isEmpty()) return
+        if (detections.isEmpty() && pose == null) return
 
         // FILL_CENTER: uniform scale to cover, then center the overflow.
         val scale = maxOf(width.toFloat() / frameWidth, height.toFloat() / frameHeight)
         val dx = (width - frameWidth * scale) / 2f
         val dy = (height - frameHeight * scale) / 2f
+
+        pose?.let { p ->
+            for ((a, b) in skeletonEdges) {
+                if (p.keypointsConf[a] < 0.3f || p.keypointsConf[b] < 0.3f) continue
+                canvas.drawLine(
+                    p.keypointsXy[a * 2] * scale + dx, p.keypointsXy[a * 2 + 1] * scale + dy,
+                    p.keypointsXy[b * 2] * scale + dx, p.keypointsXy[b * 2 + 1] * scale + dy,
+                    bonePaint,
+                )
+            }
+            for (k in 0 until 17) {
+                val conf = p.keypointsConf[k]
+                if (conf <= 0f) continue // unmapped joints never draw
+                canvas.drawCircle(
+                    p.keypointsXy[k * 2] * scale + dx, p.keypointsXy[k * 2 + 1] * scale + dy,
+                    10f, if (conf >= 0.3f) jointPaint else jointDimPaint,
+                )
+            }
+        }
 
         for (det in detections) {
             val x0 = det.x0 * scale + dx

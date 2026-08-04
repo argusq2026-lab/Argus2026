@@ -94,7 +94,7 @@ class ProtocolTest {
     @Test
     fun `detection normalization clamps and divides by the frame`() {
         val obs = Observation.fromDetection(
-            ts = 2.0, det = Detection(192f, 108f, 1920f, 1080f, 0.9f),
+            ts = 2.0, det = Detection(192f, 108f, 1920f, 1080f, 0.9f), pose = null,
             frameWidth = 1920, frameHeight = 1080,
         )
         assertEquals(listOf(0.1, 0.1, 1.0, 1.0), obs.bboxNorm)
