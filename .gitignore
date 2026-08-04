@@ -21,3 +21,11 @@ dist/
 .coverage
 
 .env
+
+# Android module build outputs. The Gradle wrapper itself IS committed, so a
+# fresh clone can build without a local Gradle install.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.apk
