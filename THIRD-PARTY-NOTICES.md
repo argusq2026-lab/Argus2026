@@ -2,6 +2,11 @@
 
 Argus is released under the [MIT License](LICENSE).
 
+This is a hackathon build. Nothing below is a reason not to demo it — the
+distinctions drawn are about *distributing an application*, which a demo is
+not. They are recorded so the decision exists in writing if this ever becomes
+something shipped.
+
 ---
 
 ## Vendored third-party files

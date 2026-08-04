@@ -6,6 +6,12 @@ observations to the laptop's WebSocket ingest server. The laptop scores and
 ranks; no frame, and nothing derived from a frame except the observation
 fields, ever leaves the device.
 
+> **Scope: hackathon build.** Everything documented here was measured on a real
+> Galaxy S25 Ultra and the tests are honest about what they do and do not cover
+> — but no accuracy claim is supported, because no real trainee footage exists.
+> Demoing and developing against the AGPL-3.0 pose model triggers nothing;
+> distributing an application built on it is the decision to revisit.
+
 ## Status
 
 | Piece | State |
