@@ -21,10 +21,21 @@
         <uses-native-library android:name="libadsprpc.so" android:required="false"/>
         <uses-native-library android:name="libOpenCL.so" android:required="false"/>
 
+        <!--
+          Rotation is handled in-process rather than by activity recreation.
+
+          The default behaviour on rotation is to destroy and recreate the
+          activity, which here would close and reopen the QNN NPU sessions and
+          drop the WebSocket mid-class. Session creation is not cheap and the
+          server treats a reconnect as a fresh `hello`, so a trainee turning
+          their phone would cost a visible stall and a rank gap. Declaring these
+          configChanges keeps the process alive and routes rotation to
+          onConfigurationChanged, which only has to retarget the camera.
+        -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="landscape">
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

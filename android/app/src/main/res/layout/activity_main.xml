@@ -1,95 +1,171 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  Arranged around what the person setting a phone on a tripod actually needs:
+  is it running, is the laptop receiving, is it seeing anybody. Everything else
+  is diagnostics and lives behind the Debug toggle — a status dump reads as
+  noise to whoever is placing the station and as signal only to whoever is
+  debugging it, and the same screen cannot serve both by default.
+
+  The preview fills the window rather than sharing a column with the controls,
+  which is what a camera app should do: the chrome floats over it.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="#000000">
+    android:background="@color/surface">
 
-    <FrameLayout
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="match_parent"/>
 
-        <androidx.camera.view.PreviewView
-            android:id="@+id/preview"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
+    <com.argus.edge.DetectionOverlayView
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
 
-        <com.argus.edge.DetectionOverlayView
-            android:id="@+id/overlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"/>
-
-        <TextView
-            android:id="@+id/status"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_margin="12dp"
-            android:padding="10dp"
-            android:background="#B0000000"
-            android:textColor="#FFFFFF"
-            android:fontFamily="monospace"
-            android:textSize="12sp"/>
-    </FrameLayout>
-
+    <!-- The whole state of the station, in one line, always visible. -->
     <LinearLayout
-        android:layout_width="match_parent"
+        android:id="@+id/statusChip"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="8dp">
+        android:background="@drawable/bg_chip"
+        android:paddingStart="14dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp">
+
+        <View
+            android:id="@+id/stateDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="9dp"/>
 
         <TextView
-            android:id="@+id/thresholdLabel"
+            android:id="@+id/stateText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#CCCCCC"
-            android:fontFamily="monospace"
-            android:textSize="12sp"
-            android:text="thr 0.35"/>
-
-        <SeekBar
-            android:id="@+id/threshold"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:max="90"
-            android:progress="30"/>
+            android:textColor="@color/on_surface"
+            android:textSize="14sp"/>
     </LinearLayout>
+
+    <!-- The engineering panel. Hidden unless someone asks for it. -->
+    <TextView
+        android:id="@+id/debugPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:background="@drawable/bg_panel"
+        android:padding="12dp"
+        android:textColor="@color/on_surface_dim"
+        android:fontFamily="monospace"
+        android:textSize="11sp"
+        android:lineSpacingExtra="2dp"
+        android:visibility="gone"/>
 
     <LinearLayout
+        android:id="@+id/bottomBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingHorizontal="8dp"
-        android:paddingBottom="8dp">
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp">
 
-        <Button
-            android:id="@+id/toggle"
-            android:layout_width="0dp"
-            android:layout_weight="1.2"
+        <!-- Detector sensitivity is a tuning control, so it travels with Debug. -->
+        <LinearLayout
+            android:id="@+id/thresholdRow"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Start"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="8dp"
+            android:visibility="gone">
 
-        <Button
-            android:id="@+id/importModel"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:text="Model"/>
+            <TextView
+                android:id="@+id/thresholdLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/on_surface_dim"
+                android:fontFamily="monospace"
+                android:textSize="12sp"
+                android:text="thr 0.35"/>
 
-        <Button
-            android:id="@+id/connect"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:text="Server"/>
+            <SeekBar
+                android:id="@+id/threshold"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="10dp"
+                android:max="90"
+                android:progress="30"/>
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/flip"
-            android:layout_width="0dp"
-            android:layout_weight="0.8"
+        <LinearLayout
+            android:id="@+id/controls"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Flip"/>
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/toggle"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="56dp"
+                android:background="@drawable/bg_action_primary"
+                android:textColor="#0E1113"
+                android:textStyle="bold"
+                android:textSize="16sp"
+                android:stateListAnimator="@null"
+                android:text="Start"/>
+
+            <Button
+                android:id="@+id/connect"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:background="@drawable/bg_action"
+                android:textColor="@color/on_surface"
+                android:textSize="14sp"
+                android:stateListAnimator="@null"
+                android:text="Server"/>
+
+            <Button
+                android:id="@+id/flip"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:paddingStart="18dp"
+                android:paddingEnd="18dp"
+                android:background="@drawable/bg_action"
+                android:textColor="@color/on_surface"
+                android:textSize="14sp"
+                android:stateListAnimator="@null"
+                android:text="Flip"/>
+
+            <Button
+                android:id="@+id/debug"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:background="@drawable/bg_action"
+                android:textColor="@color/on_surface_dim"
+                android:textSize="14sp"
+                android:stateListAnimator="@null"
+                android:text="Debug"/>
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

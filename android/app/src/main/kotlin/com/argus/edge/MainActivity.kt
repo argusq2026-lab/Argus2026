@@ -9,19 +9,25 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.graphics.drawable.GradientDrawable
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import android.content.res.Configuration
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.util.concurrent.Executors
+import android.view.View
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The station screen — what the person setting up a phone on a tripod sees.
@@ -42,12 +48,29 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var overlay: DetectionOverlayView
-    private lateinit var statusView: TextView
+    private lateinit var debugPanel: TextView
+    private lateinit var stateText: TextView
+    private lateinit var stateDot: View
     private lateinit var toggleButton: Button
     private lateinit var thresholdLabel: TextView
+    private lateinit var thresholdRow: LinearLayout
+    private var debugVisible = false
 
     private val analysisExecutor = Executors.newSingleThreadExecutor()
+    private var imageAnalysis: ImageAnalysis? = null
     private val running = AtomicBoolean(false)
+
+    /**
+     * Bumped whenever the station starts or stops.
+     *
+     * A frame takes ~22 ms to go through the NPU, and `running` is read at the
+     * top of that. Press Stop mid-flight and the frame finishes, repaints the
+     * overlay it computed, and — since no further frames are processed — that
+     * repaint is the last thing drawn and stays on screen. Capturing the epoch
+     * per frame and discarding results from a superseded one closes the window
+     * that a second `running` check would still leave open.
+     */
+    private val sessionEpoch = AtomicInteger(0)
 
     private lateinit var deviceId: String
     private lateinit var modelStore: ModelStore
@@ -121,11 +144,15 @@ class MainActivity : AppCompatActivity() {
         // A station is propped on a tripod for a whole class; a screen that
         // dozes off mid-set silently stops the camera feed with it.
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyWindowInsets()
         previewView = findViewById(R.id.preview)
         overlay = findViewById(R.id.overlay)
-        statusView = findViewById(R.id.status)
+        debugPanel = findViewById(R.id.debugPanel)
+        stateText = findViewById(R.id.stateText)
+        stateDot = findViewById(R.id.stateDot)
         toggleButton = findViewById(R.id.toggle)
         thresholdLabel = findViewById(R.id.thresholdLabel)
+        thresholdRow = findViewById(R.id.thresholdRow)
 
         deviceId = DeviceIdentity.deviceId(this)
         modelStore = ModelStore(this)
@@ -141,18 +168,37 @@ class MainActivity : AppCompatActivity() {
                 render("cannot start: $detectorStatus")
                 return@setOnClickListener
             }
+            // Retire in-flight frames before clearing, or one of them will
+            // repaint over the clear and linger.
+            sessionEpoch.incrementAndGet()
             running.set(now)
             toggleButton.text = if (now) "Stop" else "Start"
+            toggleButton.setBackgroundResource(
+                if (now) R.drawable.bg_action_stop else R.drawable.bg_action_primary
+            )
+            toggleButton.setTextColor(
+                if (now) getColor(R.color.fault) else android.graphics.Color.parseColor("#0E1113")
+            )
             if (!now) {
                 overlay.update(emptyList(), null, null, emptyList(), 1, 1)
                 subjectTracker.reset()
                 lastGood = null
                 framesInferred = 0; framesWithDetection = 0
+                lastDetections = 0
             }
             render()
         }
-        findViewById<Button>(R.id.importModel).setOnClickListener {
-            pickModelFiles.launch(arrayOf("*/*"))
+        findViewById<Button>(R.id.debug).setOnClickListener {
+            debugVisible = !debugVisible
+            debugPanel.visibility = if (debugVisible) View.VISIBLE else View.GONE
+            thresholdRow.visibility = if (debugVisible) View.VISIBLE else View.GONE
+            // Model import is a debug-time affordance too: staging happens over
+            // adb in practice, and the picker is only reachable when something
+            // has gone wrong enough to need it.
+            render()
+        }
+        findViewById<Button>(R.id.debug).setOnLongClickListener {
+            pickModelFiles.launch(arrayOf("*/*")); true
         }
         findViewById<Button>(R.id.connect).setOnClickListener { showConnectDialog() }
         findViewById<Button>(R.id.flip).setOnClickListener {
@@ -174,6 +220,51 @@ class MainActivity : AppCompatActivity() {
             == PackageManager.PERMISSION_GRANTED
         ) bindCamera() else requestCamera.launch(Manifest.permission.CAMERA)
         render()
+    }
+
+    /**
+     * Keep the controls out from under the system bars.
+     *
+     * targetSdk 35 means the window is laid out edge to edge by default, so
+     * without this the button row sits beneath the navigation bar: visible,
+     * and not reliably tappable. It is worse than it looks in one orientation,
+     * because the bar moves — bottom in portrait, side in landscape — so a
+     * fixed margin fixes one and breaks the other. Insets are asked for
+     * instead, and re-applied on rotation because the activity is not recreated.
+     *
+     * The preview deliberately keeps its full bleed; only the chrome is inset.
+     */
+    private fun applyWindowInsets() {
+        val chip = findViewById<LinearLayout>(R.id.statusChip)
+        val panel = findViewById<TextView>(R.id.debugPanel)
+        val bottom = findViewById<LinearLayout>(R.id.bottomBar)
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.root)) { _, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            // The floating chrome is positioned by margin, not padding: these
+            // views sit over the preview rather than in a column beside it, so
+            // padding would grow their backgrounds into the bars instead of
+            // moving them clear.
+            (chip.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                leftMargin = bars.left + dp(12)
+                topMargin = bars.top + dp(12)
+            }.also { chip.layoutParams = it }
+
+            (panel.layoutParams as android.widget.FrameLayout.LayoutParams).apply {
+                leftMargin = bars.left + dp(12)
+                topMargin = bars.top + dp(64)
+            }.also { panel.layoutParams = it }
+
+            bottom.setPadding(
+                bars.left + dp(16), bottom.paddingTop,
+                bars.right + dp(16), bars.bottom + dp(12),
+            )
+            insets
+        }
     }
 
     /** Open the active model on the NPU, or record exactly why not. */
@@ -243,9 +334,13 @@ class MainActivity : AppCompatActivity() {
             val preview = Preview.Builder().build()
                 .also { it.surfaceProvider = previewView.surfaceProvider }
             val analysis = ImageAnalysis.Builder()
+                // Frames must arrive oriented for the *current* display, not
+                // for whatever it was at bind time.
+                .setTargetRotation(display.rotation)
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
                 .also { it.setAnalyzer(analysisExecutor, ::onFrame) }
+                .also { imageAnalysis = it }
             provider.unbindAll()
             provider.bindToLifecycle(
                 this,
@@ -255,7 +350,32 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    /**
+     * Rotation, without tearing anything down.
+     *
+     * The activity survives the configuration change (see the manifest), so all
+     * that is needed is to tell CameraX which way the display now faces.
+     * `ImageProxy.imageInfo.rotationDegrees` is expressed relative to the
+     * analysis use case's target rotation, so leaving it stale is precisely how
+     * the overlay ends up drawn against a frame the preview is rendering a
+     * quarter-turn away from — the boxes land in the wrong place rather than
+     * disappearing, which is harder to spot.
+     *
+     * The last held overlay is dropped: it was computed in the previous
+     * orientation's pixel space and would be mapped through the new one.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        imageAnalysis?.targetRotation = display.rotation
+        // The bars move with the display; ask for the new insets.
+        ViewCompat.requestApplyInsets(findViewById(R.id.root))
+        lastGood = null
+        overlay.update(emptyList(), null, null, emptyList(), 1, 1)
+        render()
+    }
+
     private fun onFrame(image: ImageProxy) {
+        val epoch = sessionEpoch.get()
         try {
             frameCount += 1
             val nowNanos = System.nanoTime()
@@ -340,6 +460,11 @@ class MainActivity : AppCompatActivity() {
                 // being aimed. Clearing on each one flickers; holding the last
                 // result briefly does not, and the overlay fades it so a held
                 // skeleton reads as held. Only live frames are ever reported.
+                // A stop that landed while this frame was on the NPU makes
+                // everything below stale; drop it rather than repaint over the
+                // clear the stop already did.
+                if (epoch != sessionEpoch.get()) { upright.recycle(); return }
+
                 if (detections.isNotEmpty()) {
                     lastGood = Snapshot(
                         detections, subject, subjectPose, otherPoses,
@@ -418,21 +543,53 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /**
+     * Two audiences, two surfaces.
+     *
+     * The chip answers the three questions someone placing a phone has — is it
+     * running, is the laptop receiving, is it seeing anybody — in one line and
+     * one colour. The panel behind Debug answers everything else, and is the
+     * same dump this screen used to show unconditionally. Showing both at once
+     * was the mistake: it made the engineering detail the loudest thing on a
+     * screen whose primary user does not need any of it.
+     */
     private fun render(extra: String? = null) {
-        statusView.text = buildString {
+        val fault = detector == null && yolo26 == null ||
+            detectorStatus.startsWith("NPU UNAVAILABLE") ||
+            backendLabel.startsWith("yolo26 FAILED") ||
+            serverStatus.startsWith("REJECTED")
+
+        val (colour, label) = when {
+            fault -> R.color.fault to when {
+                detector == null && yolo26 == null -> "No model staged"
+                serverStatus.startsWith("REJECTED") -> "Server refused this station"
+                else -> "NPU unavailable"
+            }
+            !running.get() -> R.color.on_surface_dim to "Ready — press Start"
+            lastDetections > 0 -> R.color.live to buildString {
+                append(if (lastDetections == 1) "Tracking" else "Tracking $lastDetections people")
+                append(if (serverStatus.startsWith("streaming")) " · sending" else " · not connected")
+            }
+            else -> R.color.attention to buildString {
+                append("No one in frame")
+                append(if (serverStatus.startsWith("streaming")) " · connected" else "")
+            }
+        }
+        stateText.text = extra ?: label
+        stateDot.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(getColor(colour))
+        }
+
+        if (!debugVisible) return
+        debugPanel.text = buildString {
             append("station   ").append(deviceId).append('\n')
             append("backend   ").append(backendLabel).append('\n')
-            // Only name the two-model artifacts when they are the ones running.
-            // Showing "model 'yolox'" while the single-stage backend does the
-            // work states something untrue about what produced the boxes.
             if (yolo26 == null) append("model     ").append(detectorStatus).append('\n')
             append("camera    %.1f fps, frame %d".format(fpsEma, frameCount)).append('\n')
             append("inference ")
             append(
                 if (running.get())
-                    // Hit rate is the number to watch when the overlay looks
-                    // intermittent: a low value is the detector losing the
-                    // person on blurred frames, not the pipeline being slow.
                     "%.1f ms, %d person(s), thr %.2f, hit %d%%".format(
                         inferenceMsEma, lastDetections, scoreThreshold,
                         if (framesInferred > 0) framesWithDetection * 100 / framesInferred else 0,
@@ -448,18 +605,12 @@ class MainActivity : AppCompatActivity() {
                             " — %d subject switch(es)".format(subjectTracker.switches) else "",
                     )
                 else if (poseEstimator != null && running.get())
-                    // 13 of 17 is the ceiling: the 25-point export has no
-                    // knees or ankles, so those four never light up.
-                    "%.1f ms, %d/13 keypoints, score %.2f%s"
-                        .format(
-                            poseMsEma, lastVisibleKeypoints, lastPoseScore,
-                            if (subjectTracker.switches > 0)
-                                " — %d subject switch(es)".format(subjectTracker.switches) else "",
-                        )
+                    "%.1f ms, %d/13 keypoints, score %.2f".format(
+                        poseMsEma, lastVisibleKeypoints, lastPoseScore)
                 else poseStatus
             ).append('\n')
             append("server    ").append(serverStatus)
-            extra?.let { append('\n').append(it) }
+            append("\n\nlong-press Debug to import a model")
         }
     }
 

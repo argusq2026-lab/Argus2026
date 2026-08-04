@@ -29,3 +29,13 @@ android/build/
 android/app/build/
 android/local.properties
 *.apk
+
+# Model weights fetched by exporters into the working directory. Ultralytics
+# downloads yolo*.pt next to the process on from_pretrained(), which is how an
+# AGPL-3.0 file once got committed to this MIT repository by a `git add -A`.
+# Weights are never committed here; see android/models.json for how they are
+# reproduced instead.
+*.pt
+*.pth
+*.tflite
+yolo*.onnx

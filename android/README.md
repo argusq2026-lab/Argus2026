@@ -23,7 +23,8 @@ fields, ever leaves the device.
 | Decode (`decodeDetections`) | pure function, pinned to the deleted PC reference by fixture cases on host and device |
 | NPU↔CPU parity | measured: worst 11 LSB score / 6 LSB box vs CPU reference; bounded at 16/9 in the fixture |
 | Protocol client (`Protocol.kt`, `IngestClient.kt`) | encodes `hello`/`observation` per PROTOCOL.md, verified against the server's own parser via a shared fixture |
-| User controls | live box + skeleton overlay (held ~400 ms and faded across blurred frames), start/stop, threshold slider, model import (file picker or adb), server connect dialog, camera flip, keep-screen-on |
+| Orientation | rotates freely; the activity survives the config change, so the NPU sessions and the WebSocket are not torn down |
+| User controls | one-line status chip (state + colour), large Start/Stop, server dialog, camera flip; diagnostics, threshold slider and model import behind **Debug** |
 | Connection resilience | auto-reconnect with capped backoff on transport drops; protocol refusals stay terminal and say so |
 | BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
