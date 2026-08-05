@@ -146,6 +146,7 @@ laptop are expected to deploy from copies of the same config file; see
 | [`src/argus/synthetic.py`](src/argus/synthetic.py) | The synthetic trainee scene `argus demo` and the tests replay |
 | [`src/argus/outputs.py`](src/argus/outputs.py), [`alerts.py`](src/argus/alerts.py) | The alert boundary: console, JSON lines, HTTP, and the trainer dashboard. Import no image library. |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract a phone app must implement |
+| [`docs/ADDING_AN_EXERCISE.md`](docs/ADDING_AN_EXERCISE.md) | Runbook for the next form classifier, and the four traps the plank hit |
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | What Argus has *not* been shown to do |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design and the reasoning behind it |
 
