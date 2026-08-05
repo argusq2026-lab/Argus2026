@@ -108,6 +108,36 @@ def make_plank_observation(
     )
 
 
+def make_bicep_observation(
+    ts: float,
+    form_reason_codes: tuple[str, ...] = (),
+    exercise: str | None = "bicep",
+) -> FrameObservation:
+    """One tick of a bicep curl: an ordinary standing, camera-facing pose.
+
+    Unlike plank, nothing about a correct curl's geometry misreads `fall` or
+    `off_task` (docs/VALIDATION.md), so the default standing pose stands in
+    directly -- these tests exercise the weight profile, not a geometry claim.
+    """
+    return make_observation(ts, form_reason_codes=form_reason_codes, exercise=exercise)
+
+
+def make_lunge_observation(
+    ts: float,
+    form_reason_codes: tuple[str, ...] = (),
+    exercise: str | None = "lunge",
+) -> FrameObservation:
+    """One tick of a lunge: an ordinary standing, camera-facing pose.
+
+    `[scoring.exercise_weights.lunge]` zeroes `fall` because a full-depth
+    lunge viewed side-on plausibly reads bbox-wider-than-tall
+    (docs/VALIDATION.md), not because this fixture's geometry demonstrates it
+    -- no footage exists to model that pose from. These tests exercise the
+    weight profile lookup, the same as bicep's.
+    """
+    return make_observation(ts, form_reason_codes=form_reason_codes, exercise=exercise)
+
+
 @pytest.fixture
 def track_state(scoring: ScoringConfig) -> TrackState:
     return TrackState(history_len=scoring.history_len)

@@ -12,9 +12,9 @@ out/
 # `argus demo` regenerates this fixture; it is build output, not an asset.
 demo/synthetic_stream.json
 
-# Training data downloaded by scripts/train_plank_model.py (36 MB of labelled
-# landmark CSVs). The fitted coefficients are committed; the corpus they came
-# from is fetched on demand -- see THIRD-PARTY-NOTICES.md.
+# Training data downloaded by scripts/train_form_model.py (labelled landmark
+# CSVs, tens of MB per exercise). The fitted coefficients are committed; the
+# corpus they came from is fetched on demand -- see THIRD-PARTY-NOTICES.md.
 scratch/
 
 __pycache__/
@@ -32,6 +32,7 @@ dist/
 android/.gradle/
 android/build/
 android/app/build/
+android/.kotlin/
 android/local.properties
 *.apk
 

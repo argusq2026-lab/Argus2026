@@ -7,7 +7,9 @@
     "hips_sagging",
     "incomplete_lockout",
     "insufficient_depth",
+    "knee_over_toe",
     "knee_valgus",
+    "lean_back_error",
     "rounded_back"
   ],
   "generated_by": "scripts/gen_protocol_vectors.py",

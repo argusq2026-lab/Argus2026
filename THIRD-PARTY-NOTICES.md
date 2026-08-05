@@ -17,7 +17,7 @@ Two binaries are committed to this repository and are not Argus's work:
 |---|---|---|
 | `android/gradle/wrapper/gradle-wrapper.jar` | [Gradle](https://gradle.org) build wrapper | Apache-2.0 |
 | `android/app/src/androidTest/assets/pose_person_256.png` | Sample input from Qualcomm [`qai-hub-models`](https://github.com/quic/ai-hub-models) (`mediapipe_pose` asset store) | BSD-3-Clause |
-| `android/app/src/main/assets/plank_lr.json` | Coefficients fitted on labelled data from [NgoQuocBao1010/Exercise-Correction](https://github.com/NgoQuocBao1010/Exercise-Correction) | MIT |
+| `android/app/src/main/assets/{plank,bicep,lunge}_lr.json` | Coefficients fitted on labelled data from [NgoQuocBao1010/Exercise-Correction](https://github.com/NgoQuocBao1010/Exercise-Correction) | MIT |
 
 The Gradle wrapper is committed so a fresh clone can build the Android module
 without a local Gradle install — the standard practice for the wrapper.
@@ -27,15 +27,16 @@ a real, correctly-framed person to assert against. A synthetic figure cannot
 serve: the landmark model does not respond to drawn people, which is the whole
 reason that test exists alongside `PosePipelineTest`.
 
-The plank coefficients are committed because they *are* the classifier — 26
-floats per class, evaluated as arithmetic in `PlankClassifier.kt` rather than
-loaded into a model runtime. Unlike the pose models below there is no artifact
-to stage: this ships inside the APK. The upstream project is MIT, the same
-licence as this repository, so no obligation beyond attribution attaches. Only
-their labelled data was used; none of their code is present here, and their
-own fitted model could not have been used regardless — its feature set needs
-MediaPipe landmarks and a depth estimate COCO-17 and YOLO26-pose do not
-provide. See `scripts/train_plank_model.py`.
+The `{plank,bicep,lunge}_lr.json` coefficients are committed because they
+*are* the classifiers — a few dozen floats per class each, evaluated as
+arithmetic in `FormClassifier.kt` rather than loaded into a model runtime.
+Unlike the pose models below there is no artifact to stage: these ship inside
+the APK. The upstream project is MIT, the same licence as this repository, so
+no obligation beyond attribution attaches. Only their labelled data was used;
+none of their code is present here, and their own fitted models could not
+have been used regardless — their feature sets need MediaPipe landmarks and a
+depth estimate COCO-17 and YOLO26-pose do not provide. See
+`scripts/train_form_model.py`.
 
 (An earlier iteration of this project vendored an Apache-2.0 QNN Execution
 Provider helper for on-device NPU inference; that entire local-inference
@@ -54,9 +55,9 @@ Installed from PyPI at their own licences, not redistributed here:
 | `websockets` | BSD-3-Clause |
 
 `requirements-train.txt` (`scikit-learn` BSD-3-Clause, `numpy` BSD-3-Clause) is
-offline tooling for `scripts/train_plank_model.py`, not a runtime dependency of
-anything. Neither the server nor the phone imports either: the fitted model
-ships as coefficients and is evaluated as arithmetic.
+offline tooling for `scripts/train_form_model.py`, not a runtime dependency of
+anything. Neither the server nor the phone imports either: the fitted models
+ship as coefficients and are evaluated as arithmetic.
 
 ---
 

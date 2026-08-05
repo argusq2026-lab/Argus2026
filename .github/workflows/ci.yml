@@ -139,12 +139,15 @@ jobs:
         run: |
           test -f tests/data/yolox_parity.json
           test -f tests/data/protocol_vectors.json
-          test -f tests/data/plank_vectors.json
-          # The plank artifact is a shipped asset rather than a fixture, but
-          # PlankClassifierTest loads the very same file the APK does, so its
+          # Every exercise's artifact + fixture pair (docs/ADDING_AN_EXERCISE.md):
+          # the artifact is a shipped asset rather than a fixture, but
+          # FormClassifierTest loads the very same file the APK does, so its
           # absence fails the Kotlin suite in a way that reads like a code bug.
-          test -f android/app/src/main/assets/plank_lr.json
-          echo "ok: shared fixtures and the plank artifact are present"
+          for exercise in plank bicep lunge; do
+            test -f "tests/data/${exercise}_vectors.json"
+            test -f "android/app/src/main/assets/${exercise}_lr.json"
+          done
+          echo "ok: shared fixtures and every exercise's artifact are present"
 
       - name: Upload test report on failure
         if: failure()

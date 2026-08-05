@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 4
+config_version = 5
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +60,22 @@ form_error = 0.15
 "excessive_forward_lean" = 0.5
 "incomplete_lockout" = 0.4
 "asymmetric_form" = 0.6
-# Plank, from the phone's on-device classifier (android/.../PlankClassifier.kt).
+# Plank, from the phone's on-device classifier (android/.../FormClassifier.kt).
 # Sagging outranks piking because lumbar hyperextension under load is the
 # injury mechanism, where piking is merely an ineffective hold.
 "hips_sagging" = 0.8
 "hips_piked" = 0.6
+# Bicep curl's ML-detected fault (core/bicep_model/README.md calls it "lean
+# too far back"): using body momentum instead of the arm, which loads the
+# lumbar spine much like rounded_back does, at a lighter typical load -- hence
+# below rounded_back/knee_valgus but above the loose-form-only codes above.
+"lean_back_error" = 0.7
+# Lunge's ML-detected fault, evaluated only at the bottom of a rep (both
+# upstream and here -- see [scoring.exercise_weights] and docs/VALIDATION.md
+# for the depth gate this implies). Patellofemoral stress from the knee
+# tracking past the toe; real but more debated than a valgus collapse, so it
+# sits at the same tier as asymmetric_form rather than knee_valgus's.
+"knee_over_toe" = 0.6
 
 
 # Per-exercise weight overrides. A movement can make a feature meaningless or
@@ -88,6 +99,38 @@ form_error = 0.15
 # What remains is form, plus occlusion (still meaningful: if the phone cannot
 # see the trainee, no plank verdict is trustworthy either).
 [scoring.exercise_weights.plank]
+fall = 0.0
+stillness = 0.0
+occlusion = 0.15
+off_task = 0.0
+form_error = 0.85
+
+# A bicep curl is close to the "standing HIIT" case the default weights were
+# written for -- fall and off_task stay meaningful, a trainee actually falling
+# or turning away from the station is still worth flagging. `stillness` is the
+# one that misreads it: a curl is small-amplitude arm motion around a nearly
+# stationary torso, and this feature reads the centroid, not the limb. Rather
+# than half-trust that distinction with no footage to check it against, this
+# follows the plank profile's pattern exactly -- form_error absorbs
+# everything but occlusion. See docs/VALIDATION.md for the threshold
+# arithmetic this implies for lean_back_error.
+[scoring.exercise_weights.bicep]
+fall = 0.0
+stillness = 0.0
+occlusion = 0.15
+off_task = 0.0
+form_error = 0.85
+
+# A lunge is a stepping motion, not a hold, so in principle `stillness` and
+# `off_task` should be closer to the default than plank's. But `fall` is a
+# real risk: a side-on lunge at full depth (front knee bent, both feet planted
+# fore-and-aft) plausibly reads as "bbox wider than tall" on a correct rep,
+# the same bbox-shape misfire plank's profile exists to fix. With no footage
+# to validate a partial profile against, this follows the same
+# occlusion-plus-form_error pattern as plank and bicep rather than presenting
+# unfounded confidence in which of the other three features survive contact
+# with a lunge. See docs/VALIDATION.md.
+[scoring.exercise_weights.lunge]
 fall = 0.0
 stillness = 0.0
 occlusion = 0.15

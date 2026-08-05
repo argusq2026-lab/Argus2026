@@ -29,6 +29,9 @@ import android.view.View
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
+/** The exercise a station assumes when none has been configured. */
+const val DEFAULT_EXERCISE = "plank"
+
 /**
  * The station screen — what the person setting up a phone on a tripod sees.
  *
@@ -115,16 +118,28 @@ class MainActivity : AppCompatActivity() {
     private var serverStatus: String = "disconnected"
 
     /**
-     * The plank form classifier, or null if the asset is missing or malformed.
+     * The exercise -> asset name this build ships a classifier for.
      *
-     * Null is a working station that reports no `form_reason_codes`, not a
-     * broken one: the protocol makes the field optional precisely so a phone
-     * without a form model is still a valid station. What must not happen is
-     * silently reporting *nothing* while looking like it is classifying, so
-     * the status strip names the state either way.
+     * Adding an exercise (docs/ADDING_AN_EXERCISE.md) means fitting
+     * `scripts/train_form_model.py --exercise <name>` and adding a line here
+     * -- nothing else in this class names an exercise.
      */
-    private var plankClassifier: PlankClassifier? = null
-    private var plankStatus: String = "not loaded"
+    private val formClassifierAssets = mapOf(
+        DEFAULT_EXERCISE to "${DEFAULT_EXERCISE}_lr.json",
+        "bicep" to "bicep_lr.json",
+        "lunge" to "lunge_lr.json",
+    )
+
+    /**
+     * Loaded form classifiers, keyed by exercise. Missing from the map is a
+     * working station that reports no `form_reason_codes`, not a broken one:
+     * the protocol makes the field optional precisely so a phone without a
+     * form model is still a valid station. What must not happen is silently
+     * reporting *nothing* while looking like it is classifying, so the status
+     * strip names the state either way.
+     */
+    private var formClassifiers: Map<String, FormClassifier> = emptyMap()
+    private var formClassifierStatus: String = "not loaded"
 
     /**
      * The exercise this station is watching, sent on every observation.
@@ -134,10 +149,10 @@ class MainActivity : AppCompatActivity() {
      * report it would have a correct plank scored as a fall, so this is
      * defaulted rather than left blank, and shown on screen.
      */
-    private var exercise: String = PlankClassifier.EXERCISE
+    private var exercise: String = DEFAULT_EXERCISE
 
     /** The most recent verdict, for the status strip only — never sent. */
-    private var lastVerdict: PlankClassifier.Verdict? = null
+    private var lastVerdict: FormClassifier.Verdict? = null
 
     private var scoreThreshold = 0.35
     private var lensFacing = CameraSelector.LENS_FACING_BACK
@@ -184,7 +199,7 @@ class MainActivity : AppCompatActivity() {
         openYolo26()          // if staged, it supersedes the two-model path
         openDetector()
         openPoseEstimator()
-        openPlankClassifier()
+        openFormClassifiers()
 
         toggleButton.setOnClickListener {
             val now = !running.get()
@@ -542,38 +557,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Load the plank classifier from assets.
+     * Load every exercise's form classifier from assets.
      *
-     * Unlike the pose models this is not staged over adb: it is 39 floats per
-     * class, small enough to ship in the APK, and it must match the server's
-     * `[scoring.form_error_vocab]` at the version it was built against. A
-     * failure here is caught and named rather than thrown -- a station that
-     * cannot classify form is still worth running, since fall, stillness and
-     * occlusion are all scored from the keypoints alone.
+     * Unlike the pose models these are not staged over adb: each is a few
+     * dozen floats per class, small enough to ship in the APK, and each must
+     * match the server's `[scoring.form_error_vocab]` at the version it was
+     * built against. A missing or malformed artifact is caught and named
+     * rather than thrown -- a station that cannot classify one exercise's
+     * form is still worth running for the others, since fall, stillness and
+     * occlusion are all scored from the keypoints alone regardless.
      */
-    private fun openPlankClassifier() {
-        plankClassifier = try {
-            val json = assets.open("plank_lr.json").bufferedReader().use { it.readText() }
-            PlankClassifier.fromJson(json).also {
-                plankStatus = "loaded (${it.encoding}, p>=${it.probabilityThreshold})"
+    private fun openFormClassifiers() {
+        val loaded = mutableMapOf<String, FormClassifier>()
+        val failures = mutableListOf<String>()
+        for ((ex, asset) in formClassifierAssets) {
+            try {
+                val json = assets.open(asset).bufferedReader().use { it.readText() }
+                loaded[ex] = FormClassifier.fromJson(json)
+            } catch (t: Throwable) {
+                failures += "$ex: ${t.message}"
             }
-        } catch (t: Throwable) {
-            plankStatus = "unavailable: ${t.message}"
-            null
+        }
+        formClassifiers = loaded
+        formClassifierStatus = if (failures.isEmpty()) {
+            "loaded ${loaded.keys.sorted()}"
+        } else {
+            "loaded ${loaded.keys.sorted()}; unavailable: ${failures.joinToString("; ")}"
         }
     }
 
     /**
      * The form verdict for one frame, or no codes when it cannot be trusted.
      *
-     * Returns empty for every exercise except plank, because that is the only
-     * classifier that exists. Reporting a plank verdict for a squat would be
-     * worse than reporting nothing: the code would be in the server's
-     * vocabulary, so nothing downstream could tell it was nonsense.
+     * Returns empty for an exercise with no shipped classifier. Reporting one
+     * exercise's verdict for another would be worse than reporting nothing:
+     * the code would still be in the server's vocabulary, so nothing
+     * downstream could tell it was nonsense.
      */
     private fun classifyForm(pose: PoseResult?, frameWidth: Int, frameHeight: Int): List<String> {
-        if (exercise != PlankClassifier.EXERCISE) return emptyList()
-        val classifier = plankClassifier ?: return emptyList()
+        val classifier = formClassifiers[exercise] ?: return emptyList()
         val p = pose ?: run { lastVerdict = null; return emptyList() }
         return try {
             // `PoseResult` is in frame pixels; the model was fitted on
@@ -594,7 +616,7 @@ class MainActivity : AppCompatActivity() {
         } catch (t: Throwable) {
             // A malformed pose is a bug worth seeing, not a reason to drop the
             // whole observation: the keypoint-derived features still stand.
-            plankStatus = "classify failed: ${t.message}"
+            formClassifierStatus = "$exercise classify failed: ${t.message}"
             lastVerdict = null
             emptyList()
         }
@@ -678,7 +700,7 @@ class MainActivity : AppCompatActivity() {
         // means a correct plank is scored as a fall, so it defaults filled in.
         val exerciseInput = EditText(this).apply {
             hint = "exercise (selects the server's scoring profile)"
-            setText(prefs.getString("exercise", PlankClassifier.EXERCISE))
+            setText(prefs.getString("exercise", DEFAULT_EXERCISE))
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -698,7 +720,7 @@ class MainActivity : AppCompatActivity() {
                 val trainee = traineeInput.text.toString().trim().ifEmpty { deviceId }
                 val display = nameInput.text.toString().trim()
                 exercise = exerciseInput.text.toString().trim().lowercase()
-                    .ifEmpty { PlankClassifier.EXERCISE }
+                    .ifEmpty { DEFAULT_EXERCISE }
                 prefs.edit()
                     .putString("url", url)
                     .putString("trainee", trainee)
@@ -754,15 +776,15 @@ class MainActivity : AppCompatActivity() {
                 append(if (lastDetections == 1) "Tracking" else "Tracking $lastDetections people")
                 append(if (serverStatus.startsWith("streaming")) " · sending" else " · not connected")
                 // The form verdict belongs on the one line the operator reads.
-                // A station whose whole job is judging a plank should say what
-                // it judged -- and, just as importantly, say when it cannot
-                // see enough of the body to judge at all, which is otherwise
-                // indistinguishable from "correct".
+                // A station whose whole job is judging an exercise should say
+                // what it judged -- and, just as importantly, say when it
+                // cannot see enough of the body to judge at all, which is
+                // otherwise indistinguishable from "correct".
                 lastVerdict?.let { v ->
                     append(" · ")
                     append(
                         when {
-                            v.label == PlankClassifier.UNKNOWN -> "body not fully in frame"
+                            v.label == FormClassifier.UNKNOWN -> "body not fully in frame"
                             !v.confident -> "form unclear"
                             v.formReasonCodes.isEmpty() -> "form ok"
                             else -> v.formReasonCodes.first().replace('_', ' ')
@@ -817,9 +839,8 @@ class MainActivity : AppCompatActivity() {
             append("form      ").append(exercise).append(" — ")
             append(
                 when {
-                    plankClassifier == null -> plankStatus
-                    exercise != PlankClassifier.EXERCISE -> "no classifier for this exercise"
-                    !running.get() -> plankStatus
+                    exercise !in formClassifiers -> "no classifier for this exercise ($formClassifierStatus)"
+                    !running.get() -> formClassifierStatus
                     else -> lastVerdict?.describe() ?: "no pose this frame"
                 }
             ).append('\n')

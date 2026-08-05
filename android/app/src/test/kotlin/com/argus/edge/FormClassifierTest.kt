@@ -9,91 +9,130 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Pins the Kotlin plank classifier to the model actually fitted in Python.
+ * Pins every shipped `FormClassifier` artifact to the model actually fitted
+ * in Python, iterating over whatever `*_lr.json` files this build ships
+ * (docs/ADDING_AN_EXERCISE.md §3) rather than naming one exercise.
  *
- * `PlankClassifier` reimplements a scikit-learn multinomial logistic
+ * `FormClassifier` reimplements a scikit-learn multinomial logistic
  * regression as plain arithmetic, which carries the same class of risk the
  * decode path does: the reimplementation can be subtly wrong — feature order
  * transposed, standardization skipped, one-vs-rest sigmoids instead of a
  * softmax — and still produce plausible-looking probabilities. Only comparison
  * against the fitted model catches that.
  *
- * `tests/data/plank_vectors.json` is emitted by
- * `scripts/train_plank_model.py` alongside the artifact, from real held-out
- * rows scored by the fitted model. Both files are written by the same run, so
- * they cannot drift apart — and the artifact read here is the one the app
- * ships, not a copy.
+ * `tests/data/<exercise>_vectors.json` is emitted by
+ * `scripts/train_form_model.py` alongside each artifact, from real held-out
+ * rows scored by the fitted model. Both files of a pair are written by the
+ * same run, so they cannot drift apart — and the artifact read here is the
+ * one the app ships, not a copy.
  */
-class PlankClassifierTest {
+class FormClassifierTest {
 
     private fun property(name: String): File =
         File(System.getProperty(name) ?: error("$name system property not set"))
 
-    private val artifactJson: String by lazy {
-        File(property("argus.assets"), "plank_lr.json").readText()
-    }
+    private class Fixture(
+        val exercise: String,
+        val artifact: JSONObject,
+        val fixture: JSONObject,
+        val classifier: FormClassifier,
+        val landmarks: List<String>,
+        val featureKinds: List<String>,
+    )
 
-    private val fixture: JSONObject by lazy {
-        JSONObject(File(property("argus.fixtures"), "plank_vectors.json").readText())
-    }
-
-    private val classifier: PlankClassifier by lazy { PlankClassifier.fromJson(artifactJson) }
-
-    /** The landmark names the artifact was fitted on, in feature order. */
-    private val landmarks: List<String> by lazy {
-        JSONObject(artifactJson).getJSONArray("landmarks").let { a ->
-            List(a.length()) { a.getString(it) }
-        }
-    }
-
-    private val featureKinds: List<String> by lazy {
-        JSONObject(artifactJson).getJSONArray("feature_kinds").let { a ->
-            List(a.length()) { a.getString(it) }
+    /** Every exercise this build ships an artifact + fixture pair for. */
+    private val fixtures: List<Fixture> by lazy {
+        val assetsDir = property("argus.assets")
+        val fixturesDir = property("argus.fixtures")
+        val artifacts = (assetsDir.listFiles { f -> f.name.endsWith("_lr.json") } ?: emptyArray())
+            .sortedBy { it.name }
+        assertTrue("no *_lr.json artifacts found in $assetsDir", artifacts.isNotEmpty())
+        artifacts.map { artifactFile ->
+            val exercise = artifactFile.name.removeSuffix("_lr.json")
+            val artifactJson = artifactFile.readText()
+            val artifact = JSONObject(artifactJson)
+            val fixtureFile = File(fixturesDir, "${exercise}_vectors.json")
+            assertTrue("no fixture for '$exercise' at $fixtureFile", fixtureFile.isFile)
+            Fixture(
+                exercise = exercise,
+                artifact = artifact,
+                fixture = JSONObject(fixtureFile.readText()),
+                classifier = FormClassifier.fromJson(artifactJson),
+                landmarks = artifact.getJSONArray("landmarks").let { a -> List(a.length()) { a.getString(it) } },
+                featureKinds = artifact.getJSONArray("feature_kinds").let { a -> List(a.length()) { a.getString(it) } },
+            )
         }
     }
 
     /**
-     * Scatter a fixture's flat (x, y, v) feature vector back into COCO-17
+     * Scatter a fixture's flat (x, y) feature vector back into COCO-17
      * arrays and classify.
      *
      * Going through the public entry point rather than calling the arithmetic
      * directly is deliberate: it puts the COCO index mapping under test too,
      * which is where a silent transposition would otherwise hide.
      */
-    private fun classify(features: DoubleArray): PlankClassifier.Verdict {
-        val stride = featureKinds.size
+    private fun classify(fx: Fixture, features: DoubleArray): FormClassifier.Verdict {
+        val stride = fx.featureKinds.size
         val xy = FloatArray(NUM_KEYPOINTS * 2)
         // Fixture vectors carry coordinates only; confidence is a gate, not a
         // feature, so it is supplied here as "fully visible" to exercise the
         // arithmetic rather than the gate. The gate has its own tests below.
         val conf = FloatArray(NUM_KEYPOINTS) { 1.0f }
-        landmarks.forEachIndexed { i, name ->
-            val coco = PlankClassifier.COCO_NAMES.indexOf(name)
-            xy[coco * 2] = features[i * stride + featureKinds.indexOf("x")].toFloat()
-            xy[coco * 2 + 1] = features[i * stride + featureKinds.indexOf("y")].toFloat()
+        fx.landmarks.forEachIndexed { i, name ->
+            val coco = FormClassifier.COCO_NAMES.indexOf(name)
+            xy[coco * 2] = features[i * stride + fx.featureKinds.indexOf("x")].toFloat()
+            xy[coco * 2 + 1] = features[i * stride + fx.featureKinds.indexOf("y")].toFloat()
         }
-        return classifier.classify(xy, conf)
+        return fx.classifier.classify(xy, conf)
     }
 
-    private fun eachCase(body: (JSONObject, PlankClassifier.Verdict) -> Unit) {
-        val cases = fixture.getJSONArray("cases")
-        assertTrue("fixture has no cases", cases.length() > 0)
-        for (i in 0 until cases.length()) {
-            val case = cases.getJSONObject(i)
-            val json = case.getJSONArray("features")
-            body(case, classify(DoubleArray(json.length()) { json.getDouble(it) }))
+    private fun eachCase(body: (Fixture, JSONObject, FormClassifier.Verdict) -> Unit) {
+        for (fx in fixtures) {
+            val cases = fx.fixture.getJSONArray("cases")
+            assertTrue("${fx.exercise} fixture has no cases", cases.length() > 0)
+            for (i in 0 until cases.length()) {
+                val case = cases.getJSONObject(i)
+                // `raw_features`, not `features`: classify() applies the
+                // artifact's own encoding internally, so it must be given
+                // pre-encoding coordinates -- the same ones a pose estimator
+                // would produce -- not the already-encoded model input. See
+                // the docstring on write_fixture in train_form_model.py.
+                val json = case.getJSONArray("raw_features")
+                body(fx, case, classify(fx, DoubleArray(json.length()) { json.getDouble(it) }))
+            }
         }
+    }
+
+    /** A pose visible enough to be judged, for every exercise's landmark set.
+     *
+     * y increases with index, which -- for every shipped landmark ordering,
+     * all roughly head-to-toe -- reads as a plausible depth profile rather
+     * than a standing pose flattened to one height. That matters for lunge's
+     * depth gate: a constant y everywhere is indistinguishable from standing
+     * and is refused by design (see the dedicated depth-gate test below).
+     */
+    private fun visiblePose(fx: Fixture): Pair<FloatArray, FloatArray> {
+        val minVisible = fx.artifact.getInt("min_visible_landmarks")
+        val xy = FloatArray(NUM_KEYPOINTS * 2) { 0.5f }
+        fx.landmarks.forEachIndexed { i, name ->
+            val coco = FormClassifier.COCO_NAMES.indexOf(name)
+            xy[coco * 2 + 1] = 0.1f + 0.05f * i
+        }
+        val conf = FloatArray(NUM_KEYPOINTS)
+        fx.landmarks.take(minVisible).forEach { conf[FormClassifier.COCO_NAMES.indexOf(it)] = 0.99f }
+        return xy to conf
     }
 
     @Test
     fun `probabilities reproduce the fitted model`() {
-        val tolerance = fixture.getDouble("tolerance")
-        eachCase { case, verdict ->
+        eachCase { fx, case, verdict ->
+            val tolerance = fx.fixture.getDouble("tolerance")
             val expected = case.getJSONArray("probabilities")
-            assertEquals("class count", expected.length(), verdict.probabilities.size)
+            assertEquals("${fx.exercise} class count", expected.length(), verdict.probabilities.size)
             for (c in 0 until expected.length()) {
                 assertEquals(
-                    "${case.getString("true_label")} class $c",
+                    "${fx.exercise} ${case.getString("true_label")} class $c",
                     expected.getDouble(c), verdict.probabilities[c], tolerance,
                 )
             }
@@ -102,91 +141,117 @@ class PlankClassifierTest {
 
     @Test
     fun `form reason codes match the fitted model's decision`() {
-        eachCase { case, verdict ->
+        eachCase { fx, case, verdict ->
             val expected = case.getJSONArray("form_reason_codes").let { a ->
                 List(a.length()) { a.getString(it) }
             }
-            assertEquals("codes", expected, verdict.formReasonCodes)
-            assertEquals("class", case.getString("predicted_class"), verdict.label)
+            assertEquals("${fx.exercise} codes", expected, verdict.formReasonCodes)
+            assertEquals("${fx.exercise} class", case.getString("predicted_class"), verdict.label)
         }
     }
 
     @Test
-    fun `a correct plank reports no codes at all`() {
-        var sawCorrect = false
-        eachCase { case, verdict ->
+    fun `a correct classification reports no codes at all`() {
+        val sawCorrect = mutableSetOf<String>()
+        eachCase { fx, case, verdict ->
             if (case.getString("predicted_class") != "C") return@eachCase
-            sawCorrect = true
+            sawCorrect += fx.exercise
             assertTrue(
-                "a correct plank must report an empty form_reason_codes, not a 'correct' code",
+                "${fx.exercise}: a correct classification must report an empty " +
+                    "form_reason_codes, not a 'correct' code",
                 verdict.formReasonCodes.isEmpty(),
             )
         }
-        assertTrue("fixture covers no correct planks", sawCorrect)
+        for (fx in fixtures) {
+            assertTrue("${fx.exercise} fixture covers no correct cases", fx.exercise in sawCorrect)
+        }
     }
 
     @Test
     fun `an invisible body is refused rather than guessed at`() {
-        // A three-class softmax always returns one of its three classes, however
-        // unlike its training data the input is -- on a real device a photograph
-        // of one leg scored `hips_piked` at 100%. The probability threshold
-        // cannot catch that: it separates ambiguity between the three classes,
-        // not input that is not a plank. The gate is on evidence instead.
-        val verdict = classifier.classify(
-            FloatArray(NUM_KEYPOINTS * 2) { 0.5f },
-            FloatArray(NUM_KEYPOINTS) { 0.0f },
-        )
-        assertEquals(PlankClassifier.UNKNOWN, verdict.label)
-        assertFalse("an unseen body cannot be a confident verdict", verdict.confident)
-        assertTrue("an unseen body leaked a code", verdict.formReasonCodes.isEmpty())
+        // A softmax always returns one of its classes, however unlike its
+        // training data the input is -- on a real device a photograph of one
+        // leg scored `hips_piked` at 100% for plank. The probability
+        // threshold cannot catch that: it separates ambiguity between the
+        // classes, not input that is not the exercise. The gate is on
+        // evidence instead.
+        for (fx in fixtures) {
+            val verdict = fx.classifier.classify(
+                FloatArray(NUM_KEYPOINTS * 2) { 0.5f },
+                FloatArray(NUM_KEYPOINTS) { 0.0f },
+            )
+            assertEquals(fx.exercise, FormClassifier.UNKNOWN, verdict.label)
+            assertFalse("${fx.exercise}: an unseen body cannot be a confident verdict", verdict.confident)
+            assertTrue("${fx.exercise}: an unseen body leaked a code", verdict.formReasonCodes.isEmpty())
+        }
     }
 
     @Test
     fun `a partially visible body is refused`() {
         // Exactly one landmark short of the gate: the pose is well-formed and
         // the model would happily score it.
-        val conf = FloatArray(NUM_KEYPOINTS)
-        landmarks.take(PlankClassifier.MIN_VISIBLE_LANDMARKS - 1).forEach {
-            conf[PlankClassifier.COCO_NAMES.indexOf(it)] = 0.99f
+        for (fx in fixtures) {
+            val minVisible = fx.artifact.getInt("min_visible_landmarks")
+            val conf = FloatArray(NUM_KEYPOINTS)
+            fx.landmarks.take(minVisible - 1).forEach {
+                conf[FormClassifier.COCO_NAMES.indexOf(it)] = 0.99f
+            }
+            val verdict = fx.classifier.classify(FloatArray(NUM_KEYPOINTS * 2) { 0.5f }, conf)
+            assertEquals(fx.exercise, FormClassifier.UNKNOWN, verdict.label)
+            assertTrue(fx.exercise, verdict.formReasonCodes.isEmpty())
         }
-        val verdict = classifier.classify(FloatArray(NUM_KEYPOINTS * 2) { 0.5f }, conf)
-        assertEquals(PlankClassifier.UNKNOWN, verdict.label)
-        assertTrue(verdict.formReasonCodes.isEmpty())
     }
 
     @Test
     fun `a sufficiently visible body is judged`() {
-        val conf = FloatArray(NUM_KEYPOINTS)
-        landmarks.take(PlankClassifier.MIN_VISIBLE_LANDMARKS).forEach {
-            conf[PlankClassifier.COCO_NAMES.indexOf(it)] = 0.99f
+        for (fx in fixtures) {
+            val (xy, conf) = visiblePose(fx)
+            val verdict = fx.classifier.classify(xy, conf)
+            assertFalse("${fx.exercise}: the gate must not reject a visible body", verdict.label == FormClassifier.UNKNOWN)
+            assertTrue("${fx.exercise}: probabilities must be finite", verdict.probabilities.all { it.isFinite() })
+            assertEquals("${fx.exercise}: probabilities must sum to 1", 1.0, verdict.probabilities.sum(), 1e-9)
         }
-        val verdict = classifier.classify(FloatArray(NUM_KEYPOINTS * 2) { 0.5f }, conf)
-        assertFalse("the gate must not reject a visible body", verdict.label == PlankClassifier.UNKNOWN)
-        assertTrue("probabilities must be finite", verdict.probabilities.all { it.isFinite() })
-        assertEquals("probabilities must sum to 1", 1.0, verdict.probabilities.sum(), 1e-9)
+    }
+
+    @Test
+    fun `a pose outside the depth gate is refused`() {
+        // Lunge's knee-over-toe label was only ever collected -- and, per
+        // upstream's own detection code, only ever evaluated -- at the bottom
+        // of a lunge (docs/VALIDATION.md). A standing pose (every landmark at
+        // the same y) is exactly what that gate exists to reject: it is
+        // unlike anything the label was ever fit against.
+        val gated = fixtures.filter { !it.artifact.isNull("depth_gate") }
+        assertTrue("expected at least one exercise with a depth_gate (lunge)", gated.isNotEmpty())
+        for (fx in gated) {
+            val minVisible = fx.artifact.getInt("min_visible_landmarks")
+            val conf = FloatArray(NUM_KEYPOINTS)
+            fx.landmarks.take(minVisible).forEach { conf[FormClassifier.COCO_NAMES.indexOf(it)] = 0.99f }
+            val verdict = fx.classifier.classify(FloatArray(NUM_KEYPOINTS * 2) { 0.5f }, conf)
+            assertEquals(
+                "${fx.exercise}: a standing pose must be refused, not classified",
+                FormClassifier.UNKNOWN, verdict.label,
+            )
+        }
     }
 
     @Test
     fun `confidence never reaches the feature vector`() {
-        // The withdrawn revision fed MediaPipe visibility in as a feature. It
-        // saturates near 1.0 with a standard deviation of 0.0013, so a normal
-        // YOLO26 confidence standardized to -116 sigma and the softmax stopped
-        // depending on the pose at all. Same pose, different confidences, must
-        // now be the same verdict.
-        val xy = FloatArray(NUM_KEYPOINTS * 2)
-        landmarks.forEachIndexed { i, name ->
-            val coco = PlankClassifier.COCO_NAMES.indexOf(name)
-            xy[coco * 2] = 0.1f + 0.06f * i
-            xy[coco * 2 + 1] = 0.4f + 0.01f * i
-        }
-        val high = classifier.classify(xy, FloatArray(NUM_KEYPOINTS) { 0.99f })
-        val low = classifier.classify(xy, FloatArray(NUM_KEYPOINTS) { 0.35f })
-        assertEquals("confidence changed the verdict", high.label, low.label)
-        for (c in high.probabilities.indices) {
-            assertEquals(
-                "confidence changed class $c's probability",
-                high.probabilities[c], low.probabilities[c], 1e-12,
-            )
+        // The withdrawn plank revision fed MediaPipe visibility in as a
+        // feature. It saturates near 1.0 with a standard deviation of 0.0013,
+        // so a normal YOLO26 confidence standardized to -116 sigma and the
+        // softmax stopped depending on the pose at all. Same pose, different
+        // confidences, must now be the same verdict, for every exercise.
+        for (fx in fixtures) {
+            val (xy, _) = visiblePose(fx)
+            val high = fx.classifier.classify(xy, FloatArray(NUM_KEYPOINTS) { 0.99f })
+            val low = fx.classifier.classify(xy, FloatArray(NUM_KEYPOINTS) { 0.35f })
+            assertEquals("${fx.exercise}: confidence changed the verdict", high.label, low.label)
+            for (c in high.probabilities.indices) {
+                assertEquals(
+                    "${fx.exercise}: confidence changed class $c's probability",
+                    high.probabilities[c], low.probabilities[c], 1e-12,
+                )
+            }
         }
     }
 
@@ -197,8 +262,8 @@ class PlankClassifierTest {
         val movedX = DoubleArray(4) { xs[it] * 2 + 0.3 }
         val movedY = DoubleArray(4) { ys[it] * 2 + 0.3 }
 
-        PlankClassifier.normalizeToLandmarkBox(xs, ys)
-        PlankClassifier.normalizeToLandmarkBox(movedX, movedY)
+        FormClassifier.normalizeToLandmarkBox(xs, ys)
+        FormClassifier.normalizeToLandmarkBox(movedX, movedY)
 
         for (i in xs.indices) {
             assertEquals("x[$i]", xs[i], movedX[i], 1e-12)
@@ -210,18 +275,22 @@ class PlankClassifierTest {
     fun `a collapsed landmark span does not divide by zero`() {
         val xs = doubleArrayOf(0.4, 0.4, 0.4)
         val ys = doubleArrayOf(0.4, 0.4, 0.4)
-        PlankClassifier.normalizeToLandmarkBox(xs, ys)
+        FormClassifier.normalizeToLandmarkBox(xs, ys)
         assertTrue("collapsed span produced non-finite x", xs.all { it.isFinite() })
         assertTrue("collapsed span produced non-finite y", ys.all { it.isFinite() })
     }
 
     @Test
-    fun `the artifact ships the encoding and threshold the classifier implements`() {
-        assertEquals(fixture.getString("encoding"), classifier.encoding)
-        assertEquals(
-            fixture.getDouble("probability_threshold"),
-            classifier.probabilityThreshold, 1e-12,
-        )
+    fun `each artifact ships the exercise, encoding and threshold its classifier implements`() {
+        for (fx in fixtures) {
+            assertEquals(fx.exercise, fx.artifact.getString("exercise"))
+            assertEquals(fx.exercise, fx.classifier.exercise)
+            assertEquals(fx.exercise, fx.fixture.getString("encoding"), fx.classifier.encoding)
+            assertEquals(
+                fx.exercise,
+                fx.fixture.getDouble("probability_threshold"), fx.classifier.probabilityThreshold, 1e-12,
+            )
+        }
     }
 
     @Test
@@ -233,33 +302,35 @@ class PlankClassifierTest {
         ).getJSONArray("form_error_vocab_keys").let { a ->
             List(a.length()) { a.getString(it) }.toSet()
         }
-        val emitted = JSONObject(artifactJson).getJSONObject("class_to_code")
-        for (key in emitted.keys()) {
-            if (emitted.isNull(key)) continue
-            val code = emitted.getString(key)
-            assertTrue(
-                "class '$key' maps to '$code', which is not in [scoring.form_error_vocab]",
-                code in vocabulary,
-            )
+        for (fx in fixtures) {
+            val emitted = fx.artifact.getJSONObject("class_to_code")
+            for (key in emitted.keys()) {
+                if (emitted.isNull(key)) continue
+                val code = emitted.getString(key)
+                assertTrue(
+                    "${fx.exercise}: class '$key' maps to '$code', which is not in [scoring.form_error_vocab]",
+                    code in vocabulary,
+                )
+            }
         }
     }
 
     @Test
     fun `a malformed artifact is refused rather than half-loaded`() {
         try {
-            PlankClassifier.fromJson("""{"format":"random_forest"}""")
+            FormClassifier.fromJson("""{"format":"random_forest"}""")
             fail("an unsupported artifact format was accepted")
         } catch (e: IllegalArgumentException) {
-            assertTrue(e.message!!.contains("unsupported plank artifact format"))
+            assertTrue(e.message!!.contains("unsupported form artifact format"))
         }
     }
 
     @Test
     fun `a zero scaler scale is refused`() {
-        val artifact = JSONObject(artifactJson)
+        val artifact = JSONObject(fixtures.first().artifact.toString())
         artifact.getJSONArray("scaler_scale").put(0, 0.0)
         try {
-            PlankClassifier.fromJson(artifact.toString())
+            FormClassifier.fromJson(artifact.toString())
             fail("a zero scale was accepted; standardization would divide by zero")
         } catch (e: IllegalArgumentException) {
             assertTrue(e.message!!.contains("zero scale"))

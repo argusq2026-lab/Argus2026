@@ -31,8 +31,8 @@ fields, ever leaves the device.
 | BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
-| **Plank form classifier** | **working** — `PlankClassifier.kt`, a 3x26 logistic regression evaluated in Kotlin arithmetic. No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
-| Other exercises | not started (`form_reason_codes` empty for anything but `plank`) |
+| **Form classifiers** | **working** — `FormClassifier.kt`, a logistic regression evaluated in Kotlin arithmetic, one instance per exercise (plank 3x26, bicep 2x16, lunge 2x18). No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
+| Other exercises | not started (`form_reason_codes` empty for any exercise without a shipped `<exercise>_lr.json`; see `docs/ADDING_AN_EXERCISE.md`) |
 
 ## How detection stays honest
 
@@ -54,14 +54,15 @@ mounted into both — never copied):
   through `argus.ingest.protocol` *at generation time*. `ProtocolTest` (host)
   proves the Kotlin encoder reproduces them; `tests/test_protocol_vectors.py`
   proves the server parses them. One file, both ends of the wire.
-- **`tests/data/plank_vectors.json`** — real held-out feature vectors with the
-  probabilities the *fitted* scikit-learn model produced for them.
-  `PlankClassifierTest` (host) requires the Kotlin reimplementation to
-  reproduce them to 1e-6, and `tests/test_plank_artifact.py` re-derives them
-  from the shipped coefficients in stdlib Python. A transposed feature order,
-  a skipped standardization, or one-vs-rest sigmoids instead of a softmax all
-  still yield plausible probabilities — only comparison against the fitted
-  model catches them.
+- **`tests/data/<exercise>_vectors.json`** (one per shipped classifier) — real
+  held-out feature vectors with the probabilities the *fitted* scikit-learn
+  model produced for them. `FormClassifierTest` (host) requires the Kotlin
+  reimplementation to reproduce them to 1e-6, and `tests/test_form_artifacts.py`
+  re-derives them from the shipped coefficients in stdlib Python, for every
+  `*_lr.json` artifact this build ships. A transposed feature order, a skipped
+  standardization, or one-vs-rest sigmoids instead of a softmax all still
+  yield plausible probabilities — only comparison against the fitted model
+  catches them.
 
 The measured NPU↔CPU divergence (11 LSB ≈ 0.042 in score units) is stated, not
 hidden: a borderline detection near the 0.35 threshold can legitimately differ
@@ -162,13 +163,24 @@ torch.onnx.export(m, torch.zeros(1,3,640,640), "yolo26_pose_fp32.onnx",
 
 Note the input is float32 in [0, 1], not the w8a8 detector's raw uint8.
 
-## The plank classifier
+## The form classifiers
 
-`assets/plank_lr.json` is a multinomial logistic regression over 26 features
-(x and y for 13 COCO landmarks), refit by `scripts/train_plank_model.py` from
+Three exercises ship a classifier today: plank, bicep, lunge. Each is
+`assets/<exercise>_lr.json`, a multinomial logistic regression (26/16/18
+features respectively), refit by `scripts/train_form_model.py --exercise
+<name>` from
 [NgoQuocBao1010/Exercise-Correction](https://github.com/NgoQuocBao1010/Exercise-Correction)
-(MIT, 28,520 labelled rows). Their pickled model could not be used directly —
-42 of their 68 features do not exist on this wire:
+(MIT). `FormClassifier.kt` is exercise-agnostic — it reads landmarks, feature
+kinds, classes, and the code mapping from whichever artifact it is given, so
+what follows about plank (the first one built, and the one the traps below
+were found on) applies structurally to all three; see
+`docs/ADDING_AN_EXERCISE.md` for what differs per exercise and
+`docs/VALIDATION.md` §1b–§1d for each one's accuracy figure and caveats —
+bicep's in particular (0.63) is materially weaker than plank's or lunge's
+(0.99 each) and should not be trusted operationally yet.
+
+Their pickled models could not be used directly — many of their features do
+not exist on this wire:
 
 - `left_heel`, `right_heel`, `left_foot_index`, `right_foot_index` — COCO-17
   stops at the ankles.
@@ -181,11 +193,18 @@ second NPU dispatch on a path where dispatch alone costs ~500 us. Below the
 0.6 probability threshold it reports no codes at all rather than a best guess,
 which is the source project's own "unknown" behaviour.
 
-Features are normalized to the box the 13 landmarks span — deliberately *not*
+Features are normalized to the box the landmarks span — deliberately *not*
 the detector's `bbox_xyxy`, since MediaPipe's person box and YOLO26's are not
 the same convention, and the model was fitted against the landmark extent.
-`PlankClassifier.normalizeToLandmarkBox` and
-`train_plank_model.bbox_normalize` must stay identical.
+`FormClassifier.normalizeToLandmarkBox` and
+`train_form_model.bbox_normalize` must stay identical.
+
+Lunge carries a second gate beyond landmark visibility: its `knee_over_toe`
+label was only ever collected — and, per upstream's own detection code, only
+ever evaluated — at the bottom of a lunge. The artifact's `depth_gate` bounds
+`mean(ankle_y) - mean(hip_y)` to the training data's own observed range;
+outside it `FormClassifier` declines rather than naming a class the label was
+never fit against. See docs/VALIDATION.md §1d.
 
 ### Visibility is not confidence, and it cost a rebuild
 
@@ -210,20 +229,21 @@ above 0.3 before the classifier will judge at all, which also covers the
 separate problem that a three-class softmax has no way to say "that is not a
 plank".
 
-**Its 99% is not an accuracy claim.** That is held-out *frames* from the
-source dataset's own recordings — frame-level leakage was ruled out, but it is
-not a per-subject estimate and says nothing about a trainee neither model has
-seen. docs/VALIDATION.md §1b.
+**None of the reported accuracies are a claim about a trainee.** They are
+held-out *frames* from each source dataset's own recordings — plank's
+frame-level leakage was ruled out, but none of the three is a per-subject
+estimate, and bicep's 0.63 is weak even on those terms. docs/VALIDATION.md
+§1b–§1d.
 
 Retrain with:
 
 ```bash
 pip install -r requirements-train.txt
-python scripts/train_plank_model.py       # rewrites the asset AND the fixture
+python scripts/train_form_model.py --exercise plank   # or bicep, lunge, all
 ```
 
-Both files come out of one run; committing only one is what
-`test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
+Each exercise's artifact and fixture come out of one run; committing only one
+is what `test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
 
 ## Open
 

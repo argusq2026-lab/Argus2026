@@ -200,7 +200,7 @@ laptop are expected to deploy from copies of the same config file; see
 | [`scripts/build_binary.py`](scripts/build_binary.py) | Freezes the laptop side into a standalone executable |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract a phone app must implement |
 | [`docs/CONSOLE.md`](docs/CONSOLE.md) | What the trainer console shows, and what it is allowed to see |
-| [`docs/ADDING_AN_EXERCISE.md`](docs/ADDING_AN_EXERCISE.md) | Runbook for the next form classifier, and the four traps the plank hit |
+| [`docs/ADDING_AN_EXERCISE.md`](docs/ADDING_AN_EXERCISE.md) | Runbook for the next form classifier, and the traps plank, bicep, and lunge each hit |
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | What Argus has *not* been shown to do |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design and the reasoning behind it |
 

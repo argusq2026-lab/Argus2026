@@ -51,10 +51,10 @@ android {
     testOptions {
         unitTests.all {
             it.systemProperty("argus.fixtures", "${rootDir.parentFile}/tests/data")
-            // The plank model artifact is a shipped asset, not a fixture: the
-            // app loads it from assets at runtime, and the host test loads the
-            // very same file so a test can never pass against a copy the phone
-            // would not use.
+            // Each exercise's model artifact is a shipped asset, not a fixture:
+            // the app loads it from assets at runtime, and the host test loads
+            // the very same file so a test can never pass against a copy the
+            // phone would not use.
             it.systemProperty("argus.assets", "${projectDir}/src/main/assets")
         }
     }

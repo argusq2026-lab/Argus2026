@@ -1,8 +1,9 @@
 # Adding an exercise
 
 How the plank form classifier was built, end to end, written so the next one
-does not have to rediscover it. Read this before adding squat, lunge, or bicep
-curl.
+did not have to rediscover it. Bicep and lunge have since been added on top of
+the generalized `FormClassifier`/`train_form_model.py` §3 describes; squat is
+still open, and is a different shape entirely (§5.3).
 
 It is deliberately blunt about what went wrong, because two of the four
 mistakes below produced a system that *looked* like it worked — high test
@@ -10,7 +11,8 @@ accuracy, confident probabilities, a clean dashboard — and were only caught by
 pointing a real phone at a real person.
 
 Reference implementation: commits `5fd7525` (server) and `01ce651` (phone) on
-`plank-form-classification`.
+`plank-form-classification` for plank; see `docs/VALIDATION.md` §1c–§1d and
+`scripts/train_form_model.py`'s `EXERCISE_SPECS` for bicep and lunge.
 
 ---
 
@@ -24,36 +26,40 @@ only by two strings: the `exercise` label and the `form_reason_codes`
 vocabulary.
 
 ```
-  labelled CSV (upstream)                     [offline, once]
+  labelled CSV (upstream)                       [offline, once]
         │
-        │  scripts/train_plank_model.py
+        │  scripts/train_form_model.py --exercise <name>
         ▼
-  android/app/src/main/assets/plank_lr.json   ← coefficients, not a pickle
-  tests/data/plank_vectors.json               ← pins the Kotlin reimplementation
+  android/app/src/main/assets/<name>_lr.json    ← coefficients, not a pickle
+  tests/data/<name>_vectors.json                ← pins the Kotlin reimplementation
         │
-        │  PlankClassifier.fromJson()          [phone, every frame]
+        │  FormClassifier.fromJson()             [phone, every frame]
         ▼
   MainActivity.classifyForm() ──► Observation{exercise, form_reason_codes}
         │
-        │  WebSocket                           [wire]
+        │  WebSocket                             [wire]
         ▼
-  argus.ingest.protocol.parse_observation     ← rejects codes outside the vocab
+  argus.ingest.protocol.parse_observation       ← rejects codes outside the vocab
         │
         ▼
-  argus.triage.compute_triage                 [laptop, every rank tick]
+  argus.triage.compute_triage                   [laptop, every rank tick]
         └─ cfg.weights_for(exercise) picks the weight vector
 ```
 
 | Concern | File |
 |---|---|
-| Fit the model, emit artifact + fixture | `scripts/train_plank_model.py` |
-| Evaluate it on-device | `android/.../PlankClassifier.kt` |
-| Wire it into the frame loop | `android/.../MainActivity.kt` (`classifyForm`, `openPlankClassifier`) |
+| Fit the model, emit artifact + fixture | `scripts/train_form_model.py` (add an `ExerciseSpec` to `EXERCISE_SPECS`) |
+| Evaluate it on-device | `android/.../FormClassifier.kt` (exercise-agnostic; reads the artifact) |
+| Wire it into the frame loop | `android/.../MainActivity.kt` (`classifyForm`, `openFormClassifiers`, `formClassifierAssets`) |
 | Codes the server will accept | `[scoring.form_error_vocab]` in `configs/argus.default.toml` |
 | Which features count for this exercise | `[scoring.exercise_weights.<name>]` in the same file |
-| Pin the Kotlin arithmetic | `android/.../PlankClassifierTest.kt` |
-| Pin the artifact in CI without a JDK | `tests/test_plank_artifact.py` |
+| Pin the Kotlin arithmetic | `android/.../FormClassifierTest.kt` (iterates every shipped artifact) |
+| Pin the artifact in CI without a JDK | `tests/test_form_artifacts.py` (iterates every shipped artifact) |
 | Prove the profile fixes the misfire | `tests/test_exercise_profiles.py` |
+
+Adding an exercise on top of this generalized shape (§3) is now: an
+`ExerciseSpec` entry, a `formClassifierAssets` line, a vocabulary entry, and a
+weight profile -- nothing above needs a new class or a new test file.
 
 ---
 
@@ -107,12 +113,15 @@ Two rules learned on the plank:
 
 ### Step 4 — Fit, and ship coefficients rather than a pickle
 
-Copy `scripts/train_plank_model.py`. A multinomial logistic regression is a
-standardise, a matrix multiply, and a softmax, so the phone evaluates it as
-Kotlin arithmetic — no ONNX export, no ML runtime, no second NPU dispatch on a
-path where dispatch alone costs ~500 µs, and no third artifact to stage on the
-device. Keep that property. If an exercise genuinely needs a non-linear model,
-that is a real decision with real cost, not a drop-in.
+Add an `ExerciseSpec` to `scripts/train_form_model.py` (landmarks, upstream
+CSVs, label-to-code map, `min_visible_landmarks`, an optional `depth_gate` --
+see bicep and lunge for two shapes this takes). A multinomial logistic
+regression is a standardise, a matrix multiply, and a softmax, so the phone
+evaluates it as Kotlin arithmetic — no ONNX export, no ML runtime, no second
+NPU dispatch on a path where dispatch alone costs ~500 µs, and no third
+artifact to stage on the device. Keep that property. If an exercise genuinely
+needs a non-linear model, that is a real decision with real cost, not a
+drop-in.
 
 Emit both files from **one run**: the artifact (`assets/<exercise>_lr.json`)
 and the reference fixture (`tests/data/<exercise>_vectors.json`). They cannot
@@ -123,12 +132,23 @@ same data must produce identical files. Verify it; the plank's is.
 
 ### Step 5 — Port the arithmetic and pin it
 
-`PlankClassifier.kt` is a reimplementation of a model fitted in Python, which
+`FormClassifier.kt` is a reimplementation of a model fitted in Python, which
 is exactly the situation that produces plausible-looking wrong answers: a
 transposed feature order, a skipped standardisation, or one-vs-rest sigmoids
 instead of a softmax all still yield numbers in [0, 1] that sum to 1. Only
 comparison against the fitted model catches it, which is what
-`plank_vectors.json` and `PlankClassifierTest` are for. Reproduce to 1e-6.
+`<exercise>_vectors.json` and `FormClassifierTest` are for -- it already
+iterates every shipped artifact, so a new exercise is covered automatically
+once its artifact and fixture exist. Reproduce to 1e-6.
+
+One sklearn wrinkle worth knowing before you hit it: a **binary** exercise
+(two classes, like bicep and lunge) gets a single coefficient row from
+`LogisticRegression`, not one per class -- sklearn fits one sigmoid, not a
+degenerate 2-row softmax. `train_form_model.coef_and_intercept` expands it to
+a real second row (`[0, z]`, whose softmax is exactly `[sigmoid(-z),
+sigmoid(z)]`) so both the artifact schema and the Kotlin/Python reference
+arithmetic only ever implement one kind of math. Skipping this ships a
+1-class "vocabulary" that both sides silently misread.
 
 Do not forget the **max-shift in the softmax**. Without it, `exp` of a large
 logit overflows to infinity on a degenerate pose, every probability comes back
@@ -147,36 +167,34 @@ See the checklist in §7.
 
 ---
 
-## 3. What has to be generalised first
+## 3. What was generalised (done — bicep and lunge are the proof)
 
-The current code is **hardcoded to plank in four places**. Someone adding a
-second exercise has to decide whether to generalise or to copy-paste, and the
-honest answer depends on how much time is left:
+This used to describe four places the code hardcoded plank, and a choice
+between generalising and copy-pasting for the next exercise. That choice has
+been made: the clean version was built, and bicep and lunge were added on top
+of it without touching `FormClassifier.kt` or either test file. What changed:
 
-| Hardcoded | Where |
+| Was hardcoded to plank | Now |
 |---|---|
-| `EXERCISE = "plank"`, `describe()` prefixes `"plank:"` | `PlankClassifier.kt` companion |
-| `classifyForm` returns empty unless `exercise == PlankClassifier.EXERCISE` | `MainActivity.kt:575` |
-| Asset name `"plank_lr.json"` | `MainActivity.openPlankClassifier()` |
-| `COCO_LANDMARKS`, `LABEL_TO_CODE`, `DATA_BASE`, output paths as module constants | `train_plank_model.py` |
+| `EXERCISE = "plank"`, `describe()` prefixed `"plank:"` | `FormClassifier` reads `exercise` from the artifact; `describe()` uses it |
+| `classifyForm` returned empty unless `exercise == PlankClassifier.EXERCISE` | `MainActivity.classifyForm` looks up `formClassifiers[exercise]`, a real map |
+| Asset name `"plank_lr.json"` | `MainActivity.formClassifierAssets`, `exercise -> asset` |
+| `COCO_LANDMARKS`, `LABEL_TO_CODE`, `DATA_BASE`, output paths as module constants | `train_form_model.EXERCISE_SPECS`, one `ExerciseSpec` per exercise, `--exercise` flag |
+| One test file per exercise | `FormClassifierTest.kt` and `test_form_artifacts.py` both iterate every shipped `*_lr.json`/fixture pair |
 
-**The clean version** is a `FormClassifier` (rename; the arithmetic is not
-plank-specific — it already reads landmarks, feature kinds, classes, and the
-code mapping from the artifact) plus a registry mapping `exercise` → asset
-name, loaded lazily. The training script becomes one exercise-spec table and a
-`--exercise` flag. The two test files iterate over artifacts rather than naming
-one. This is maybe half a day and it is the right shape.
+Adding a fourth exercise is now an `ExerciseSpec` entry, a
+`formClassifierAssets` line, a vocabulary entry, and a weight profile — no new
+Kotlin class, no new test file. Squat is the exception: §5.3 explains why it
+does not fit this shape at all.
 
-**The fast version** is a second classifier class and a second training script,
-copied. It works, and it makes the third exercise worse. If you take it, take
-it knowingly — and note that `MainActivity` will need a real dispatch on
-`exercise` either way, so you pay part of the cost regardless.
-
-`PlankClassifier`'s *loading and validation* logic is already exercise-agnostic
-and worth keeping verbatim: the artifact declares its own landmarks, feature
-kinds, classes, and code mapping, so the Kotlin builds its feature vector from
-the file rather than from a hardcoded stride. Dropping a feature kind in Python
-does not require a matching Kotlin edit to stay correct. Preserve that.
+`FormClassifier`'s *loading and validation* logic was already exercise-agnostic
+before the rename and was kept verbatim: the artifact declares its own
+landmarks, feature kinds, classes, and code mapping, so the Kotlin builds its
+feature vector from the file rather than from a hardcoded stride. Dropping a
+feature kind in Python does not require a matching Kotlin edit to stay
+correct. The one genuine addition beyond the rename is the optional
+`depth_gate` lunge needed (§5, §2 Step 5's binary-classifier note) — declared
+by the artifact the same way, not hardcoded per exercise in Kotlin either.
 
 ---
 
@@ -280,31 +298,43 @@ COCO-17, so features = 2 × that.
 | Exercise | CSVs | Label column | Landmarks | Survives | Upstream calls it |
 |---|---|---|---|---|---|
 | **plank** | `train.csv` / `test.csv` | `C` / `L` / `H` | 17 | **13** → 26 feats | *all errors* — **done** |
-| **bicep** | `train.csv` / `test.csv` | `C` / `L` | 9 | **9** → 18 feats | *lean back error* |
-| **lunge** | `err.train.csv` / `err.test.csv` | `C` / `L` | 13 | **9** → 18 feats | *knee over toe error* |
+| **bicep** | `train.csv` / `test.csv` | `C` / `L` | 9 | **8** → 16 feats | *lean back error* — **done** (see below: `nose` dropped) |
+| **lunge** | `err.train.csv` / `err.test.csv` | `C` / `L` | 13 | **9** → 18 feats | *knee over toe error* — **done** |
 | **lunge** | `stage.train.csv` / `stage.test.csv` | `I` / `M` / `D` | 13 | **9** → 18 feats | *stage* — not a form model |
-| **squat** | `train.csv` / `test.csv` | `up` / `down` | 9 | **9** → 18 feats | *stage* — **not a form model** |
+| **squat** | `train.csv` / `test.csv` | `up` / `down` | 9 | **9** → 18 feats | *stage* — **not a form model, not started** |
 
 Base URL: `https://raw.githubusercontent.com/NgoQuocBao1010/Exercise-Correction/main/core/<exercise>_model/`
 
-**Recommended order:**
+**Bicep's landmark count differs from the plan above (9 → 8, not 9 → 9).**
+Under `bbox` encoding, `nose_y` came in with a training spread of 0.0083 —
+under the 0.01 saturating-scale floor Trap 1's guard enforces, because the
+head sits at the top of the landmark box on nearly every frame of a curl.
+`nose` is excluded from bicep's `ExerciseSpec` for exactly that reason; see
+`docs/VALIDATION.md` §1c. Accuracy dropped from 0.841 (with the degenerate
+feature) to 0.629 (without it) — the honest cost of the guard doing its job,
+and a reason to treat bicep's classifier as weaker than plank's or lunge's,
+not a bug to route around.
 
-1. **Bicep curl** is the closest analogue to plank — a genuine binary form
-   classifier, all 9 landmarks survive intact, no `z`/heel losses at all. If
-   you are generalising the code (§3), do it here where the second case is
-   easy.
-2. **Lunge** works too, via `err.*`, losing heels and foot indices. Note it has
-   a *second* model for rep stage; Argus has no rep-phase concept and does not
-   need one — take `err.*` only, unless the error turns out to be
-   stage-dependent, which is worth checking before fitting.
-3. **Squat needs a different approach entirely.** Their squat *model* is a
-   stage classifier. Their squat *errors* (foot placement, knee placement) are
-   detected geometrically — distance ratios between joints against thresholds,
-   documented in `core/README.md` §1 — not by a fitted model. That is a
-   perfectly good approach and it is not this pipeline. It would be a
-   `SquatGeometry.kt` computing ratios, with no artifact, no scaler, and no
-   fixture, and thresholds that are *unvalidated priors* and must be recorded
-   as such in `docs/VALIDATION.md`. Do not force it into the LR shape.
+**Lunge's error label turned out to be stage-dependent, as flagged above.**
+Checked before fitting: `mean(ankle_y) - mean(hip_y)` on `err.train.csv` (mean
+0.144, sd 0.027) matches `stage.train.csv`'s own `D` (down) rows (mean 0.158,
+sd 0.029) almost exactly, and nothing like `I`/`M`. Upstream's own detection
+code only ever calls the error model in the down stage. `err.*` was still the
+right split to fit on (`stage.*` is a rep-phase label Argus doesn't need), but
+the classifier needed a second evidence gate beyond landmark visibility — see
+`depth_gate` in `train_form_model.py`/`FormClassifier.kt` and
+`docs/VALIDATION.md` §1d for what it does and why a plain visibility gate
+would not have caught this.
+
+**Squat still needs a different approach entirely, and remains not started.**
+Their squat *model* is a stage classifier. Their squat *errors* (foot
+placement, knee placement) are detected geometrically — distance ratios
+between joints against thresholds, documented in `core/README.md` §1 — not by
+a fitted model. That is a perfectly good approach and it is not this
+pipeline. It would be a `SquatGeometry.kt` computing ratios, with no artifact,
+no scaler, and no fixture, and thresholds that are *unvalidated priors* and
+must be recorded as such in `docs/VALIDATION.md`. Do not force it into the LR
+shape.
 
 Also true of the whole corpus, and inherited by anything built on it: their
 accuracy figures are on held-out **frames** from the same few recordings as the
@@ -327,8 +357,8 @@ number without the caveat.
   training CSVs have no detector box, and MediaPipe's person box and YOLO26's
   are not the same convention — normalising by them would train on one
   definition and infer on another. Both sides compute the extent from the same
-  joints. `PlankClassifier.normalizeToLandmarkBox` and
-  `train_plank_model.bbox_normalize` must stay identical.
+  joints. `FormClassifier.normalizeToLandmarkBox` and
+  `train_form_model.bbox_normalize` must stay identical.
 - **`bbox` ships even though `raw` measures higher** (0.9930 vs 0.9901). The
   extra point is earned by learning where in the source recordings a person
   stood, scored on a test split drawn from those same recordings. A metric

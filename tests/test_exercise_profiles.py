@@ -26,7 +26,12 @@ from argus.triage import (
     TrackState,
     compute_triage,
 )
-from tests.conftest import make_observation, make_plank_observation
+from tests.conftest import (
+    make_bicep_observation,
+    make_lunge_observation,
+    make_observation,
+    make_plank_observation,
+)
 
 
 def hold(scoring, ticks: int, **kwargs) -> TrackState:
@@ -34,6 +39,20 @@ def hold(scoring, ticks: int, **kwargs) -> TrackState:
     track = TrackState(history_len=scoring.history_len)
     for i in range(ticks):
         track.push(make_plank_observation(ts=i * 0.066, **kwargs), scoring)
+    return track
+
+
+def hold_bicep(scoring, ticks: int, **kwargs) -> TrackState:
+    track = TrackState(history_len=scoring.history_len)
+    for i in range(ticks):
+        track.push(make_bicep_observation(ts=i * 0.066, **kwargs), scoring)
+    return track
+
+
+def hold_lunge(scoring, ticks: int, **kwargs) -> TrackState:
+    track = TrackState(history_len=scoring.history_len)
+    for i in range(ticks):
+        track.push(make_lunge_observation(ts=i * 0.066, **kwargs), scoring)
     return track
 
 
@@ -206,3 +225,59 @@ def test_the_scorer_cannot_mutate_a_profile(scoring):
     """Frozen tuning is what keeps two runs of the same history identical."""
     with pytest.raises(dataclasses.FrozenInstanceError):
         scoring.alert_threshold = 0.9
+
+
+# -- bicep and lunge (docs/ADDING_AN_EXERCISE.md) ----------------------------
+#
+# Both profiles follow the plank profile's exact numbers -- occlusion 0.15,
+# form_error 0.85, everything else zeroed -- for reasons specific to each
+# exercise (see the comments in configs/argus.default.toml and
+# docs/VALIDATION.md), not because the numbers were retuned. The tests below
+# mirror plank's: that a correct rep scores zero, that a flagged one alerts,
+# and that the threshold arithmetic actually clears `alert_threshold`.
+
+
+@pytest.mark.parametrize(
+    ("hold_fn", "exercise", "code"),
+    [(hold_bicep, "bicep", "lean_back_error"), (hold_lunge, "lunge", "knee_over_toe")],
+)
+def test_a_correct_rep_scores_zero_and_explains_nothing(scoring, hold_fn, exercise, code):
+    record = compute_triage("t", hold_fn(scoring, scoring.history_len), 2.0, scoring)
+    assert record.score == 0.0
+    assert record.reason_codes == ()
+
+
+@pytest.mark.parametrize(
+    ("hold_fn", "exercise", "code"),
+    [(hold_bicep, "bicep", "lean_back_error"), (hold_lunge, "lunge", "knee_over_toe")],
+)
+def test_a_flagged_rep_alerts(scoring, hold_fn, exercise, code):
+    track = hold_fn(scoring, scoring.history_len, form_reason_codes=(code,))
+    record = compute_triage("t", track, 2.0, scoring)
+    assert record.score >= scoring.alert_threshold, f"{exercise}/{code} did not reach the threshold"
+    assert record.reason_codes == (REASON_FORM_ERROR,)
+
+
+@pytest.mark.parametrize("exercise", ["bicep", "lunge"])
+def test_the_shipped_profile_zeroes_fall_stillness_and_off_task(scoring, exercise):
+    profile = scoring.weights_for(exercise)
+    assert profile is not scoring.weights, f"no {exercise} profile configured"
+    assert profile["fall"] == 0.0
+    assert profile["stillness"] == 0.0
+    assert profile["off_task"] == 0.0
+    assert profile["occlusion"] > 0.0, "an unseen trainee is still worth flagging"
+    assert profile["form_error"] > 0.0
+
+
+@pytest.mark.parametrize("exercise, code", [("bicep", "lean_back_error"), ("lunge", "knee_over_toe")])
+def test_the_vocab_weight_and_profile_together_clear_the_alert_threshold(scoring, exercise, code):
+    """The Trap 4 check: the arithmetic, not just the intent, must alert.
+
+    `vocab_weight * profile["form_error"]` is what a held flagged rep scores
+    (see the `test_a_flagged_rep_alerts` cases above); this pins the
+    arithmetic itself so a vocabulary or profile edit that quietly drops below
+    `alert_threshold` fails here rather than in a gym.
+    """
+    profile = scoring.weights_for(exercise)
+    contribution = scoring.form_error_vocab[code] * profile["form_error"]
+    assert contribution >= scoring.alert_threshold

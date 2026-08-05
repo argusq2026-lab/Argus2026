@@ -1,11 +1,12 @@
 {
   "format": "multinomial_logistic_regression",
   "artifact_version": 1,
+  "exercise": "plank",
   "encoding": "bbox",
   "source_dataset": "NgoQuocBao1010/Exercise-Correction (MIT), core/plank_model",
-  "generated_by": "scripts/train_plank_model.py",
+  "generated_by": "scripts/train_form_model.py",
   "test_accuracy": 0.990141,
-  "test_accuracy_caveat": "Held-out frames from the source dataset's own recordings, which feature a small number of people. Verified not to be frame-level leakage (nearest test-to-train distance 0.083, versus 1.607 between random training rows), but this is not a per-subject generalisation estimate and must not be quoted as accuracy on a new trainee. See docs/VALIDATION.md.",
+  "test_accuracy_caveat": "Held-out frames from the source dataset's own recordings, which feature a small number of people. This is not a per-subject generalisation estimate and must not be quoted as accuracy on a new trainee. See docs/VALIDATION.md.",
   "probability_threshold": 0.6,
   "feature_names": [
     "nose_x",
@@ -64,6 +65,7 @@
     "H": "hips_piked",
     "L": "hips_sagging"
   },
+  "min_visible_landmarks": 10,
   "scaler_mean": [
     0.5182299962861796,
     0.464657479961665,
@@ -211,5 +213,6 @@
     2.3600914921740013,
     -1.8785536253856159,
     -0.4815378667885589
-  ]
+  ],
+  "depth_gate": null
 }

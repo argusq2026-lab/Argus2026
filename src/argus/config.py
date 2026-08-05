@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 
 #: Shipped default config. Present both in a source checkout (repo-root
 #: ``configs/``) and in an installed wheel (``argus/_data/``).
