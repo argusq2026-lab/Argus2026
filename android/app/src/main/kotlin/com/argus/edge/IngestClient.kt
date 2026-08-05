@@ -28,6 +28,13 @@ class IngestClient(
     private val serverUrl: String,          // ws://<laptop-ip>:8765
     private val stationId: String,
     private val traineeId: String,
+    /**
+     * Announced once at handshake and informational on the server. The
+     * load-bearing copy is the `exercise` field on every observation, which
+     * selects the scoring weight profile -- this one only tells the operator's
+     * logs what the station was set up to watch.
+     */
+    private val exercisePlan: String = "",
     private val onStateChange: (String) -> Unit,
 ) {
     enum class State { IDLE, CONNECTING, AWAITING_ACK, STREAMING, REJECTED, CLOSED }
@@ -63,7 +70,7 @@ class IngestClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 socket = webSocket
                 // The first frame on every connection must be hello.
-                webSocket.send(encodeHello(stationId, traineeId))
+                webSocket.send(encodeHello(stationId, traineeId, exercisePlan))
                 transition(State.AWAITING_ACK)
             }
 

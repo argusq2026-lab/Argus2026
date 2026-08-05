@@ -35,6 +35,71 @@ illustrative, not the result of any domain review.
 
 ---
 
+## 1b. The plank classifier's 99.0% is not an accuracy claim about a trainee
+
+**Status:** blocking for any claim about form detection.
+
+`scripts/train_plank_model.py` refits the plank classifier from
+[NgoQuocBao1010/Exercise-Correction](https://github.com/NgoQuocBao1010/Exercise-Correction)
+(MIT) on the 26 of its 68 features a COCO-17 phone can reproduce — x and y for
+13 landmarks. Their set also includes heels and foot indices COCO does not
+have, a `z` depth estimate YOLO26-pose does not emit, and a MediaPipe
+*visibility* per landmark that is excluded deliberately (see "the feature that
+cost a rebuild" below). It reports **0.9901** on their held-out split.
+
+That number is real and it is nearly meaningless for this product. It was
+measured on held-out *frames* from the same small set of recordings the
+training data came from. Frame-level leakage was checked and ruled out (the
+nearest test row sits 0.083 from any training row, against 1.607 between two
+random training rows), so the model is not simply memorising — but "a frame of
+a person the model has seen in other frames" is not "a trainee it has never
+seen". Nothing here establishes it generalises across people, body types,
+camera heights, or clothing.
+
+Two narrower gaps sit underneath it:
+
+* **The three-class taxonomy is theirs, not a domain review.** Correct /
+  low-back / high-back is what their data was labelled with. Whether those are
+  the plank faults worth interrupting a class for is an unexamined
+  inheritance. Worse, a three-class softmax has no fourth answer: shown
+  something that is not a plank at all it must still name one of the three.
+  `PlankClassifier` therefore gates on landmark visibility rather than trusting
+  the probability, which bounds the failure without measuring it.
+* **`bbox` encoding ships despite measuring *lower*.** Raw absolute
+  coordinates score 0.9930 against landmark-box-relative features' 0.9901, and
+  the higher number is the one to distrust: a model fitted on absolute
+  coordinates partly learns where in the source recordings' frame a person
+  stood, and the test split comes from those same recordings, so it rewards
+  exactly the memorisation that fails on a phone at a different height and
+  distance. The reasoning is sound and unmeasured; nothing here demonstrates
+  `bbox` is better where it matters.
+
+**To close:** record real trainees planking, from real station placements, and
+measure per-subject held-out accuracy — the split has to be by person, not by
+frame. Until then the classifier is wiring that works, not a verified signal.
+
+### The feature that cost a rebuild
+
+The first revision kept the visibility columns, on the assumption that
+MediaPipe visibility and YOLO26 keypoint confidence are the same kind of
+number. They are not. Visibility saturates: `nose_v` has a training mean of
+0.9993 and a standard deviation of **0.0013**, so a perfectly ordinary
+YOLO26 confidence of 0.85 standardises to −116 sigma, and thirteen such
+features saturate the softmax before the pose is consulted at all. On device
+this reported a form error for every plank it was shown. Substituting
+realistic confidences into a known-correct fixture row, coordinates untouched,
+flips the prediction from correct at 100% to `hips_sagging` at 100%.
+
+The general form of the mistake is worth recording, because no accuracy metric
+on the source dataset could have caught it: a feature only transfers between
+two pose models if both mean the same thing by it. Coordinates do. Confidence
+does not, and its *units* agreeing is not evidence that its distribution does.
+`tests/test_plank_artifact.py` now rejects any feature whose training spread is
+under 0.01 — a floor that bounds a [0, 1] feature's worst case at ~100 sigma —
+so a near-constant column cannot enter the model again unnoticed.
+
+---
+
 ## 2. The five scoring weights have never been fitted to an incident
 
 **Status:** blocking for operational trust in the rank.
