@@ -214,9 +214,13 @@ def _parse_rep_count(raw: Mapping[str, Any]) -> int | None:
     `bool` is rejected explicitly: it is a subclass of `int`, so a phone
     sending `true` here would otherwise be silently displayed as 1 rep.
     """
-    if "rep_count" not in raw:
+    value = raw.get("rep_count")
+    # An explicit `null` means the same as omitting it: not reported. A held
+    # exercise has no rep count to report, and refusing the connection over a
+    # phone that says so plainly would be strictness pointed the wrong way --
+    # nothing is being silently defaulted, the field is simply absent.
+    if value is None:
         return None
-    value = raw["rep_count"]
     if isinstance(value, bool) or not isinstance(value, int):
         raise ProtocolError(f"rep_count must be an int, got {type(value).__name__}")
     if value < 0:
@@ -232,9 +236,9 @@ def _parse_form_ok(raw: Mapping[str, Any]) -> bool | None:
     therefore scoreable. `None` means the phone did not send a verdict, which
     the console shows as unknown rather than as a pass.
     """
-    if "form_ok" not in raw:
+    value = raw.get("form_ok")
+    if value is None:      # absent or explicitly null: the phone has no verdict
         return None
-    value = raw["form_ok"]
     if not isinstance(value, bool):
         raise ProtocolError(f"form_ok must be a bool, got {type(value).__name__}")
     return value

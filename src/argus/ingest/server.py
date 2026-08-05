@@ -118,6 +118,11 @@ class IngestServer:
                     track_ttl_s=cfg.ingest.track_ttl_s,
                     session_name=cfg.session.name,
                     approval=cfg.session.approval,
+                    default_weights=dict(cfg.scoring.weights),
+                    exercise_weights={
+                        name: dict(profile)
+                        for name, profile in cfg.scoring.exercise_weights.items()
+                    },
                 ),
                 on_join_decision=self._admission.decide,
                 allow_remote_control=cfg.outputs.allow_remote_join_control,

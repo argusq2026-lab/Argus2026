@@ -72,6 +72,12 @@ FORM_ERROR_ONSET_TICK = 20
 #: How many ticks one rep takes. Informational only — see `FrameObservation`.
 TICKS_PER_REP = 5
 
+#: Exercises that are held rather than repeated, and so have no rep count.
+#: A plank reporting "72 reps" is not a cosmetic wart: it is the console
+#: stating something about a trainee that nothing measured, which is the same
+#: class of mistake as showing a silent station as calm.
+HELD_EXERCISES = frozenset({"plank"})
+
 
 def _form_reason_codes(trainee_id: str, tick: int) -> tuple[str, ...]:
     """The scene's form codes for one trainee at one tick. Deterministic."""
@@ -181,14 +187,15 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
     for trainee_id, box in _boxes(tick).items():
         kp_xy, kp_conf = _pose(box)
         codes = _form_reason_codes(trainee_id, tick)
+        exercise = TRAINEE_EXERCISE[trainee_id]
         observations[trainee_id] = FrameObservation(
             ts=ts,
             bbox_xyxy=box.xyxy,
             keypoints_xy=kp_xy,
             keypoints_conf=kp_conf,
             form_reason_codes=codes,
-            exercise=TRAINEE_EXERCISE[trainee_id],
-            rep_count=tick // TICKS_PER_REP,
+            exercise=exercise,
+            rep_count=None if exercise in HELD_EXERCISES else tick // TICKS_PER_REP,
             form_ok=not codes,
         )
     return observations

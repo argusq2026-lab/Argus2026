@@ -403,3 +403,91 @@ def test_the_page_shows_the_trainee_id_being_admitted():
     should see it."""
     assert "trainee " in CONSOLE_HTML
     assert "display_name" in CONSOLE_HTML
+
+
+# -- scoring profiles ---------------------------------------------------------
+#
+# A profile that zeroes a feature suppresses both its contribution and its
+# reason code. That is correct, and it means a plank card reading "nothing
+# flagged" looks identical to one where fall and stillness had actually been
+# checked. The console is the only place that difference can be shown, so the
+# weights have to reach it.
+
+
+def test_the_shipped_plank_profile_reaches_the_console(default_config):
+    """Read from the real config, not a hand-built one: what matters is that
+    the profile an operator actually ships is what the page renders against."""
+    scoring = default_config.scoring
+    srv = TriageHTTPServer(
+        0,
+        console=ConsoleSettings(
+            default_weights=dict(scoring.weights),
+            exercise_weights={k: dict(v) for k, v in scoring.exercise_weights.items()},
+        ),
+    )
+    srv.start()
+    try:
+        served = _get(srv.port, "/console")["config"]
+        assert served["default_weights"]["fall"] > 0
+        # The two the plank profile switches off, and the one it leans on.
+        assert served["exercise_weights"]["plank"]["fall"] == 0.0
+        assert served["exercise_weights"]["plank"]["stillness"] == 0.0
+        assert served["exercise_weights"]["plank"]["form_error"] > 0
+    finally:
+        srv.stop()
+
+
+def test_a_running_server_publishes_the_configured_profiles(default_config):
+    """The wiring, not just the dataclass: a `ConsoleSettings` built by hand
+    in a test proves nothing about what `argus run` actually publishes."""
+    import asyncio
+    import socket
+
+    from argus.ingest.server import IngestServer
+
+    with socket.socket() as probe:          # a port that is free right now
+        probe.bind(("127.0.0.1", 0))
+        http_port = probe.getsockname()[1]
+
+    cfg = dataclasses.replace(
+        default_config,
+        ingest=dataclasses.replace(default_config.ingest, ws_host="127.0.0.1", ws_port=0),
+        outputs=dataclasses.replace(
+            default_config.outputs, console=False, http_port=http_port
+        ),
+        discovery=dataclasses.replace(default_config.discovery, enabled=False),
+    )
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            served = _get(server.http_port, "/console")["config"]
+            assert served["exercise_weights"]["plank"]["fall"] == 0.0
+            assert served["default_weights"] == dict(cfg.scoring.weights)
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_the_page_can_name_which_checks_a_profile_switches_off():
+    """`fall` weighted 0 for planks means a trainee who collapses mid-plank
+    raises nothing. Correct, and unacceptable to leave unsaid."""
+    assert "notWatchedFor" in CONSOLE_HTML
+    assert "not watching for" in CONSOLE_HTML
+    assert "exercise_weights" in CONSOLE_HTML
+    assert "default_weights" in CONSOLE_HTML
+
+
+def test_the_page_resolves_a_profile_the_same_way_the_scorer_does():
+    """An exercise with no profile falls back to the defaults, not to zero."""
+    assert "profileFor" in CONSOLE_HTML
+    assert "toLowerCase" in CONSOLE_HTML
+
+
+def test_the_page_names_the_plank_form_codes_in_prose():
+    """`hips_piked` is jargon; a trainer should read a sentence."""
+    assert "hips_sagging: " in CONSOLE_HTML
+    assert "hips_piked: " in CONSOLE_HTML
+    assert "Hips sagging" in CONSOLE_HTML

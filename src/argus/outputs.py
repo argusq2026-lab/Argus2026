@@ -27,8 +27,11 @@ What that is *not*:
   keypoint is a pair of floats whichever endpoint serves it.
 * not free text. `form_reason_codes` is closed-vocabulary by the time
   `argus.ingest.protocol` accepts it. `exercise` is the single field a phone
-  fills freely; it is length-bounded on the wire, never scored, never
-  logged, and the console renders it as text and never as markup.
+  fills freely; it is length-bounded on the wire, never logged, and the
+  console renders it as text and never as markup. It does select the scoring
+  weight profile (`ScoringConfig.weights_for`) — a lookup into config, not a
+  term in the score — which is why the console is also served the profiles
+  themselves, so it can say which checks a given exercise switches off.
 * not a widening of the *alert* boundary. `emit_alert`, `JsonLogSink`, and
   `GET /triage` still carry the same four fields they always did — a
   `StationView` cannot reach any of them, because none of them has a
@@ -43,7 +46,7 @@ from __future__ import annotations
 
 import json
 import threading
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
@@ -108,8 +111,10 @@ class StationView:
     keypoints_conf: tuple[float, ...] | None = None
     #: Closed-vocabulary, enforced by `argus.ingest.protocol`.
     form_reason_codes: tuple[str, ...] = ()
-    #: The phone's informational fields. Display-only: nothing scores these.
+    #: Selects the scoring weight profile, and is displayed. `""` means the
+    #: phone reported none, which scores on the default weights.
     exercise: str = ""
+    #: Display-only: nothing scores these two.
     rep_count: int | None = None
     form_ok: bool | None = None
 
@@ -177,6 +182,18 @@ class ConsoleSettings:
     #: very different things under `auto` and under `manual`.
     session_name: str = ""
     approval: str = "auto"
+    #: The scoring weight vectors, default and per-exercise, so the page can
+    #: say *which checks are switched off* for a given trainee.
+    #:
+    #: This is the console's half of a trade the scorer makes deliberately. A
+    #: correct plank is horizontal and motionless, so
+    #: `[scoring.exercise_weights.plank]` zeroes `fall` and `stillness` —
+    #: which also means a trainee who collapses mid-plank raises neither. That
+    #: is the right call for the score and a terrible thing to leave implicit:
+    #: without this, a plank card reading "nothing flagged" is
+    #: indistinguishable from one where those checks were actually run.
+    default_weights: dict[str, float] = field(default_factory=dict)
+    exercise_weights: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 class JsonLogSink:
