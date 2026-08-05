@@ -141,6 +141,25 @@ nothing here has ever seen a pixel:
 Anything at or above `alert_threshold` (0.5) is surfaced with `reason_codes`
 explaining why. Ties break on `trainee_id`, so the rank is stable across runs.
 
+### Some features are wrong for some exercises
+
+Those five weights are the *default* profile. An exercise can name its own
+vector in `[scoring.exercise_weights]`, because a movement can make a feature
+meaningless or actively misleading. A correct plank is horizontal and
+motionless — which is precisely what `fall` (bbox wider than tall) and
+`stillness` (centroid not moving) are built to treat as an emergency.
+
+Measured, on the defaults: a textbook plank scores **0.42** of the 0.5
+threshold and displays `prolonged_stillness, off_task_orientation`, leaving
+the actual form signal worth 0.12 against 0.42 of noise. On
+`[scoring.exercise_weights.plank]` the same observation scores **0.0** and
+displays nothing, while a sagging plank scores **0.68**.
+
+A feature weighted 0 contributes nothing **and** emits no reason code — one
+number does both, because a reason that explains no part of the score is worse
+than no reason at all. An exercise with no profile scores on the defaults,
+unchanged.
+
 **These weights are unvalidated.** They are the prototype author's priors; no
 incident has ever been scored with them. They now live in
 [`configs/argus.default.toml`](configs/argus.default.toml), so retuning is a
@@ -181,6 +200,7 @@ laptop are expected to deploy from copies of the same config file; see
 | [`scripts/build_binary.py`](scripts/build_binary.py) | Freezes the laptop side into a standalone executable |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract a phone app must implement |
 | [`docs/CONSOLE.md`](docs/CONSOLE.md) | What the trainer console shows, and what it is allowed to see |
+| [`docs/ADDING_AN_EXERCISE.md`](docs/ADDING_AN_EXERCISE.md) | Runbook for the next form classifier, and the four traps the plank hit |
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | What Argus has *not* been shown to do |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design and the reasoning behind it |
 

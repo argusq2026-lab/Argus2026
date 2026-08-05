@@ -181,8 +181,23 @@ def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, flo
 
 
 def _parse_exercise(raw: Mapping[str, Any]) -> str:
-    """The phone's classified exercise label. Optional, display-only."""
+    """The phone's classified exercise label. Optional.
+
+    Deliberately **open** where `form_reason_codes` is closed: this selects
+    the scoring weight profile (`ScoringConfig.weights_for`), and an exercise
+    the server has no profile for scores on the default weights rather than
+    being rejected. A form code the server does not know is a version skew
+    worth stopping for; an exercise label it does not know is just a movement
+    nobody has tuned yet.
+
+    Bounded in length all the same. It is the one field on the wire whose
+    value a phone chooses freely, it reaches a human's screen, and a label a
+    classifier emits is short — so a long one is a malformed message rather
+    than a plausible exercise.
+    """
     value = raw.get("exercise", "")
+    if value is None:
+        return ""
     if not isinstance(value, str):
         raise ProtocolError(f"exercise must be a string, got {type(value).__name__}")
     if len(value) > _MAX_EXERCISE_LEN:

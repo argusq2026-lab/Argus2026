@@ -29,30 +29,55 @@ FALL_START_TICK = 20
 FALL_DURATION_TICKS = 6
 
 #: Every synthetic trainee id this scene ever emits, in a stable order.
-TRAINEE_IDS = ("walker", "still", "faller")
-
-#: The scene's stand-in for an on-device form classifier.
 #:
-#: No phone reports `form_reason_codes` yet — that classifier is edge work
-#: that has not landed — so the `form_error` feature would otherwise be inert
-#: everywhere, including in the one fixture the console is developed against.
-#: One synthetic trainee reports a code on a fixed, repeating slice of each
-#: cycle, so the console's form-error path is exercisable today and looks the
-#: same when a real classifier starts filling the field. Intermittent rather
-#: than latched on purpose: a real classifier flags the bad reps, not the set.
+#: The two plank stations are here because a plank is the case the scorer's
+#: standing-trainee assumptions get wrong: `good_plank` is horizontal and
+#: motionless, which `score_fall` and `score_stillness` read as an emergency,
+#: and only `[scoring.exercise_weights.plank]` stops it alerting. A demo
+#: without one shows a system that looks correct because nothing on the floor
+#: was lying down.
+TRAINEE_IDS = ("walker", "still", "faller", "good_plank", "sagging_plank")
+
+#: Which exercise each station reports. This selects the server's scoring
+#: weight profile, so it is part of the scene, not decoration.
+TRAINEE_EXERCISE = {
+    "walker": "squat",
+    "still": "squat",
+    "faller": "squat",
+    "good_plank": "plank",
+    "sagging_plank": "plank",
+}
+
+#: Form codes a station holds for as long as it is on the floor, drawn from
+#: `[scoring.form_error_vocab]`. This is the *real* case now: the phone's
+#: `PlankClassifier` genuinely emits `hips_sagging`, so the sagging plank is a
+#: recording of something the system produces rather than a stand-in.
+TRAINEE_FORM_CODES: dict[str, tuple[str, ...]] = {
+    "sagging_plank": ("hips_sagging",),
+}
+
+#: A stand-in for the squat classifier, which does not exist yet.
+#:
+#: Plank is classified on the phone; squat is not (docs/ADDING_AN_EXERCISE.md
+#: explains why the upstream squat model does not fit this pipeline). Without
+#: this the squat stations would report perfect form forever, and the console
+#: would only ever be developed against a code that latches on and stays on.
+#: Intermittent on purpose: a per-rep classifier flags bad reps, not the set,
+#: and a reason that appears and clears is what the trainer actually sees.
 FORM_ERROR_TRAINEE = "walker"
 FORM_ERROR_CODE = "insufficient_depth"
 FORM_ERROR_CYCLE_TICKS = 30
 FORM_ERROR_ONSET_TICK = 20
 
-#: The exercise every synthetic trainee is nominally performing, and how many
-#: ticks one rep takes. Informational only — see `FrameObservation`.
-SCENE_EXERCISE = "squat"
+#: How many ticks one rep takes. Informational only — see `FrameObservation`.
 TICKS_PER_REP = 5
 
 
 def _form_reason_codes(trainee_id: str, tick: int) -> tuple[str, ...]:
     """The scene's form codes for one trainee at one tick. Deterministic."""
+    latched = TRAINEE_FORM_CODES.get(trainee_id)
+    if latched is not None:
+        return latched
     if trainee_id != FORM_ERROR_TRAINEE:
         return ()
     if tick % FORM_ERROR_CYCLE_TICKS < FORM_ERROR_ONSET_TICK:
@@ -94,6 +119,11 @@ def _boxes(tick: int) -> dict[str, _Box]:
     boxes = {
         "walker": _Box(walk_cx, 0.50, 0.09, 0.32),
         "still": _Box(0.60, 0.50, 0.09, 0.32),
+        # Both planks: wide, short, and unmoving. Deliberately the same shape
+        # the faller ends up in, and the same stillness the "still" trainee
+        # has -- the geometry cannot tell them apart, which is the point.
+        "good_plank": _Box(0.30, 0.82, 0.30, 0.09),
+        "sagging_plank": _Box(0.70, 0.82, 0.30, 0.09),
     }
     if tick < FALL_START_TICK:
         boxes["faller"] = _Box(0.84, 0.50, 0.09, 0.32)
@@ -157,7 +187,7 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
             keypoints_xy=kp_xy,
             keypoints_conf=kp_conf,
             form_reason_codes=codes,
-            exercise=SCENE_EXERCISE,
+            exercise=TRAINEE_EXERCISE[trainee_id],
             rep_count=tick // TICKS_PER_REP,
             form_ok=not codes,
         )

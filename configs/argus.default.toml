@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 3
+config_version = 4
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +60,39 @@ form_error = 0.15
 "excessive_forward_lean" = 0.5
 "incomplete_lockout" = 0.4
 "asymmetric_form" = 0.6
+# Plank, from the phone's on-device classifier (android/.../PlankClassifier.kt).
+# Sagging outranks piking because lumbar hyperextension under load is the
+# injury mechanism, where piking is merely an ineffective hold.
+"hips_sagging" = 0.8
+"hips_piked" = 0.6
+
+
+# Per-exercise weight overrides. A movement can make a feature meaningless or
+# actively wrong, and the scorer resolves that by looking up a whole weight
+# vector rather than by special-casing exercises in code. A feature weighted 0
+# contributes nothing AND emits no reason code. An exercise with no profile
+# here scores on [scoring.weights] above, unchanged.
+#
+# Each profile is a complete vector held to the same rules as the default:
+# every feature named, non-negative, summing to 1.0.
+
+# A correct plank is horizontal and motionless -- which is precisely what
+# `fall` (bbox wider than tall) and `stillness` (centroid not moving) are
+# built to treat as an emergency. Measured before this profile existed, a
+# textbook plank scored 0.42 against a 0.5 threshold and displayed
+# `prolonged_stillness, off_task_orientation` on the trainer's dashboard,
+# leaving the actual form signal worth 0.12 -- less than the noise. Off-task
+# orientation goes too: the shoulder-line reference angle assumes a standing
+# trainee facing their station.
+#
+# What remains is form, plus occlusion (still meaningful: if the phone cannot
+# see the trainee, no plank verdict is trustworthy either).
+[scoring.exercise_weights.plank]
+fall = 0.0
+stillness = 0.0
+occlusion = 0.15
+off_task = 0.0
+form_error = 0.85
 
 
 # ---------------------------------------------------------------------------
