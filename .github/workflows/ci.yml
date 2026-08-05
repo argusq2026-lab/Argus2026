@@ -139,7 +139,12 @@ jobs:
         run: |
           test -f tests/data/yolox_parity.json
           test -f tests/data/protocol_vectors.json
-          echo "ok: shared fixtures present"
+          test -f tests/data/plank_vectors.json
+          # The plank artifact is a shipped asset rather than a fixture, but
+          # PlankClassifierTest loads the very same file the APK does, so its
+          # absence fails the Kotlin suite in a way that reads like a code bug.
+          test -f android/app/src/main/assets/plank_lr.json
+          echo "ok: shared fixtures and the plank artifact are present"
 
       - name: Upload test report on failure
         if: failure()

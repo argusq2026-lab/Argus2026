@@ -31,7 +31,8 @@ fields, ever leaves the device.
 | BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
-| Form/exercise classifier | not started (`form_reason_codes` always empty) |
+| **Plank form classifier** | **working** — `PlankClassifier.kt`, a 3x26 logistic regression evaluated in Kotlin arithmetic. No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
+| Other exercises | not started (`form_reason_codes` empty for anything but `plank`) |
 
 ## How detection stays honest
 
@@ -53,6 +54,14 @@ mounted into both — never copied):
   through `argus.ingest.protocol` *at generation time*. `ProtocolTest` (host)
   proves the Kotlin encoder reproduces them; `tests/test_protocol_vectors.py`
   proves the server parses them. One file, both ends of the wire.
+- **`tests/data/plank_vectors.json`** — real held-out feature vectors with the
+  probabilities the *fitted* scikit-learn model produced for them.
+  `PlankClassifierTest` (host) requires the Kotlin reimplementation to
+  reproduce them to 1e-6, and `tests/test_plank_artifact.py` re-derives them
+  from the shipped coefficients in stdlib Python. A transposed feature order,
+  a skipped standardization, or one-vs-rest sigmoids instead of a softmax all
+  still yield plausible probabilities — only comparison against the fitted
+  model catches them.
 
 The measured NPU↔CPU divergence (11 LSB ≈ 0.042 in score units) is stated, not
 hidden: a borderline detection near the 0.35 threshold can legitimately differ
@@ -152,6 +161,69 @@ torch.onnx.export(m, torch.zeros(1,3,640,640), "yolo26_pose_fp32.onnx",
 ```
 
 Note the input is float32 in [0, 1], not the w8a8 detector's raw uint8.
+
+## The plank classifier
+
+`assets/plank_lr.json` is a multinomial logistic regression over 26 features
+(x and y for 13 COCO landmarks), refit by `scripts/train_plank_model.py` from
+[NgoQuocBao1010/Exercise-Correction](https://github.com/NgoQuocBao1010/Exercise-Correction)
+(MIT, 28,520 labelled rows). Their pickled model could not be used directly —
+42 of their 68 features do not exist on this wire:
+
+- `left_heel`, `right_heel`, `left_foot_index`, `right_foot_index` — COCO-17
+  stops at the ankles.
+- a MediaPipe `z` depth estimate per landmark — YOLO26-pose emits none.
+- a MediaPipe **visibility** per landmark, dropped deliberately. See below.
+
+It runs as arithmetic, not a model. Standardize, multiply by a 3x26 matrix,
+add an intercept, softmax: no ONNX session, no third artifact to stage, and no
+second NPU dispatch on a path where dispatch alone costs ~500 us. Below the
+0.6 probability threshold it reports no codes at all rather than a best guess,
+which is the source project's own "unknown" behaviour.
+
+Features are normalized to the box the 13 landmarks span — deliberately *not*
+the detector's `bbox_xyxy`, since MediaPipe's person box and YOLO26's are not
+the same convention, and the model was fitted against the landmark extent.
+`PlankClassifier.normalizeToLandmarkBox` and
+`train_plank_model.bbox_normalize` must stay identical.
+
+### Visibility is not confidence, and it cost a rebuild
+
+The first revision kept the visibility columns, on the assumption that
+MediaPipe visibility and YOLO26 keypoint confidence are the same kind of
+number. They are not. MediaPipe visibility saturates: on this dataset
+`nose_v` has mean 0.9993 and a standard deviation of **0.0013**. Standardizing
+an entirely ordinary YOLO26 confidence of 0.85 against that gives **-116
+sigma**, and 13 such features saturate the softmax before the pose is
+consulted.
+
+The symptom on a real device was a model that reported 100% confidence on
+whatever the camera happened to see, and reported a form error for a correct
+plank. It was reproduced offline by taking a known-correct plank from the
+fixture and substituting realistic confidences for the MediaPipe ones: the
+prediction flips from `C` at 100% to `L` at 100% with the pose untouched.
+
+The rule: a feature transfers between two pose models only if both mean the
+same thing by it. Coordinates do. Confidence does not. Confidence now gates
+the verdict instead — `MIN_VISIBLE_LANDMARKS` requires 10 of the 13 landmarks
+above 0.3 before the classifier will judge at all, which also covers the
+separate problem that a three-class softmax has no way to say "that is not a
+plank".
+
+**Its 99% is not an accuracy claim.** That is held-out *frames* from the
+source dataset's own recordings — frame-level leakage was ruled out, but it is
+not a per-subject estimate and says nothing about a trainee neither model has
+seen. docs/VALIDATION.md §1b.
+
+Retrain with:
+
+```bash
+pip install -r requirements-train.txt
+python scripts/train_plank_model.py       # rewrites the asset AND the fixture
+```
+
+Both files come out of one run; committing only one is what
+`test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
 
 ## Open
 

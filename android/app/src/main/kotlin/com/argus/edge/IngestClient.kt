@@ -28,6 +28,13 @@ class IngestClient(
     private val serverUrl: String,          // ws://<laptop-ip>:8765
     private val stationId: String,
     private val traineeId: String,
+    /**
+     * Announced once at handshake and informational on the server. The
+     * load-bearing copy is the `exercise` field on every observation, which
+     * selects the scoring weight profile -- this one only tells the operator's
+     * logs what the station was set up to watch.
+     */
+    private val exercisePlan: String = "",
     /** Label for the instructor's approval prompt. Optional. */
     private val displayName: String = "",
     /** The session this phone means to join, if a beacon named one. */
@@ -78,6 +85,7 @@ class IngestClient(
                     encodeHello(
                         stationId,
                         traineeId,
+                        exercisePlan = exercisePlan,
                         displayName = displayName,
                         sessionName = sessionName,
                     )

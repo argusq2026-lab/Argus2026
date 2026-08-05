@@ -12,6 +12,11 @@ out/
 # `argus demo` regenerates this fixture; it is build output, not an asset.
 demo/synthetic_stream.json
 
+# Training data downloaded by scripts/train_plank_model.py (36 MB of labelled
+# landmark CSVs). The fitted coefficients are committed; the corpus they came
+# from is fetched on demand -- see THIRD-PARTY-NOTICES.md.
+scratch/
+
 __pycache__/
 *.py[cod]
 *.egg-info/

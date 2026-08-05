@@ -114,6 +114,31 @@ class MainActivity : AppCompatActivity() {
     private var client: IngestClient? = null
     private var serverStatus: String = "disconnected"
 
+    /**
+     * The plank form classifier, or null if the asset is missing or malformed.
+     *
+     * Null is a working station that reports no `form_reason_codes`, not a
+     * broken one: the protocol makes the field optional precisely so a phone
+     * without a form model is still a valid station. What must not happen is
+     * silently reporting *nothing* while looking like it is classifying, so
+     * the status strip names the state either way.
+     */
+    private var plankClassifier: PlankClassifier? = null
+    private var plankStatus: String = "not loaded"
+
+    /**
+     * The exercise this station is watching, sent on every observation.
+     *
+     * Load-bearing on the laptop: it selects the scoring weight profile
+     * (`[scoring.exercise_weights]`). A station set to "plank" that failed to
+     * report it would have a correct plank scored as a fall, so this is
+     * defaulted rather than left blank, and shown on screen.
+     */
+    private var exercise: String = PlankClassifier.EXERCISE
+
+    /** The most recent verdict, for the status strip only — never sent. */
+    private var lastVerdict: PlankClassifier.Verdict? = null
+
     private var scoreThreshold = 0.35
     private var lensFacing = CameraSelector.LENS_FACING_BACK
     private var frameCount = 0L
@@ -159,6 +184,7 @@ class MainActivity : AppCompatActivity() {
         openYolo26()          // if staged, it supersedes the two-model path
         openDetector()
         openPoseEstimator()
+        openPlankClassifier()
 
         toggleButton.setOnClickListener {
             val now = !running.get()
@@ -488,14 +514,24 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
 
-                subject?.let {
+                if (subject != null) {
+                    val codes = classifyForm(subjectPose, upright.width, upright.height)
                     client?.send(
                         Observation.fromDetection(
                             ts = System.currentTimeMillis() / 1000.0,
-                            det = it, pose = subjectPose,
+                            det = subject, pose = subjectPose,
                             frameWidth = upright.width, frameHeight = upright.height,
+                        ).copy(
+                            exercise = exercise,
+                            formOk = if (subjectPose != null) codes.isEmpty() else null,
+                            formReasonCodes = codes,
                         )
                     )
+                } else {
+                    // No subject means no verdict, not the previous one. A
+                    // form judgement that outlives the person it was made
+                    // about is worse than a blank: it reads as current.
+                    lastVerdict = null
                 }
                 upright.recycle()
             }
@@ -503,6 +539,65 @@ class MainActivity : AppCompatActivity() {
             image.close()
         }
         if (frameCount % 10L == 0L) runOnUiThread { render() }
+    }
+
+    /**
+     * Load the plank classifier from assets.
+     *
+     * Unlike the pose models this is not staged over adb: it is 39 floats per
+     * class, small enough to ship in the APK, and it must match the server's
+     * `[scoring.form_error_vocab]` at the version it was built against. A
+     * failure here is caught and named rather than thrown -- a station that
+     * cannot classify form is still worth running, since fall, stillness and
+     * occlusion are all scored from the keypoints alone.
+     */
+    private fun openPlankClassifier() {
+        plankClassifier = try {
+            val json = assets.open("plank_lr.json").bufferedReader().use { it.readText() }
+            PlankClassifier.fromJson(json).also {
+                plankStatus = "loaded (${it.encoding}, p>=${it.probabilityThreshold})"
+            }
+        } catch (t: Throwable) {
+            plankStatus = "unavailable: ${t.message}"
+            null
+        }
+    }
+
+    /**
+     * The form verdict for one frame, or no codes when it cannot be trusted.
+     *
+     * Returns empty for every exercise except plank, because that is the only
+     * classifier that exists. Reporting a plank verdict for a squat would be
+     * worse than reporting nothing: the code would be in the server's
+     * vocabulary, so nothing downstream could tell it was nonsense.
+     */
+    private fun classifyForm(pose: PoseResult?, frameWidth: Int, frameHeight: Int): List<String> {
+        if (exercise != PlankClassifier.EXERCISE) return emptyList()
+        val classifier = plankClassifier ?: return emptyList()
+        val p = pose ?: run { lastVerdict = null; return emptyList() }
+        return try {
+            // `PoseResult` is in frame pixels; the model was fitted on
+            // normalized coordinates. Under the shipped `bbox` encoding the
+            // frame size cancels out of the landmark-box normalization, so
+            // this conversion is currently a no-op mathematically -- but it is
+            // done anyway, because that cancellation is a property of one
+            // encoding and not of the interface. A `raw`-encoded artifact
+            // would be silently wrong without it.
+            val xy = FloatArray(p.keypointsXy.size)
+            for (k in 0 until NUM_KEYPOINTS) {
+                xy[k * 2] = p.keypointsXy[k * 2] / frameWidth
+                xy[k * 2 + 1] = p.keypointsXy[k * 2 + 1] / frameHeight
+            }
+            val verdict = classifier.classify(xy, p.keypointsConf)
+            lastVerdict = verdict
+            verdict.formReasonCodes
+        } catch (t: Throwable) {
+            // A malformed pose is a bug worth seeing, not a reason to drop the
+            // whole observation: the keypoint-derived features still stand.
+            plankStatus = "classify failed: ${t.message}"
+            lastVerdict = null
+            emptyList()
+        }
     }
 
     private fun showConnectDialog() {
@@ -577,6 +672,14 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        // The exercise is not cosmetic: it selects the laptop's scoring weight
+        // profile. Setting it to something with no profile is allowed and
+        // scores on the default weights -- but leaving it blank for a plank
+        // means a correct plank is scored as a fall, so it defaults filled in.
+        val exerciseInput = EditText(this).apply {
+            hint = "exercise (selects the server's scoring profile)"
+            setText(prefs.getString("exercise", PlankClassifier.EXERCISE))
+        }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 24, 48, 0)
@@ -585,6 +688,7 @@ class MainActivity : AppCompatActivity() {
             addView(urlInput)
             addView(traineeInput)
             addView(nameInput)
+            addView(exerciseInput)
         }
         AlertDialog.Builder(this)
             .setTitle("Ingest server (docs/PROTOCOL.md)")
@@ -593,17 +697,21 @@ class MainActivity : AppCompatActivity() {
                 val url = urlInput.text.toString().trim()
                 val trainee = traineeInput.text.toString().trim().ifEmpty { deviceId }
                 val display = nameInput.text.toString().trim()
+                exercise = exerciseInput.text.toString().trim().lowercase()
+                    .ifEmpty { PlankClassifier.EXERCISE }
                 prefs.edit()
                     .putString("url", url)
                     .putString("trainee", trainee)
                     .putString("display_name", display)
                     .putString("session", chosenSession)
+                    .putString("exercise", exercise)
                     .apply()
                 client?.disconnect()
                 client = IngestClient(
                     url,
                     stationId = deviceId,
                     traineeId = trainee,
+                    exercisePlan = exercise,
                     displayName = display,
                     sessionName = chosenSession,
                 ) { s ->
@@ -645,6 +753,22 @@ class MainActivity : AppCompatActivity() {
             lastDetections > 0 -> R.color.live to buildString {
                 append(if (lastDetections == 1) "Tracking" else "Tracking $lastDetections people")
                 append(if (serverStatus.startsWith("streaming")) " · sending" else " · not connected")
+                // The form verdict belongs on the one line the operator reads.
+                // A station whose whole job is judging a plank should say what
+                // it judged -- and, just as importantly, say when it cannot
+                // see enough of the body to judge at all, which is otherwise
+                // indistinguishable from "correct".
+                lastVerdict?.let { v ->
+                    append(" · ")
+                    append(
+                        when {
+                            v.label == PlankClassifier.UNKNOWN -> "body not fully in frame"
+                            !v.confident -> "form unclear"
+                            v.formReasonCodes.isEmpty() -> "form ok"
+                            else -> v.formReasonCodes.first().replace('_', ' ')
+                        }
+                    )
+                }
             }
             else -> R.color.attention to buildString {
                 append("No one in frame")
@@ -684,6 +808,20 @@ class MainActivity : AppCompatActivity() {
                     "%.1f ms, %d/13 keypoints, score %.2f".format(
                         poseMsEma, lastVisibleKeypoints, lastPoseScore)
                 else poseStatus
+            ).append('\n')
+            // Which exercise is announced, and what the form model made of the
+            // last frame. Both matter to whoever places the phone: the exercise
+            // selects the server's scoring profile, and a station reporting
+            // "no model" is scoring on geometry alone -- a real state, but not
+            // one to discover from a flat dashboard.
+            append("form      ").append(exercise).append(" — ")
+            append(
+                when {
+                    plankClassifier == null -> plankStatus
+                    exercise != PlankClassifier.EXERCISE -> "no classifier for this exercise"
+                    !running.get() -> plankStatus
+                    else -> lastVerdict?.describe() ?: "no pose this frame"
+                }
             ).append('\n')
             append("server    ").append(serverStatus)
             append("\n\nlong-press Debug to import a model")
