@@ -100,7 +100,17 @@ lookup of the phone's own closed-vocabulary reason codes) — but the
                                   │  only {trainee_id, score, reason_codes, ts}
              ┌──────────┬─────────┴────────┬──────────────┐
              ▼          ▼                  ▼              ▼
-         console    JSON lines      HTTP /triage    trainer dashboard (/)
+      stderr alerts  JSON lines     HTTP /triage    trainer console (/)
+                                                          ▲
+                                                          │ also reads the live
+                                                          │ numeric observation
+                                                          │ via GET /console —
+                                                          │ a skeleton cannot be
+                                                          │ drawn from four
+                                                          │ scalars. Still no
+                                                          │ frame, still closed,
+                                                          │ loopback-bound.
+                                                          │ See docs/CONSOLE.md.
 ```
 
 ---
@@ -114,9 +124,12 @@ lookup of the phone's own closed-vocabulary reason codes) — but the
 | Synthetic fixture | `argus.synthetic` | The scene `argus demo` + tests replay — no phone needed |
 | Wire protocol | `argus.ingest.protocol` | Message validation; closed-vocabulary and version enforcement |
 | Session registry | `argus.ingest.session` | One `TrackState` per trainee; disconnect grace window; TTL eviction |
+| Admission | `argus.ingest.admission` | Who is allowed onto the floor: auto by default, or held for the instructor to approve |
 | Ingest server | `argus.ingest.server` | WebSocket listener + the periodic rank tick |
-| Sinks | `argus.outputs`, `argus.alerts` | The alert boundary: console, JSON lines, HTTP, dashboard |
-| CLI | `argus.cli` | `run`, `doctor`, `config`, `demo` |
+| Sinks | `argus.outputs`, `argus.alerts` | The alert boundary: stderr alerts, JSON lines, HTTP, and the console's snapshot |
+| Trainer console | `argus.console` | The page at `GET /`. Static, no build step, reads one endpoint |
+| LAN discovery | `argus.discovery` | The beacon that lets a phone find this laptop without being told |
+| CLI | `argus.cli` | `run`, `replay`, `discover`, `doctor`, `config`, `demo`; no arguments means `run --open` |
 
 ---
 

@@ -123,6 +123,100 @@ def _check_ingest(cfg: ArgusConfig) -> list[Check]:
     return checks
 
 
+def _check_session(cfg: ArgusConfig) -> list[Check]:
+    """Whose floor this is, and what happens when a phone asks to join."""
+    checks = [
+        Check(
+            "session name",
+            PASS if cfg.session.name else WARN,
+            cfg.session.name or "unnamed",
+            ""
+            if cfg.session.name
+            else 'Phones will show this laptop as an address. Set [session] name = '
+            '"Coach Riley" so whoever is placing a phone can tell it apart from '
+            "another laptop on the floor.",
+        )
+    ]
+
+    if cfg.session.approval == "manual":
+        # Manual admission is a commitment to watch the console. Nobody
+        # watching means phones queue and time out, and a trainee stands at a
+        # rack unmonitored while the system reports no problem at all.
+        checks.append(
+            Check(
+                "join approval",
+                WARN,
+                f"manual -- every phone waits up to {cfg.session.join_timeout_s}s "
+                "for someone to approve it on the console",
+                "Nothing is wrong, but someone has to be watching the console for "
+                'a phone to get on the floor. Set [session] approval = "auto" if '
+                "no one will be.",
+            )
+        )
+    else:
+        checks.append(
+            Check("join approval", PASS, "auto -- a well-formed hello is admitted immediately")
+        )
+
+    if cfg.outputs.allow_remote_join_control:
+        checks.append(
+            Check(
+                "join control",
+                WARN,
+                "outputs.allow_remote_join_control = true",
+                "Anyone who can reach outputs.http_host can approve phones onto "
+                "this floor; there is no authentication on that endpoint. Leave it "
+                "false unless the console is deliberately being driven from "
+                "another machine on a trusted network.",
+            )
+        )
+    return checks
+
+
+def _check_discovery(cfg: ArgusConfig) -> list[Check]:
+    """Whether a phone can find this laptop without being told where it is."""
+    from argus.discovery import beacon_payload
+
+    if not cfg.discovery.enabled:
+        return [
+            Check(
+                "LAN discovery",
+                WARN,
+                "discovery.enabled = false",
+                "Phones must be given the ws:// address by hand. Set "
+                "discovery.enabled = true to have them find this laptop.",
+            )
+        ]
+
+    payload = beacon_payload(
+        cfg.ingest.ws_host,
+        cfg.ingest.ws_port,
+        cfg.ingest.protocol_version,
+        cfg.session.name,
+        cfg.session.approval,
+    )
+    if payload is None:
+        return [
+            Check(
+                "LAN discovery",
+                WARN,
+                f"nothing phone-reachable to advertise (ws_host = {cfg.ingest.ws_host!r})",
+                "A beacon pointing at an address no phone can reach would be worse "
+                'than none, so it is not sent. Set ingest.ws_host = "0.0.0.0" and '
+                "connect this machine to the gym's Wi-Fi.",
+            )
+        ]
+    return [
+        Check(
+            "LAN discovery",
+            PASS,
+            f"advertising {payload['ws_url']} on udp/{cfg.discovery.port} "
+            f"every {cfg.discovery.interval_s}s",
+            "",
+        )
+    ]
+
+
 def _check_outputs(cfg: ArgusConfig) -> list[Check]:
     checks = []
     if cfg.outputs.http_port:
@@ -151,10 +245,30 @@ def _check_outputs(cfg: ArgusConfig) -> list[Check]:
                 "http endpoint",
                 WARN,
                 "outputs.http_port = 0 (disabled)",
-                "The /triage endpoint and trainer dashboard are off. Set "
+                "The /triage endpoint and the trainer console are off. Set "
                 "outputs.http_port to enable them.",
             )
         )
+
+    # A station is evicted at track_ttl_s and drawn stale at
+    # console_stale_after_s. Get the order wrong and a trainee who goes silent
+    # is dropped before the console ever flags them -- they leave the grid
+    # without having been shown as anything but calm, which is the one
+    # failure this console exists to prevent.
+    stale_after = cfg.outputs.console_stale_after_s
+    ttl = cfg.ingest.track_ttl_s
+    checks.append(
+        Check(
+            "console staleness window",
+            PASS if stale_after < ttl else WARN,
+            f"stale at {stale_after}s, evicted at {ttl}s",
+            ""
+            if stale_after < ttl
+            else "outputs.console_stale_after_s is not shorter than "
+            "ingest.track_ttl_s, so a silent station is dropped before the "
+            "console draws it as stale. Lower console_stale_after_s.",
+        )
+    )
     return checks
 
 
@@ -163,6 +277,8 @@ def run_doctor(cfg: ArgusConfig) -> int:
     checks: list[Check] = []
     checks += _check_host()
     checks += _check_ingest(cfg)
+    checks += _check_session(cfg)
+    checks += _check_discovery(cfg)
     checks += _check_outputs(cfg)
 
     width = max(len(c.name) for c in checks)

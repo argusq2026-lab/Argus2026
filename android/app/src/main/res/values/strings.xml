@@ -1,4 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Argus Edge</string>
+
+    <!-- LAN discovery (Discovery.kt). Every one of these is a statement about
+         what the phone knows, not a promise: "found" means an address was
+         filled in, and a human still presses Connect. -->
+    <string name="find_server">Find server on this network</string>
+    <string name="find_server_searching">Searching…</string>
+    <string name="find_server_found">Found — check the address, then Connect</string>
+    <string name="find_server_none">No server found — type the address</string>
+    <string name="find_server_choose">Which session?</string>
+
+    <!-- Joining a named session. The manual variant is said up front so the
+         "waiting for approval" state later is expected rather than alarming. -->
+    <string name="session_none">Not joining a named session</string>
+    <string name="session_joining">Joining %1$s</string>
+    <string name="session_joining_manual">Joining %1$s — the instructor approves each station</string>
+    <string name="display_name_hint">name shown to the instructor (optional)</string>
 </resources>

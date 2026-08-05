@@ -108,13 +108,15 @@ def test_nothing_else_is_served(server):
     assert exc.value.code == 404
 
 
-def test_dashboard_is_served_at_root(server):
+def test_the_trainer_console_is_served_at_root(server):
+    """What the page actually renders is covered in tests/test_console.py;
+    this only pins that `/` serves it as HTML."""
     with urllib.request.urlopen(f"http://127.0.0.1:{server.port}/", timeout=5) as response:
         assert response.status == 200
         assert "text/html" in response.headers["Content-Type"]
         body = response.read().decode("utf-8")
-    assert "<table" in body
-    assert "/triage" in body  # the page polls the JSON endpoint client-side
+    assert body.startswith("<!doctype html>")
+    assert "/console" in body  # the page polls the snapshot endpoint client-side
 
 
 def test_binds_loopback_by_default(server):

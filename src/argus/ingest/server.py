@@ -29,15 +29,18 @@ from websockets.asyncio.server import ServerConnection
 
 from argus.alerts import AlertSink
 from argus.config import ArgusConfig
+from argus.discovery import DiscoveryBeacon, beacon_payload
+from argus.ingest.admission import AdmissionQueue, Decision
 from argus.ingest.protocol import (
     ProtocolError,
     error_message,
     hello_ack_message,
+    join_pending_message,
     parse_hello,
     parse_observation,
 )
 from argus.ingest.session import DuplicateTraineeError, SessionRegistry
-from argus.outputs import JsonLogSink, TriageHTTPServer
+from argus.outputs import ConsoleSettings, JsonLogSink, TriageHTTPServer
 from argus.triage import TriageRecord, needs_instructor, rank_trainees
 
 logger = logging.getLogger(__name__)
@@ -54,6 +57,21 @@ _HELLO_TIMEOUT_S = 10.0
 #: the full explanation always goes to the client as an `error` message
 #: first, so the close reason only needs to be a short pointer to it.
 _MAX_CLOSE_REASON = 100
+
+
+#: What a phone is told when its join did not go through. Each names the
+#: actual cause: "the instructor said no" and "nobody was looking at the
+#: console" are different problems for whoever is standing next to the phone,
+#: and collapsing them into one message hides which.
+_JOIN_REFUSALS = {
+    Decision.DENIED: "the instructor declined this join request",
+    Decision.TIMED_OUT: (
+        "no instructor answered this join request in time; ask them to approve "
+        "it on the console, then connect again"
+    ),
+    Decision.SUPERSEDED: "a newer join request for this trainee replaced this one",
+    Decision.WITHDRAWN: "the join request was withdrawn",
+}
 
 
 def _close_reason(message: str) -> str:
@@ -84,13 +102,61 @@ class IngestServer:
         self._alert_sink = alert_sink
         self._now = now
         self._registry = SessionRegistry(cfg.scoring, cfg.ingest.track_ttl_s)
+        self._admission = AdmissionQueue()
         self._json_sink = JsonLogSink(cfg.outputs.json_log) if cfg.outputs.json_log else None
         self._http: TriageHTTPServer | None = None
         if cfg.outputs.http_port:
-            self._http = TriageHTTPServer(cfg.outputs.http_port, cfg.outputs.http_host)
+            self._http = TriageHTTPServer(
+                cfg.outputs.http_port,
+                cfg.outputs.http_host,
+                ConsoleSettings(
+                    poll_interval_ms=cfg.outputs.console_poll_interval_ms,
+                    stale_after_s=cfg.outputs.console_stale_after_s,
+                    keypoint_conf_threshold=cfg.scoring.keypoint_conf_threshold,
+                    alert_threshold=cfg.scoring.alert_threshold,
+                    history_len=cfg.scoring.history_len,
+                    track_ttl_s=cfg.ingest.track_ttl_s,
+                    session_name=cfg.session.name,
+                    approval=cfg.session.approval,
+                ),
+                on_join_decision=self._admission.decide,
+                allow_remote_control=cfg.outputs.allow_remote_join_control,
+            )
         self.ticks = 0
         self._ws_server: websockets.Server | None = None
         self._rank_task: asyncio.Task | None = None
+        self._beacon: DiscoveryBeacon | None = None
+
+    def _build_beacon(self) -> DiscoveryBeacon | None:
+        """The LAN beacon, or `None` when there is nothing worth advertising.
+
+        Built at `start()` rather than in `__init__` so it can advertise the
+        port that was actually bound — `ingest.ws_port = 0` means the OS picks
+        one, and a beacon naming port 0 would send every phone nowhere.
+        """
+        if not self.cfg.discovery.enabled:
+            return None
+        payload = beacon_payload(
+            self.cfg.ingest.ws_host,
+            self.ws_port,
+            self.cfg.ingest.protocol_version,
+            self.cfg.session.name,
+            self.cfg.session.approval,
+        )
+        if payload is None:
+            logger.info(
+                "discovery beacon not started: nothing phone-reachable to advertise "
+                "(ws_host=%s). Phones can still be given the address by hand.",
+                self.cfg.ingest.ws_host,
+            )
+            return None
+        logger.info("advertising %s on udp/%s", payload["ws_url"], self.cfg.discovery.port)
+        return DiscoveryBeacon(
+            payload,
+            port=self.cfg.discovery.port,
+            interval_s=self.cfg.discovery.interval_s,
+            broadcast=self.cfg.discovery.broadcast,
+        )
 
     @property
     def http_port(self) -> int | None:
@@ -127,11 +193,88 @@ class IngestServer:
                 self._alert_sink(record)
         if self._json_sink is not None:
             self._json_sink.write(now, records)
+        # Settle join requests nobody answered. Each waiting phone times itself
+        # out too, so this is not what unblocks them -- it is what keeps an
+        # unanswered prompt from sitting on the console after the phone behind
+        # it has already given up and gone.
+        self._admission.expire(now)
+
         if self._http is not None:
-            self._http.update(now, records)
+            self._http.update(
+                now, records, self._registry.station_views(), self._admission.pending_views()
+            )
 
         self.ticks += 1
         return TickResult(now, records, alerts, len(self._registry), expired)
+
+    def _publish_stations(self) -> None:
+        """Push the live station snapshot to the console, between rank ticks.
+
+        The rank tick republishes this too, which is what keeps staleness
+        honest: if every phone goes silent, no observation arrives to trigger
+        this method, and only the tick's unconditional republish keeps the
+        console's clock advancing so the cards visibly age. Without it a
+        floor that had gone completely quiet would freeze at its last good
+        frame and read as calm.
+        """
+        if self._http is not None:
+            self._http.update_stations(
+                self._now(), self._registry.station_views(), self._admission.pending_views()
+            )
+
+    # -- admission ------------------------------------------------------------
+
+    async def _admit(self, ws: ServerConnection, hello) -> bool:
+        """Decide whether this phone joins. True to proceed to `hello_ack`.
+
+        In `session.approval = "auto"` this is a branch that does nothing,
+        which is the point: the default path through the handshake is byte for
+        byte what it was before admission existed.
+        """
+        if self.cfg.session.approval != "manual":
+            return True
+
+        timeout_s = self.cfg.session.join_timeout_s
+        request = self._admission.submit(
+            hello.station_id, hello.trainee_id, hello.display_name, self._now(), timeout_s
+        )
+        logger.info(
+            "join requested by %s (station %s) — awaiting instructor",
+            request.label,
+            hello.station_id,
+        )
+        await ws.send(
+            json.dumps(join_pending_message(self.cfg.session.name, request.request_id, timeout_s))
+        )
+        # Surface the prompt now rather than at the next rank tick: this one is
+        # a person waiting at a rack, not a number that can be half a second late.
+        self._publish_stations()
+
+        # Race the decision against the phone hanging up. Without this arm, a
+        # trainee who walked away mid-request leaves a prompt on the console
+        # for the whole timeout, and the instructor approves a phone that is
+        # not there.
+        decided = asyncio.ensure_future(request.wait(timeout_s))
+        hung_up = asyncio.ensure_future(ws.wait_closed())
+        try:
+            await asyncio.wait({decided, hung_up}, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            hung_up.cancel()
+            if not decided.done():
+                self._admission.withdraw(request.request_id)
+            decision = await decided
+
+        self._publish_stations()
+        if decision is Decision.APPROVED:
+            logger.info("join approved for %s", request.label)
+            return True
+
+        logger.info("join not granted for %s: %s", request.label, decision.value)
+        reason = _JOIN_REFUSALS.get(decision, "join request was not granted")
+        with contextlib.suppress(websockets.ConnectionClosed):
+            await ws.send(json.dumps(error_message(reason)))
+            await ws.close(_POLICY_VIOLATION, _close_reason(reason))
+        return False
 
     # -- the WebSocket listener -----------------------------------------------
 
@@ -143,20 +286,43 @@ class IngestServer:
             return
 
         try:
-            hello = parse_hello(json.loads(raw), self.cfg.ingest.protocol_version)
+            hello = parse_hello(
+                json.loads(raw), self.cfg.ingest.protocol_version, self.cfg.session.name
+            )
         except (ProtocolError, json.JSONDecodeError) as exc:
             await ws.send(json.dumps(error_message(str(exc))))
             await ws.close(_POLICY_VIOLATION, _close_reason(str(exc)))
             return
 
+        # Collisions are settled before the instructor is bothered: asking
+        # someone to approve a phone that is going to be refused anyway wastes
+        # the one thing a manual gate costs, which is their attention.
+        if self._registry.is_connected(hello.trainee_id):
+            msg = f"trainee_id {hello.trainee_id!r} is already connected"
+            await ws.send(json.dumps(error_message(msg)))
+            await ws.close(_POLICY_VIOLATION, _close_reason(msg))
+            return
+
+        if not await self._admit(ws, hello):
+            return
+
         try:
             self._registry.register(hello.station_id, hello.trainee_id, self._now())
         except DuplicateTraineeError as exc:
+            # Two phones can be approved for one trainee_id in the window
+            # between the check above and here. The registry is the authority
+            # on identity, not the admission queue, so it still gets the last
+            # word.
             await ws.send(json.dumps(error_message(str(exc))))
             await ws.close(_POLICY_VIOLATION, _close_reason(str(exc)))
             return
 
         await ws.send(json.dumps(hello_ack_message()))
+        # Show the station on the console at handshake, not at its first
+        # observation: a phone that connects and then sends nothing is a
+        # failure worth seeing, and it is invisible if the card only appears
+        # once a frame arrives.
+        self._publish_stations()
         logger.info("station %s connected as trainee %s", hello.station_id, hello.trainee_id)
 
         try:
@@ -176,8 +342,14 @@ class IngestServer:
                     await ws.send(json.dumps(error_message(msg)))
                     await ws.close(_POLICY_VIOLATION, _close_reason(msg))
                     return
+                self._publish_stations()
         finally:
             self._registry.mark_disconnected(hello.trainee_id)
+            # Republish immediately rather than waiting up to a whole
+            # rank_interval_s: a dropped phone is exactly the event a trainer
+            # needs promptly, and it is the console's job to show the grace
+            # window counting down, not to hide it for half a second.
+            self._publish_stations()
             logger.info("station %s (trainee %s) disconnected", hello.station_id, hello.trainee_id)
 
     async def _rank_loop(self) -> None:
@@ -200,9 +372,15 @@ class IngestServer:
             self._handle, self.cfg.ingest.ws_host, self.cfg.ingest.ws_port
         )
         self._rank_task = asyncio.create_task(self._rank_loop())
+        self._beacon = self._build_beacon()
+        if self._beacon is not None:
+            self._beacon.start()
         logger.info("ingest server listening on %s:%s", self.cfg.ingest.ws_host, self.ws_port)
 
     async def stop(self) -> None:
+        if self._beacon is not None:
+            self._beacon.stop()
+            self._beacon = None
         if self._rank_task is not None:
             self._rank_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

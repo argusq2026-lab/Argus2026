@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 2
+config_version = 3
 
 
 # ---------------------------------------------------------------------------
@@ -76,10 +76,78 @@ track_ttl_s = 10.0            # a station silent this long is presumed to have l
 
 
 # ---------------------------------------------------------------------------
-# Outputs. Every sink here is typed to accept only TriageRecord.
+# LAN discovery. The laptop broadcasts where its WebSocket listener is, so a
+# phone on the same Wi-Fi can find it instead of someone typing an IP into
+# every device -- see docs/PROTOCOL.md, "Discovery".
+#
+# This is outward-facing, so be clear about what it does: it announces this
+# laptop's ws:// address to the local network once a second. It carries no
+# trainee data and it advertises a port that ws_host = "0.0.0.0" above has
+# already left open, so it publishes the *fact* of the service, not new
+# access to it. Turn it off on a network where even that is unwanted; phones
+# can still be pointed at the address by hand.
+# ---------------------------------------------------------------------------
+[discovery]
+enabled = true
+port = 8766
+interval_s = 1.0
+broadcast = ""                # blank = 255.255.255.255; set e.g. "192.168.1.255"
+                              # on a network that drops limited broadcast
+
+
+# ---------------------------------------------------------------------------
+# The session: whose floor this is, and who is allowed onto it.
+#
+# `name` is what a phone shows when it finds this laptop, so it should read
+# like something an instructor would recognise across a room -- their own
+# name, or the class. Blank shows the address instead.
+#
+# `approval` decides what happens when a phone asks to join:
+#
+#   "auto"   (default) a well-formed hello is acknowledged immediately, which
+#            is exactly how Argus behaved before admission existed.
+#   "manual" the connection waits until the instructor approves it on the
+#            console, or until join_timeout_s elapses.
+#
+# Auto is the default because the failure modes are not symmetric: an
+# unwanted phone on the console is a nuisance an instructor can see and
+# disconnect, whereas a trainee standing at a rack unmonitored because nobody
+# noticed a prompt is the thing this system exists to prevent. Use "manual"
+# where an open floor means strangers' phones would otherwise appear.
+# ---------------------------------------------------------------------------
+[session]
+name = ""
+approval = "auto"             # "auto" or "manual"
+join_timeout_s = 120.0        # how long an unanswered join request waits
+
+
+# ---------------------------------------------------------------------------
+# Outputs. Every alert sink here is typed to accept only TriageRecord.
+#
+# The trainer console at GET / is the one exception, and deliberately a
+# narrow one: it also reads the live numeric observation (box, COCO-17
+# keypoints, the phone's own exercise/rep/form fields) so it can draw a
+# skeleton, which a four-field TriageRecord cannot express. That payload is
+# still numbers -- no frame ever existed past the phone's own camera -- and
+# it goes only to GET /console on the loopback-bound HTTP server. Nothing
+# widened: the JSON log and the alert sinks still carry the same four fields
+# they always did. See docs/CONSOLE.md.
 # ---------------------------------------------------------------------------
 [outputs]
-console = true
+console = true                # stderr alert sink (NOT the trainer console page)
 json_log = ""                 # blank = disabled
-http_port = 0                 # 0 = disabled; also serves the trainer dashboard
+http_port = 0                 # 0 = disabled; also serves the trainer console
 http_host = "127.0.0.1"
+
+# The trainer console page served at GET /.
+console_poll_interval_ms = 200  # how often the page re-reads GET /console
+# A station silent this long is drawn as stale rather than calm -- the whole
+# point of the console being the only place a quiet station and a calm one
+# can be told apart. Keep it well under ingest.track_ttl_s above, or a
+# station is evicted before it is ever drawn stale; `argus doctor` warns.
+console_stale_after_s = 2.0
+# Whether POST /join/decide is accepted from machines other than this one.
+# Off by default: approving a phone decides who monitors a trainee, and the
+# check is on the *requesting* client's address, so serving the console on a
+# second screen does not hand that decision to the rest of the LAN.
+allow_remote_join_control = false

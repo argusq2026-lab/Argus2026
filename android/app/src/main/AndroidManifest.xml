@@ -5,6 +5,12 @@
     <!-- Envelopes go to the PC over the local network. No INTERNET-wide use;
          the aggregator is on the same floor. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Discovery.kt listens for the laptop's UDP beacon so nobody has to type
+         an IP into every phone. Wi-Fi firmware drops broadcast frames to save
+         power unless a multicast lock is held, which is what this permits:
+         without it the socket is correct and simply never receives anything.
+         Normal permission, granted at install; no runtime prompt. -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <uses-feature android:name="android.hardware.camera.any" android:required="true"/>
 
     <application

@@ -144,3 +144,75 @@ def test_cli_run_end_to_end_with_the_replay_client(tmp_path):
     for line in ranked:
         for record in line["records"]:
             assert set(record) == {"trainee_id", "score", "reason_codes", "ts"}
+
+
+# -- the subcommands the packaged binary needs -------------------------------
+#
+# `argus replay` and `argus discover` exist so a laptop with the binary and
+# nothing else can drive and diagnose itself: no checkout beside it, no
+# `demo/replay_client.py` on disk, no second tool to install. Tested through
+# the CLI for that reason -- calling the library directly would not catch the
+# subcommand being wired up wrong, which is the whole risk.
+
+
+def test_default_argv_turns_a_bare_launch_into_run():
+    """Someone who double-clicks the binary passes no arguments and should
+    get a server and a console, not argparse's usage message."""
+    from argus.cli import default_argv
+
+    assert default_argv([]) == ["run", "--open"]
+
+
+def test_default_argv_leaves_an_explicit_subcommand_alone():
+    from argus.cli import default_argv
+
+    for argv in (["doctor"], ["run", "--max-ticks", "1"], ["--version"]):
+        assert default_argv(argv) == argv
+
+
+@pytest.mark.timeout(90)
+def test_replay_and_discover_subcommands_against_a_live_server(tmp_path):
+    fixture = tmp_path / "fixture.json"
+    assert _run_cli("demo", "--out", str(fixture), "--ticks", "20").returncode == 0
+
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src")}
+    run_proc = subprocess.Popen(
+        [
+            sys.executable, "-m", "argus.cli", "run",
+            "--ws-port", "18766",
+            "--max-ticks", "5",
+            "--quiet",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    try:
+        _wait_until_listening(18766, run_proc)
+
+        replay = _run_cli(
+            "replay", "--fixture", str(fixture), "--ws-port", "18766", timeout=30
+        )
+        assert replay.returncode == 0, replay.stderr
+        assert "sent 20 observations" in replay.stdout
+
+        # Discovery is a convenience, and a CI runner may have no non-loopback
+        # address to advertise or may drop broadcast entirely. Assert only that
+        # the subcommand runs and reports itself honestly either way -- a test
+        # that required a beacon to arrive would be testing the runner's
+        # network, not this code. tests/test_discovery.py covers the round
+        # trip deterministically over loopback.
+        discover = _run_cli("discover", "--timeout", "2", timeout=30)
+        assert discover.returncode in (0, 1)
+        if discover.returncode == 0:
+            assert "ws://" in discover.stdout
+        else:
+            assert "no server found" in discover.stderr
+
+        out, _ = run_proc.communicate(timeout=30)
+        assert run_proc.returncode == 0, out
+    finally:
+        if run_proc.poll() is None:
+            run_proc.kill()

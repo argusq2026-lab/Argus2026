@@ -24,6 +24,7 @@ from pathlib import Path
 import pytest
 
 import argus.alerts as alerts
+import argus.console as console
 import argus.ingest.protocol as ingest_protocol
 import argus.ingest.server as ingest_server
 import argus.ingest.session as ingest_session
@@ -32,7 +33,14 @@ from argus.triage import TriageRecord
 
 #: Modules that sit on or outside the alert boundary. Nothing here may hold a
 #: frame, a crop, or free text.
-BOUNDARY_MODULES = (alerts, outputs, ingest_protocol, ingest_session, ingest_server)
+BOUNDARY_MODULES = (
+    alerts,
+    console,
+    outputs,
+    ingest_protocol,
+    ingest_session,
+    ingest_server,
+)
 
 #: Types that can carry imagery or free-form model output.
 FORBIDDEN_TYPE_NAMES = {"ndarray", "Mat", "Image", "bytes", "bytearray", "memoryview"}
@@ -100,6 +108,67 @@ def test_triage_record_is_frozen():
     record = TriageRecord("t0", 0.5, ("possible_fall",), 1.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
         record.trainee_id = "t1"  # type: ignore[misc]
+
+
+# -- the console's view -------------------------------------------------------
+#
+# `StationView` is the one type here wider than a `TriageRecord`: a console
+# that draws a skeleton needs the numeric pose, and four scalar fields cannot
+# express one. So it gets the same closed-set discipline rather than an
+# exemption -- widening what a trainer's screen can see stays a visible,
+# reviewable change. See the module docstring in argus/outputs.py.
+
+
+def test_station_view_fields_are_the_closed_set():
+    fields = {f.name for f in dataclasses.fields(outputs.StationView)}
+    assert fields == {
+        "station_id",
+        "trainee_id",
+        "connected",
+        "last_seen_ts",
+        "observations",
+        "bbox_xyxy",
+        "keypoints_xy",
+        "keypoints_conf",
+        "form_reason_codes",
+        "exercise",
+        "rep_count",
+        "form_ok",
+    }
+
+
+def test_station_view_is_frozen():
+    view = outputs.StationView("s0", "t0", True, 1.0, 0)
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        view.trainee_id = "t1"  # type: ignore[misc]
+
+
+def test_station_view_holds_no_image_capable_field():
+    for field in dataclasses.fields(outputs.StationView):
+        text = str(field.type)
+        for forbidden in FORBIDDEN_TYPE_NAMES:
+            assert forbidden not in text, f"StationView.{field.name} can hold {forbidden}"
+
+
+def test_a_station_view_cannot_reach_an_alert_sink():
+    """The console's wider view is console-only. `emit_alert` and the JSON log
+    still take a `TriageRecord`, so there is no parameter anywhere on the
+    alert boundary through which a keypoint could travel."""
+    for func in (alerts.emit_alert, outputs.JsonLogSink.write):
+        hints = typing.get_type_hints(func)
+        assert not any("StationView" in str(annotation) for annotation in hints.values())
+
+
+def test_the_json_log_did_not_widen(tmp_path):
+    """The console reads keypoints; what is written to disk did not change."""
+    import json
+
+    sink = outputs.JsonLogSink(tmp_path / "triage.jsonl")
+    sink.write(1.0, [TriageRecord("t0", 0.5, (), 1.0)])
+    sink.close()
+    payload = json.loads((tmp_path / "triage.jsonl").read_text(encoding="utf-8"))
+    assert set(payload) == {"ts", "records"}
+    assert set(payload["records"][0]) == {"trainee_id", "score", "reason_codes", "ts"}
 
 
 def test_triage_module_holds_no_pixels():

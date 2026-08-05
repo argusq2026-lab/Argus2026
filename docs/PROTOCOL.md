@@ -24,7 +24,64 @@ multiple logical messages into one frame, and no framing beyond what
 WebSocket already provides.
 
 `argus doctor` prints the LAN-reachable address(es) a phone should use — not
-`127.0.0.1`, which only works from the laptop itself.
+`127.0.0.1`, which only works from the laptop itself. A phone does not have to
+be told the address by a human, though; see **Discovery** below.
+
+---
+
+## Discovery
+
+Optional, and strictly a convenience: it removes the step where someone reads
+an IP off the laptop and types it into every phone, once per phone, again
+whenever the DHCP lease moves.
+
+The server broadcasts one UDP datagram to port `discovery.port` (default
+`8766`) every `discovery.interval_s` (default 1 s):
+
+```json
+{
+  "type": "argus_beacon",
+  "protocol_version": 1,
+  "ws_url": "ws://10.73.51.76:8765",
+  "session_name": "Coach Riley — 6pm HIIT",
+  "approval": "manual"
+}
+```
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `type` | `"argus_beacon"` | yes | Marks the datagram as ours. Anything else on this port is unrelated traffic and must be dropped silently. |
+| `protocol_version` | int | yes | The server's. A client should **check this before offering the address**, so a mismatch shows up during setup rather than as a handshake rejection after the phone has been placed on a rack. |
+| `ws_url` | string | yes | Where to connect. Always `ws://host:port`. |
+| `session_name` | string | no | The instructor's session name. This is what makes a room with three laptops choosable rather than a list of IP addresses. Absent when the laptop has none set, in which case show the address. |
+| `approval` | string | yes | `"auto"` or `"manual"` — see **Admission**. Carried so a phone can say "the instructor will approve this" up front, instead of looking hung once it has connected. Treat an absent value as `"auto"`. |
+
+Rules a client must follow:
+
+* **Listen, never reply.** The server has no listener on this port; it only
+  sends. Discovery adds no inbound surface to the laptop.
+* **Suggest, never auto-connect.** A beacon is an unauthenticated datagram
+  from whoever is on the Wi-Fi. It may fill an address field in; a human
+  presses Connect. Anything else lets any host on the network point a phone
+  at a server of its choosing.
+* **Drop malformed input silently.** Any process can send to this port, so
+  bad input is the normal case, not an error worth reporting — unlike a
+  malformed `observation`, which comes from a phone that has already shaken
+  hands and means a real disagreement.
+* **Fall back to typing.** A phone that hears nothing — broadcast-filtered
+  guest Wi-Fi, a laptop on another VLAN — must still accept a typed address.
+  Discovery failing is an inconvenience, never the reason a station cannot be
+  set up.
+
+Nothing about a trainee is in the beacon, and structurally cannot be: the
+payload is built once at startup from config, before any phone has connected.
+It advertises a port that `ingest.ws_host = "0.0.0.0"` already left open, so
+it publishes the *fact* of the service rather than new access to it. Set
+`discovery.enabled = false` where even that is unwanted.
+
+Both halves are implemented and testable without a phone in the room:
+`argus.discovery` sends, `argus discover` listens and prints what it hears,
+and `android/.../Discovery.kt` is the same listener on the device.
 
 ---
 
@@ -49,15 +106,69 @@ The **first message** on every connection must be `hello`:
 | `station_id` | string | yes | A label for this physical station/camera. Not required to be globally unique; purely diagnostic (shows up in server logs). |
 | `trainee_id` | string | yes | **The triage key.** Must be globally unique across every trainee currently on the floor — this is what an alert is dispatched against. Two phones simultaneously claiming the same `trainee_id` is rejected as a collision, not merged. |
 | `exercise_plan` | string | no | Free-form, informational only; not used in scoring today. |
+| `display_name` | string | no | What to call this station on the instructor's approval prompt (e.g. `"Alex — rack 3"`). At most 64 characters. Display-only, never scored, never logged. Only reaches a human when the session requires approval, but harmless to always send. |
+| `session_name` | string | no | The session this phone believes it is joining, if it learned one from a beacon (see **Discovery**). The server **rejects a mismatch**: on a floor with two laptops, silently joining the wrong one means a trainee is monitored by an instructor who is not watching them. Omit it if the address was typed by hand — a phone that never heard a beacon cannot know the name, and must still be able to connect. |
 
 The server replies with exactly one of:
 
 * `{"type": "hello_ack", "accepted": true}` — proceed to sending `observation`
   messages.
+* `{"type": "join_pending", ...}` — the instructor has to approve this station
+  first. See **Admission** below. The connection stays open; exactly one
+  `hello_ack` or `error` follows.
 * `{"type": "error", "message": "<why>"}`, immediately followed by the
   server closing the connection (WebSocket close code `1008`). Causes:
-  wrong `protocol_version`, a missing/empty required field, or a
-  `trainee_id` that is already connected elsewhere.
+  wrong `protocol_version`, a missing/empty required field, a `trainee_id`
+  that is already connected elsewhere, a `session_name` naming a different
+  session, or a join request that was declined or went unanswered.
+
+---
+
+## Admission
+
+A session runs one of two admission modes, set by `[session] approval` on the
+laptop and advertised in the beacon so a phone knows before it connects.
+
+**`"auto"` (the default)** — a well-formed `hello` is acknowledged
+immediately. Nothing below applies; this is the handshake exactly as it was
+before admission existed.
+
+**`"manual"`** — the server replies:
+
+```json
+{
+  "type": "join_pending",
+  "session_name": "Coach Riley — 6pm HIIT",
+  "request_id": "join-1",
+  "timeout_s": 120.0
+}
+```
+
+and holds the connection open while the request sits on the instructor's
+console. Exactly one of these follows, and one always does:
+
+| Then | Meaning |
+|---|---|
+| `hello_ack` | Approved. Stream observations as normal. |
+| `error` — "the instructor declined this join request" | Refused by a human. |
+| `error` — "no instructor answered…" | `timeout_s` elapsed with nobody deciding. |
+| `error` — "a newer join request… replaced this one" | The same `trainee_id` asked again, almost always this phone reconnecting. The newer request is the live one. |
+
+A client must:
+
+* **Show the wait as a wait.** A phone that displays nothing after
+  `join_pending` looks hung, and a station that looks hung gets restarted by
+  whoever is standing next to it — which only queues another request behind
+  the first. Say who is being waited on and for how long.
+* **Not retry automatically.** All four outcomes above are protocol refusals,
+  terminal like any other. A declined phone that reconnected in a loop would
+  bury the instructor in prompts; an unanswered one would do the same. The fix
+  for both is on the console, not on the phone.
+* **Expect a decision at any point** inside `timeout_s`, including
+  immediately.
+
+Duplicate `trainee_id` is checked *before* the instructor is asked, so a phone
+that would be refused anyway never costs anyone a decision.
 
 If no `hello` arrives within 10 seconds of connecting, the server closes the
 connection with code `1002` and no `hello_ack`/`error` is sent (there is
@@ -93,9 +204,16 @@ fast any individual phone sends):
 | `bbox_xyxy` | `[x0, y0, x1, y1]` | yes | The trainee's bounding box, **normalized to [0, 1]** of the phone's own camera frame — resolution-independent, so a 1080p and a 4K phone report the same numbers for the same framing. |
 | `keypoints_xy` | 17 × `[x, y]` | yes | COCO-17 keypoints, normalized to [0, 1] the same way. See "Keypoint layout" below. |
 | `keypoints_conf` | 17 × float | yes | Per-keypoint confidence in [0, 1]. A keypoint the phone's pose model has no estimate for should be reported at low/zero confidence, not omitted — all 17 slots are always present. |
-| `exercise` | string | no | The classified exercise (e.g. `"squat"`, `"burpee"`). Informational only today — not used in scoring, only reserved for a future dashboard column. |
-| `rep_count` | int | no | Running rep count for the current set. Informational only, same as `exercise`. |
-| `form_ok` | bool | no | The phone's own correct/incorrect verdict. Informational only — the server derives whether form is flagged from `form_reason_codes` being non-empty, not from this field. A phone should still send it accurately; it is reserved for future display. |
+| `exercise` | string | no | The classified exercise (e.g. `"squat"`, `"burpee"`). **Display-only**: shown on the trainer console, never scored. At most 64 characters — it is a classifier label, not free text, and a longer value is rejected like any other malformed field. It is the one field on the wire whose value a phone chooses freely, so it is bounded here and rendered as text and never as markup. |
+| `rep_count` | int | no | Running rep count for the current set. Display-only, same as `exercise`. Must be a non-negative integer; `true`/`false` is rejected rather than counted as 1. |
+| `form_ok` | bool | no | The phone's own correct/incorrect verdict. Display-only — the server derives whether form is flagged from `form_reason_codes` being non-empty, not from this field. Omitting it is **not** the same as sending `false`: the console shows an absent verdict as unknown, not as a pass, so send it when the phone has one and omit it when it does not. |
+
+These three are validated and carried through to the trainer console (see
+[`CONSOLE.md`](CONSOLE.md)). "Display-only" is a guarantee, not an accident:
+the rank must stay a pure function of the numeric pose history and the
+closed-vocabulary form codes, so scoring a phone-chosen label or a
+phone-maintained counter would make it a function of an unauditable
+device-side value.
 | `form_reason_codes` | list of strings | no (default `[]`) | The phone's on-device classifier's closed-vocabulary reasons for an incorrect rep. **Every code must appear in the server's `[scoring.form_error_vocab]`** (see below) — an unrecognised code is treated as a protocol/version mismatch, not scored as zero: the server sends an `error` and closes the connection. |
 
 A malformed `observation` (wrong type, missing field, wrong-length array, or

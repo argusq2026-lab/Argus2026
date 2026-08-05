@@ -26,6 +26,8 @@ fields, ever leaves the device.
 | Orientation | rotates freely; the activity survives the config change, so the NPU sessions and the WebSocket are not torn down |
 | User controls | one-line status chip (state + colour), large Start/Stop, server dialog, camera flip; diagnostics, threshold slider and model import behind **Debug** |
 | Connection resilience | auto-reconnect with capped backoff on transport drops; protocol refusals stay terminal and say so |
+| Server discovery (`Discovery.kt`) | **written, not yet built or run on a device** — "Find server on this network" listens for the laptop's UDP beacon, lists sessions by the instructor's name, and fills the address in; a human still presses Connect. Parsing is covered by `DiscoveryTest` (host); the receive path needs a device on real Wi-Fi. See PROTOCOL.md, "Discovery" |
+| Join approval | **written, not yet built or run on a device** — `hello` carries an optional display name and the chosen session; `join_pending` is its own client state, so a station awaiting an instructor's approval says so instead of looking hung. Refusals stay terminal, including a declined or unanswered join. `JoinPendingTest` (host) covers the parsing; the server side is verified in `tests/test_admission.py`. See PROTOCOL.md, "Admission" |
 | BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |

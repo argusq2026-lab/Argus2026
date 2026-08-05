@@ -31,6 +31,34 @@ FALL_DURATION_TICKS = 6
 #: Every synthetic trainee id this scene ever emits, in a stable order.
 TRAINEE_IDS = ("walker", "still", "faller")
 
+#: The scene's stand-in for an on-device form classifier.
+#:
+#: No phone reports `form_reason_codes` yet — that classifier is edge work
+#: that has not landed — so the `form_error` feature would otherwise be inert
+#: everywhere, including in the one fixture the console is developed against.
+#: One synthetic trainee reports a code on a fixed, repeating slice of each
+#: cycle, so the console's form-error path is exercisable today and looks the
+#: same when a real classifier starts filling the field. Intermittent rather
+#: than latched on purpose: a real classifier flags the bad reps, not the set.
+FORM_ERROR_TRAINEE = "walker"
+FORM_ERROR_CODE = "insufficient_depth"
+FORM_ERROR_CYCLE_TICKS = 30
+FORM_ERROR_ONSET_TICK = 20
+
+#: The exercise every synthetic trainee is nominally performing, and how many
+#: ticks one rep takes. Informational only — see `FrameObservation`.
+SCENE_EXERCISE = "squat"
+TICKS_PER_REP = 5
+
+
+def _form_reason_codes(trainee_id: str, tick: int) -> tuple[str, ...]:
+    """The scene's form codes for one trainee at one tick. Deterministic."""
+    if trainee_id != FORM_ERROR_TRAINEE:
+        return ()
+    if tick % FORM_ERROR_CYCLE_TICKS < FORM_ERROR_ONSET_TICK:
+        return ()
+    return (FORM_ERROR_CODE,)
+
 
 @dataclass(frozen=True)
 class _Box:
@@ -122,8 +150,16 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
     observations = {}
     for trainee_id, box in _boxes(tick).items():
         kp_xy, kp_conf = _pose(box)
+        codes = _form_reason_codes(trainee_id, tick)
         observations[trainee_id] = FrameObservation(
-            ts=ts, bbox_xyxy=box.xyxy, keypoints_xy=kp_xy, keypoints_conf=kp_conf
+            ts=ts,
+            bbox_xyxy=box.xyxy,
+            keypoints_xy=kp_xy,
+            keypoints_conf=kp_conf,
+            form_reason_codes=codes,
+            exercise=SCENE_EXERCISE,
+            rep_count=tick // TICKS_PER_REP,
+            form_ok=not codes,
         )
     return observations
 
@@ -148,9 +184,9 @@ def build_fixture(n_ticks: int = 150, fps: float = 15.0, protocol_version: int =
                     "bbox_xyxy": list(obs.bbox_xyxy),
                     "keypoints_xy": [list(p) for p in obs.keypoints_xy],
                     "keypoints_conf": list(obs.keypoints_conf),
-                    "exercise": "squat",
-                    "rep_count": tick // 5,
-                    "form_ok": True,
+                    "exercise": obs.exercise,
+                    "rep_count": obs.rep_count,
+                    "form_ok": obs.form_ok,
                     "form_reason_codes": list(obs.form_reason_codes),
                 }
             )

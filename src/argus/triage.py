@@ -60,6 +60,14 @@ class FrameObservation:
     vocab`, not free text. The ingest layer rejects a code outside that
     vocabulary before it ever reaches this dataclass (see
     `argus.ingest.protocol`); this module only ever scores what it is given.
+
+    The last three fields are the protocol's informational ones. **Nothing in
+    this module reads them**, and nothing may start to: the rank is a pure
+    function of the numeric pose/box history plus the closed-vocabulary form
+    codes, and scoring a phone-chosen `exercise` label or a phone-maintained
+    `rep_count` would make it a function of an unauditable device-side counter
+    instead. They exist so the trainer console can display them (see
+    `argus.outputs.StationView`), and for no other reason.
     """
 
     ts: float
@@ -67,6 +75,10 @@ class FrameObservation:
     keypoints_xy: list[tuple[float, float]]  # len 17, COCO order
     keypoints_conf: list[float]  # len 17
     form_reason_codes: tuple[str, ...] = ()
+    #: Display-only. See the note above — the scorer must never read these.
+    exercise: str = ""
+    rep_count: int | None = None
+    form_ok: bool | None = None
 
 
 @dataclass

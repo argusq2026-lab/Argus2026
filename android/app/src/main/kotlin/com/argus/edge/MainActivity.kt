@@ -516,11 +516,75 @@ class MainActivity : AppCompatActivity() {
             hint = "trainee id"
             setText(prefs.getString("trainee", deviceId))
         }
+        val nameInput = EditText(this).apply {
+            hint = getString(R.string.display_name_hint)
+            setText(prefs.getString("display_name", ""))
+        }
+        // Remembered from the session that was picked, and sent in the hello
+        // so the server can refuse a mismatch. Empty when the address was
+        // typed by hand: a phone that never heard a beacon cannot know the
+        // name, and must still be able to connect.
+        var chosenSession = prefs.getString("session", "") ?: ""
+        val sessionLabel = TextView(this).apply {
+            text = if (chosenSession.isEmpty()) getString(R.string.session_none)
+                   else getString(R.string.session_joining, chosenSession)
+        }
+
+        fun choose(server: Discovery.Server) {
+            urlInput.setText(server.wsUrl)
+            chosenSession = server.sessionName ?: ""
+            sessionLabel.text = when {
+                chosenSession.isEmpty() -> getString(R.string.session_none)
+                server.needsApproval -> getString(R.string.session_joining_manual, chosenSession)
+                else -> getString(R.string.session_joining, chosenSession)
+            }
+        }
+
+        // Discovery fills the address in; it never connects on its own. A
+        // beacon is an unauthenticated datagram from whoever is on the Wi-Fi,
+        // so it gets to make a suggestion, not a decision — a human still
+        // reads it and presses Connect.
+        val findButton = Button(this).apply {
+            text = getString(R.string.find_server)
+            setOnClickListener {
+                isEnabled = false
+                text = getString(R.string.find_server_searching)
+                Executors.newSingleThreadExecutor().execute {
+                    val servers = Discovery.listen(this@MainActivity)
+                    runOnUiThread {
+                        isEnabled = true
+                        when {
+                            servers.isEmpty() ->
+                                text = getString(R.string.find_server_none)
+                            servers.size == 1 -> {
+                                choose(servers[0])
+                                text = getString(R.string.find_server_found)
+                            }
+                            else -> {
+                                // More than one instructor on the floor: name
+                                // them and let a human pick. Choosing for them
+                                // would put a trainee on a console nobody
+                                // meant to be watching.
+                                val labels = servers.map { it.label }.toTypedArray()
+                                AlertDialog.Builder(this@MainActivity)
+                                    .setTitle(R.string.find_server_choose)
+                                    .setItems(labels) { _, which -> choose(servers[which]) }
+                                    .show()
+                                text = getString(R.string.find_server)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 24, 48, 0)
+            addView(findButton)
+            addView(sessionLabel)
             addView(urlInput)
             addView(traineeInput)
+            addView(nameInput)
         }
         AlertDialog.Builder(this)
             .setTitle("Ingest server (docs/PROTOCOL.md)")
@@ -528,9 +592,21 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Connect") { _, _ ->
                 val url = urlInput.text.toString().trim()
                 val trainee = traineeInput.text.toString().trim().ifEmpty { deviceId }
-                prefs.edit().putString("url", url).putString("trainee", trainee).apply()
+                val display = nameInput.text.toString().trim()
+                prefs.edit()
+                    .putString("url", url)
+                    .putString("trainee", trainee)
+                    .putString("display_name", display)
+                    .putString("session", chosenSession)
+                    .apply()
                 client?.disconnect()
-                client = IngestClient(url, stationId = deviceId, traineeId = trainee) { s ->
+                client = IngestClient(
+                    url,
+                    stationId = deviceId,
+                    traineeId = trainee,
+                    displayName = display,
+                    sessionName = chosenSession,
+                ) { s ->
                     serverStatus = s
                     runOnUiThread { render() }
                 }.also { it.connect() }
