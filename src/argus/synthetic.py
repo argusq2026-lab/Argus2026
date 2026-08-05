@@ -29,7 +29,30 @@ FALL_START_TICK = 20
 FALL_DURATION_TICKS = 6
 
 #: Every synthetic trainee id this scene ever emits, in a stable order.
-TRAINEE_IDS = ("walker", "still", "faller")
+#:
+#: The two plank stations are here because a plank is the case the scorer's
+#: standing-trainee assumptions get wrong: `good_plank` is horizontal and
+#: motionless, which `score_fall` and `score_stillness` read as an emergency,
+#: and only `[scoring.exercise_weights.plank]` stops it alerting. A demo
+#: without one shows a system that looks correct because nothing on the floor
+#: was lying down.
+TRAINEE_IDS = ("walker", "still", "faller", "good_plank", "sagging_plank")
+
+#: Which exercise each station reports. This selects the server's scoring
+#: weight profile, so it is part of the scene, not decoration.
+TRAINEE_EXERCISE = {
+    "walker": "squat",
+    "still": "squat",
+    "faller": "squat",
+    "good_plank": "plank",
+    "sagging_plank": "plank",
+}
+
+#: The form codes each station reports, drawn from `[scoring.form_error_vocab]`.
+#: Only the sagging plank is doing anything wrong.
+TRAINEE_FORM_CODES: dict[str, tuple[str, ...]] = {
+    "sagging_plank": ("hips_sagging",),
+}
 
 #: The scene's stand-in for an on-device form classifier.
 #:
@@ -94,6 +117,11 @@ def _boxes(tick: int) -> dict[str, _Box]:
     boxes = {
         "walker": _Box(walk_cx, 0.50, 0.09, 0.32),
         "still": _Box(0.60, 0.50, 0.09, 0.32),
+        # Both planks: wide, short, and unmoving. Deliberately the same shape
+        # the faller ends up in, and the same stillness the "still" trainee
+        # has -- the geometry cannot tell them apart, which is the point.
+        "good_plank": _Box(0.30, 0.82, 0.30, 0.09),
+        "sagging_plank": _Box(0.70, 0.82, 0.30, 0.09),
     }
     if tick < FALL_START_TICK:
         boxes["faller"] = _Box(0.84, 0.50, 0.09, 0.32)
@@ -150,14 +178,24 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
     observations = {}
     for trainee_id, box in _boxes(tick).items():
         kp_xy, kp_conf = _pose(box)
-        codes = _form_reason_codes(trainee_id, tick)
+        # Two independent form-code mechanisms, one per trainee: the sagging
+        # plank's is a static, always-on fault (it never has correct form),
+        # the walker's is `_form_reason_codes`' cyclic squat demo (a real
+        # classifier flags the bad reps, not the whole set). They never
+        # target the same trainee_id, so this is a union, not a priority.
+        codes = TRAINEE_FORM_CODES.get(trainee_id) or _form_reason_codes(trainee_id, tick)
         observations[trainee_id] = FrameObservation(
             ts=ts,
             bbox_xyxy=box.xyxy,
             keypoints_xy=kp_xy,
             keypoints_conf=kp_conf,
             form_reason_codes=codes,
-            exercise=SCENE_EXERCISE,
+            # Load-bearing (selects the scoring weight profile), so each
+            # trainee needs its own value rather than the scene-wide
+            # SCENE_EXERCISE constant -- a plank scored as a squat is exactly
+            # the misfire TRAINEE_EXERCISE/[scoring.exercise_weights] exist
+            # to prevent.
+            exercise=TRAINEE_EXERCISE[trainee_id],
             rep_count=tick // TICKS_PER_REP,
             form_ok=not codes,
         )

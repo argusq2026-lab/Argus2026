@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from argus.synthetic import TRAINEE_IDS
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -90,7 +92,7 @@ def test_cli_demo_writes_a_multi_station_fixture(tmp_path):
     result = _run_cli("demo", "--out", str(out), "--ticks", "20")
     assert result.returncode == 0, result.stderr
     fixture = json.loads(out.read_text(encoding="utf-8"))
-    assert len(fixture["stations"]) == 3
+    assert len(fixture["stations"]) == len(TRAINEE_IDS)
     assert all(len(s["messages"]) == 20 for s in fixture["stations"])
 
 

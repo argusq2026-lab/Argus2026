@@ -204,16 +204,17 @@ fast any individual phone sends):
 | `bbox_xyxy` | `[x0, y0, x1, y1]` | yes | The trainee's bounding box, **normalized to [0, 1]** of the phone's own camera frame — resolution-independent, so a 1080p and a 4K phone report the same numbers for the same framing. |
 | `keypoints_xy` | 17 × `[x, y]` | yes | COCO-17 keypoints, normalized to [0, 1] the same way. See "Keypoint layout" below. |
 | `keypoints_conf` | 17 × float | yes | Per-keypoint confidence in [0, 1]. A keypoint the phone's pose model has no estimate for should be reported at low/zero confidence, not omitted — all 17 slots are always present. |
-| `exercise` | string | no | The classified exercise (e.g. `"squat"`, `"burpee"`). **Display-only**: shown on the trainer console, never scored. At most 64 characters — it is a classifier label, not free text, and a longer value is rejected like any other malformed field. It is the one field on the wire whose value a phone chooses freely, so it is bounded here and rendered as text and never as markup. |
-| `rep_count` | int | no | Running rep count for the current set. Display-only, same as `exercise`. Must be a non-negative integer; `true`/`false` is rejected rather than counted as 1. |
-| `form_ok` | bool | no | The phone's own correct/incorrect verdict. Display-only — the server derives whether form is flagged from `form_reason_codes` being non-empty, not from this field. Omitting it is **not** the same as sending `false`: the console shows an absent verdict as unknown, not as a pass, so send it when the phone has one and omit it when it does not. |
+| `exercise` | string | no | The exercise being performed (e.g. `"plank"`, `"squat"`). **Selects the server's scoring weight profile** — see "The exercise field is load-bearing" below. Lowercased on the server; unlike `form_reason_codes` it is *not* a closed vocabulary, and an exercise the server has no profile for scores on the default weights rather than being rejected. At most 64 characters — it is a classifier label, not free text, and a longer value is rejected like any other malformed field. It is also shown on the trainer console (see [`CONSOLE.md`](CONSOLE.md)). |
+| `rep_count` | int | no | Running rep count for the current set. **Display-only**, shown on the trainer console, never scored. Must be a non-negative integer; `true`/`false` is rejected rather than counted as 1. |
+| `form_ok` | bool | no | The phone's own correct/incorrect verdict. **Display-only** — the server derives whether form is flagged from `form_reason_codes` being non-empty, not from this field. Omitting it is **not** the same as sending `false`: the console shows an absent verdict as unknown, not as a pass, so send it when the phone has one and omit it when it does not. |
 
-These three are validated and carried through to the trainer console (see
-[`CONSOLE.md`](CONSOLE.md)). "Display-only" is a guarantee, not an accident:
-the rank must stay a pure function of the numeric pose history and the
-closed-vocabulary form codes, so scoring a phone-chosen label or a
-phone-maintained counter would make it a function of an unauditable
-device-side value.
+All three are validated and carried through to the trainer console. `rep_count`
+and `form_ok` are display-only as a guarantee, not an accident: the rank must
+stay a pure function of the numeric pose history, the closed-vocabulary form
+codes, and `exercise`'s weight-profile selection below, so scoring a
+phone-maintained rep counter would make it a function of an unauditable
+device-side value. `exercise` is the one exception to "display-only" — see
+below.
 | `form_reason_codes` | list of strings | no (default `[]`) | The phone's on-device classifier's closed-vocabulary reasons for an incorrect rep. **Every code must appear in the server's `[scoring.form_error_vocab]`** (see below) — an unrecognised code is treated as a protocol/version mismatch, not scored as zero: the server sends an `error` and closes the connection. |
 
 A malformed `observation` (wrong type, missing field, wrong-length array, or
@@ -242,6 +243,32 @@ backwards makes every attentive trainee score a full off-task deviation. If
 the phone's own pose model (e.g. MediaPipe Pose, on-device) emits a different
 landmark layout or count, the phone is responsible for remapping to COCO-17
 before sending — the server does no remapping of its own.
+
+### The `exercise` field is load-bearing
+
+`exercise` was informational in earlier revisions of this document. It is not
+any more: the server looks it up in `[scoring.exercise_weights]` to pick which
+weight vector scores that trainee, because some features are wrong for some
+movements.
+
+The concrete case is the plank. `fall` fires on a bounding box wider than it
+is tall; `stillness` fires on a centroid that stops moving; `off_task` fires
+on a shoulder line away from the station-facing angle. A correct plank is all
+three. Measured against the default weights, a textbook plank scores **0.42**
+of a 0.5 alert threshold and reports `prolonged_stillness,
+off_task_orientation` — an instructor is told a trainee holding perfect form
+has stopped moving and is facing the wrong way, and the actual form signal is
+worth 0.12 against 0.42 of noise. With `exercise: "plank"` the same
+observation scores 0.0 and reports nothing, and a sagging plank scores 0.68.
+
+So for any exercise with a profile, omitting `exercise` is not a small loss of
+fidelity — it is the difference between a correct rep scoring 0.0 and scoring
+most of an alert. A phone should send it on every observation, not only when
+it changes: the server tracks the most recent value and has no way to
+distinguish "still planking" from "stopped reporting".
+
+Exercises with no configured profile are unaffected, and sending an unknown
+one is safe by design — it is a label, not a code.
 
 ### The form-error vocabulary must match exactly
 

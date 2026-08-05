@@ -61,13 +61,19 @@ class FrameObservation:
     vocabulary before it ever reaches this dataclass (see
     `argus.ingest.protocol`); this module only ever scores what it is given.
 
-    The last three fields are the protocol's informational ones. **Nothing in
-    this module reads them**, and nothing may start to: the rank is a pure
-    function of the numeric pose/box history plus the closed-vocabulary form
-    codes, and scoring a phone-chosen `exercise` label or a phone-maintained
-    `rep_count` would make it a function of an unauditable device-side counter
-    instead. They exist so the trainer console can display them (see
-    `argus.outputs.StationView`), and for no other reason.
+    `exercise` selects the weight profile (`ScoringConfig.weights_for`).
+    Unlike a form-error code it is *not* a closed vocabulary — an exercise
+    with no configured profile scores on the default weights rather than
+    being rejected, because the protocol has always described this field as a
+    free-form label.
+
+    `rep_count` and `form_ok` are the protocol's purely informational fields.
+    **Nothing in this module reads them**, and nothing may start to: beyond
+    `exercise` above, the rank is a pure function of the numeric pose/box
+    history plus the closed-vocabulary form codes, and scoring a
+    phone-maintained rep counter would make it a function of an unauditable
+    device-side counter. They exist so the trainer console can display them
+    (see `argus.outputs.StationView`), and for no other reason.
     """
 
     ts: float
@@ -75,8 +81,8 @@ class FrameObservation:
     keypoints_xy: list[tuple[float, float]]  # len 17, COCO order
     keypoints_conf: list[float]  # len 17
     form_reason_codes: tuple[str, ...] = ()
+    exercise: str | None = None
     #: Display-only. See the note above — the scorer must never read these.
-    exercise: str = ""
     rep_count: int | None = None
     form_ok: bool | None = None
 
@@ -88,6 +94,11 @@ class TrackState:
     history_len: int = 30
     history: deque[FrameObservation] = field(default_factory=deque)
     last_form_error_score: float = 0.0
+    #: The exercise most recently reported, which selects the weight profile.
+    #: Latest-wins rather than a majority over the window: a trainee who has
+    #: just dropped into a plank should be scored as planking immediately, not
+    #: after the history fills.
+    last_exercise: str | None = None
 
     def __post_init__(self) -> None:
         # deque(maxlen=...) cannot be expressed as a field default that depends
@@ -98,6 +109,7 @@ class TrackState:
     def push(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
         self.history.append(obs)
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
+        self.last_exercise = obs.exercise
 
 
 @dataclass(frozen=True)
@@ -267,14 +279,22 @@ def compute_triage(
     cfg: ScoringConfig,
     reference_angle_deg: float | None = None,
 ) -> TriageRecord:
-    """Combine the deterministic features into one ranked, explainable record."""
+    """Combine the deterministic features into one ranked, explainable record.
+
+    The weight vector is chosen by the trainee's current exercise, so a
+    feature a movement makes meaningless can be zeroed for that movement
+    alone. A zero weight also suppresses the feature's reason code: a signal
+    that contributes nothing to the score must not appear on the trainer's
+    dashboard as a reason, or the explanation stops matching the number it
+    claims to explain.
+    """
     fall, fall_hit = score_fall(track.history, cfg)
     still, still_hit = score_stillness(track.history, cfg)
     occl, occl_hit = score_occlusion(track.history, cfg)
     off_task, off_task_hit = score_off_task(track.history, cfg, reference_angle_deg)
     form_error = track.last_form_error_score
 
-    w = cfg.weights
+    w = cfg.weights_for(track.last_exercise)
     score = (
         w["fall"] * fall
         + w["stillness"] * still
@@ -284,15 +304,15 @@ def compute_triage(
     )
 
     reasons: list[str] = []
-    if fall_hit:
+    if fall_hit and w["fall"] > 0:
         reasons.append(REASON_FALL)
-    if still_hit:
+    if still_hit and w["stillness"] > 0:
         reasons.append(REASON_STILLNESS)
-    if occl_hit:
+    if occl_hit and w["occlusion"] > 0:
         reasons.append(REASON_OCCLUSION)
-    if off_task_hit:
+    if off_task_hit and w["off_task"] > 0:
         reasons.append(REASON_OFF_TASK)
-    if form_error >= 0.5:
+    if form_error >= 0.5 and w["form_error"] > 0:
         reasons.append(REASON_FORM_ERROR)
 
     return TriageRecord(

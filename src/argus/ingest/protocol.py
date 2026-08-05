@@ -181,7 +181,14 @@ def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, flo
 
 
 def _parse_exercise(raw: Mapping[str, Any]) -> str:
-    """The phone's classified exercise label. Optional, display-only."""
+    """The phone's classified exercise label.
+
+    Selects the scoring weight profile (`ScoringConfig.weights_for`), but
+    stays deliberately open: unlike `form_reason_codes`, whose closed
+    vocabulary is what keeps the form feature auditable, an exercise this
+    server has no profile for scores on the default weights rather than
+    being rejected. Only its type and length are enforced here.
+    """
     value = raw.get("exercise", "")
     if not isinstance(value, str):
         raise ProtocolError(f"exercise must be a string, got {type(value).__name__}")

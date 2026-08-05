@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 3
+CONFIG_VERSION = 4
 
 #: Shipped default config. Present both in a source checkout (repo-root
 #: ``configs/``) and in an installed wheel (``argus/_data/``).
@@ -41,6 +41,16 @@ class ScoringConfig:
 
     weights: dict[str, float]
     form_error_vocab: dict[str, float]
+    #: Per-exercise weight overrides, keyed by the `exercise` field of an
+    #: observation. A movement can make a feature meaningless or actively
+    #: wrong: a correct plank is horizontal and motionless, which the `fall`
+    #: and `stillness` features are built to treat as an emergency. Rather
+    #: than special-casing exercises in the scorer, an exercise names its own
+    #: full weight vector here and the scorer looks it up. A feature weighted
+    #: 0 contributes nothing *and* emits no reason code, so one number both
+    #: silences a misfiring signal and keeps it off the trainer's dashboard.
+    #: An exercise with no profile scores on `weights`, unchanged.
+    exercise_weights: dict[str, dict[str, float]] = field(default_factory=dict)
     alert_threshold: float = 0.5
     history_len: int = 30
     keypoint_conf_threshold: float = 0.3
@@ -57,24 +67,48 @@ class ScoringConfig:
 
     REQUIRED_WEIGHTS = ("fall", "stillness", "occlusion", "off_task", "form_error")
 
-    def __post_init__(self) -> None:
-        missing = [k for k in self.REQUIRED_WEIGHTS if k not in self.weights]
+    def _validate_weights(self, weights: dict[str, float], section: str) -> None:
+        """Every weight vector, default or per-exercise, obeys the same rules.
+
+        Per-exercise profiles are held to the full contract rather than
+        treated as sparse patches: a profile that named only the weights it
+        changed would leave the rest implicit, and "what does a plank actually
+        score on" would need two places to answer.
+        """
+        missing = [k for k in self.REQUIRED_WEIGHTS if k not in weights]
         if missing:
-            raise ConfigError(f"[scoring.weights] missing required weight(s): {missing}")
-        extra = [k for k in self.weights if k not in self.REQUIRED_WEIGHTS]
+            raise ConfigError(f"[{section}] missing required weight(s): {missing}")
+        extra = [k for k in weights if k not in self.REQUIRED_WEIGHTS]
         if extra:
             raise ConfigError(
-                f"[scoring.weights] unknown weight(s) {extra}: a weight the scorer "
+                f"[{section}] unknown weight(s) {extra}: a weight the scorer "
                 "does not read would silently do nothing"
             )
-        if any(w < 0 for w in self.weights.values()):
-            raise ConfigError("[scoring.weights] weights must be non-negative")
-        total = sum(self.weights.values())
+        if any(w < 0 for w in weights.values()):
+            raise ConfigError(f"[{section}] weights must be non-negative")
+        total = sum(weights.values())
         if abs(total - 1.0) > 1e-6:
             raise ConfigError(
-                f"[scoring.weights] must sum to 1.0 (got {total:.6f}); otherwise "
+                f"[{section}] must sum to 1.0 (got {total:.6f}); otherwise "
                 "`score` is not comparable against `alert_threshold`"
             )
+
+    def weights_for(self, exercise: str | None) -> dict[str, float]:
+        """The weight vector for `exercise`, falling back to the default set.
+
+        An unrecognised exercise scores on the default weights rather than
+        raising: unlike a form-error code, `exercise` is a free-form label the
+        protocol has always described as informational, so a phone reporting
+        one this config has no profile for is not a version mismatch.
+        """
+        if exercise is None:
+            return self.weights
+        return self.exercise_weights.get(exercise.lower(), self.weights)
+
+    def __post_init__(self) -> None:
+        self._validate_weights(self.weights, "scoring.weights")
+        for name, profile in self.exercise_weights.items():
+            self._validate_weights(profile, f"scoring.exercise_weights.{name}")
         if self.history_len < 2:
             raise ConfigError("[scoring] history_len must be >= 2")
         if not 0.0 <= self.alert_threshold <= 1.0:
@@ -293,16 +327,28 @@ def load_config(path: str | Path | None = None) -> ArgusConfig:
     scoring_raw = dict(_section(raw, "scoring"))
     weights = scoring_raw.pop("weights", None)
     vocab = scoring_raw.pop("form_error_vocab", None)
+    exercise_weights = scoring_raw.pop("exercise_weights", {})
     if weights is None:
         raise ConfigError("[scoring.weights] is required")
     if vocab is None:
         raise ConfigError("[scoring.form_error_vocab] is required")
+    if not isinstance(exercise_weights, dict):
+        raise ConfigError("[scoring.exercise_weights] must be a table of tables")
+    for name, profile in exercise_weights.items():
+        if not isinstance(profile, dict):
+            raise ConfigError(
+                f"[scoring.exercise_weights.{name}] must be a table of weights"
+            )
     scoring = _build(
         ScoringConfig,
         scoring_raw,
         "scoring",
         weights={k: float(v) for k, v in weights.items()},
         form_error_vocab={k.lower(): float(v) for k, v in vocab.items()},
+        exercise_weights={
+            name.lower(): {k: float(v) for k, v in profile.items()}
+            for name, profile in exercise_weights.items()
+        },
     )
 
     known_top = {"config_version", "scoring", "ingest", "outputs", "session", "discovery"}
