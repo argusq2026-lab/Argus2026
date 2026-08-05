@@ -103,7 +103,20 @@ data class Observation(
     }
 }
 
-fun encodeHello(stationId: String, traineeId: String, exercisePlan: String = ""): String {
+fun encodeHello(
+    stationId: String,
+    traineeId: String,
+    exercisePlan: String = "",
+    /** Label shown on the instructor's approval prompt. Optional. */
+    displayName: String = "",
+    /**
+     * The session this phone believes it is joining, when it learned one from
+     * a beacon. Sent so the server can refuse a mismatch: on a floor with two
+     * laptops, silently joining the wrong one is a trainee monitored by an
+     * instructor who is not watching them.
+     */
+    sessionName: String = "",
+): String {
     if (stationId.isEmpty()) throw ProtocolException("station_id must not be empty")
     if (traineeId.isEmpty()) throw ProtocolException("trainee_id must not be empty")
     val obj = JSONObject()
@@ -112,6 +125,8 @@ fun encodeHello(stationId: String, traineeId: String, exercisePlan: String = "")
         .put("station_id", stationId)
         .put("trainee_id", traineeId)
     if (exercisePlan.isNotEmpty()) obj.put("exercise_plan", exercisePlan)
+    if (displayName.isNotEmpty()) obj.put("display_name", displayName)
+    if (sessionName.isNotEmpty()) obj.put("session_name", sessionName)
     return obj.toString()
 }
 
@@ -136,12 +151,31 @@ sealed class ServerReply {
     data object HelloAck : ServerReply()
     data class Error(val message: String) : ServerReply()
 
+    /**
+     * The instructor has to approve this station before it can stream.
+     *
+     * Sent instead of [HelloAck] when the session runs
+     * `session.approval = "manual"`. It is not a refusal and not an
+     * acknowledgement: the connection stays open and a decision follows, or
+     * an [Error] does when nobody answers within [timeoutS].
+     */
+    data class JoinPending(
+        val sessionName: String,
+        val requestId: String,
+        val timeoutS: Double,
+    ) : ServerReply()
+
     companion object {
         fun parse(text: String): ServerReply {
             val obj = JSONObject(text)
             return when (val type = obj.optString("type")) {
                 "hello_ack" -> HelloAck
                 "error" -> Error(obj.optString("message", "(no message)"))
+                "join_pending" -> JoinPending(
+                    obj.optString("session_name"),
+                    obj.optString("request_id"),
+                    obj.optDouble("timeout_s", 0.0),
+                )
                 else -> throw ProtocolException("server sent unexpected frame type '$type'")
             }
         }

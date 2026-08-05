@@ -36,25 +36,75 @@ reference client that stands in for a real phone during development.
 
 ## Quick start
 
+### As a binary
+
+The laptop side builds to a single executable with no Python install
+required. Launched with no arguments it starts the ingest server and opens
+the trainer console, so it can be handed to someone who runs a gym rather
+than a terminal.
+
+```bash
+pip install -e ".[build]"
+python scripts/build_binary.py     # writes dist/argus (dist\argus.exe on Windows)
+
+./dist/argus                       # server + console, no arguments needed
+```
+
+The build self-checks that the binary runs from a directory that is not the
+repo, because a binary that only works beside its own source tree is exactly
+the failure worth catching before shipping one.
+
+### From a checkout
+
 ```powershell
 .\run.ps1                     # .venv + deps + editable install
 
 # No phone needed: generate a canned multi-trainee observation fixture and
 # replay it over a real WebSocket connection against a running server.
-.venv\Scripts\python.exe -m argus.cli demo --ticks 60
+.venv\Scripts\python.exe -m argus.cli demo --ticks 900
 .venv\Scripts\python.exe -m argus.cli run --http-port 8080 &
-.venv\Scripts\python.exe demo\replay_client.py
+.venv\Scripts\python.exe -m argus.cli replay --speed 1.0
 
 # Watch the ranked, redacted output live:
-#   http://127.0.0.1:8080/         (trainer dashboard)
+#   http://127.0.0.1:8080/         (trainer console)
 #   http://127.0.0.1:8080/triage   (raw JSON)
 ```
 
+`--speed 1.0` streams at the fixture's own pace, which is what makes the
+console behave like a real floor rather than filling instantly.
+
 ```powershell
-# Diagnose the config and the ingest port; also prints the LAN address a
-# phone should connect to:
+# Diagnose the config, the ingest port, and whether phones can discover this
+# laptop; also prints the LAN address a phone would connect to:
 .venv\Scripts\python.exe -m argus.cli doctor
+
+# What a phone does at setup: listen for laptops advertising themselves.
+.venv\Scripts\python.exe -m argus.cli discover
 ```
+
+### Connecting a phone
+
+Name the session so phones can find it:
+
+```toml
+[session]
+name = "Coach Riley — 6pm HIIT"
+approval = "auto"      # or "manual" to approve each phone yourself
+```
+
+The laptop broadcasts where it is, so nobody types an IP: press **Find server
+on this network** in the app's connect dialog, pick the session by name, and
+the address fills itself in. A human still presses Connect — a beacon is an
+unauthenticated datagram, so it gets to make a suggestion, not a decision.
+Typing the address by hand still works, which is what a broadcast-filtered
+guest network falls back to. See [Discovery](docs/PROTOCOL.md#discovery).
+
+With `approval = "manual"`, a phone that asks to join waits while the request
+sits at the top of the trainer console with **Approve** and **Decline**. Auto
+is the default because the failure modes are not symmetric: an unwanted phone
+on the console is a nuisance you can see and disconnect, whereas a trainee
+standing at a rack unmonitored because nobody noticed a prompt is the thing
+Argus exists to prevent. See [Admission](docs/PROTOCOL.md#admission).
 
 ---
 
@@ -125,8 +175,12 @@ laptop are expected to deploy from copies of the same config file; see
 | [`src/argus/config.py`](src/argus/config.py) | Versioned config loading and validation |
 | [`src/argus/ingest/`](src/argus/ingest/) | The WebSocket boundary: wire protocol, per-trainee sessions, the server |
 | [`src/argus/synthetic.py`](src/argus/synthetic.py) | The synthetic trainee scene `argus demo` and the tests replay |
-| [`src/argus/outputs.py`](src/argus/outputs.py), [`alerts.py`](src/argus/alerts.py) | The alert boundary: console, JSON lines, HTTP, and the trainer dashboard. Import no image library. |
+| [`src/argus/outputs.py`](src/argus/outputs.py), [`alerts.py`](src/argus/alerts.py) | The alert boundary: stderr alerts, JSON lines, HTTP, and the console's snapshot. Import no image library. |
+| [`src/argus/console.py`](src/argus/console.py) | The trainer console page served at `GET /` |
+| [`src/argus/discovery.py`](src/argus/discovery.py) | The LAN beacon that lets a phone find this laptop |
+| [`scripts/build_binary.py`](scripts/build_binary.py) | Freezes the laptop side into a standalone executable |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract a phone app must implement |
+| [`docs/CONSOLE.md`](docs/CONSOLE.md) | What the trainer console shows, and what it is allowed to see |
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | What Argus has *not* been shown to do |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System design and the reasoning behind it |
 

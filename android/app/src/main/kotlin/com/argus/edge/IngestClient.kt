@@ -28,9 +28,18 @@ class IngestClient(
     private val serverUrl: String,          // ws://<laptop-ip>:8765
     private val stationId: String,
     private val traineeId: String,
+    /** Label for the instructor's approval prompt. Optional. */
+    private val displayName: String = "",
+    /** The session this phone means to join, if a beacon named one. */
+    private val sessionName: String = "",
     private val onStateChange: (String) -> Unit,
 ) {
-    enum class State { IDLE, CONNECTING, AWAITING_ACK, STREAMING, REJECTED, CLOSED }
+    enum class State {
+        IDLE, CONNECTING, AWAITING_ACK,
+        /** The instructor has been asked and has not answered yet. */
+        AWAITING_APPROVAL,
+        STREAMING, REJECTED, CLOSED,
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -48,6 +57,8 @@ class IngestClient(
 
     /** Set by [disconnect]; suppresses the reconnect loop for a deliberate stop. */
     @Volatile private var stopped = false
+    @Volatile private var pendingSession: String = ""
+    @Volatile private var approvalDeadlineMs: Long = 0L
     @Volatile private var reconnects: Long = 0
     private var backoffMs = 1_000L
     private val reconnectTimer = java.util.Timer("ingest-reconnect", true)
@@ -63,7 +74,14 @@ class IngestClient(
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 socket = webSocket
                 // The first frame on every connection must be hello.
-                webSocket.send(encodeHello(stationId, traineeId))
+                webSocket.send(
+                    encodeHello(
+                        stationId,
+                        traineeId,
+                        displayName = displayName,
+                        sessionName = sessionName,
+                    )
+                )
                 transition(State.AWAITING_ACK)
             }
 
@@ -73,12 +91,27 @@ class IngestClient(
                         backoffMs = 1_000L   // a good handshake resets the backoff
                         transition(State.STREAMING)
                     }
+                    is ServerReply.JoinPending -> {
+                        // Not an ack and not a refusal: a human has to press a
+                        // button. Surfacing it as its own state is what keeps
+                        // whoever is standing at the rack from reading a
+                        // perfectly healthy connection as a hang and
+                        // restarting the station -- which would only queue
+                        // another request behind the first.
+                        pendingSession = reply.sessionName
+                        approvalDeadlineMs =
+                            System.currentTimeMillis() + (reply.timeoutS * 1000).toLong()
+                        transition(State.AWAITING_APPROVAL)
+                    }
                     is ServerReply.Error -> {
                         lastError = reply.message
                         transition(State.REJECTED)
                         // A protocol-level refusal (bad version, id collision,
-                        // unknown form code) will not fix itself by retrying:
-                        // retrying would hammer the server and hide the cause.
+                        // unknown form code, a declined or unanswered join)
+                        // will not fix itself by retrying: retrying would
+                        // hammer the server and hide the cause. A join that
+                        // was never answered is the one worth reading twice --
+                        // the fix is on the instructor's console, not here.
                     }
                     null -> {
                         lastError = "unparseable server frame"
@@ -157,6 +190,12 @@ class IngestClient(
             State.IDLE -> "disconnected"
             State.CONNECTING -> "connecting to $serverUrl$retries"
             State.AWAITING_ACK -> "awaiting hello_ack$retries"
+            State.AWAITING_APPROVAL -> {
+                val left = ((approvalDeadlineMs - System.currentTimeMillis()) / 1000)
+                    .coerceAtLeast(0)
+                val who = pendingSession.ifEmpty { "the instructor" }
+                "waiting for $who to approve this station (${left}s)"
+            }
             State.STREAMING -> "streaming ($observationsSent sent$retries)"
             // A refusal is terminal on purpose — see scheduleReconnect.
             State.REJECTED -> "REJECTED — ${lastError ?: "?"} (will not retry)"

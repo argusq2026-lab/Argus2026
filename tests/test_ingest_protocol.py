@@ -125,6 +125,69 @@ def test_observation_rejects_a_missing_field():
         parse_observation(raw, VOCAB)
 
 
+# -- the informational fields -------------------------------------------------
+#
+# `exercise`, `rep_count`, and `form_ok` are display-only: the trainer console
+# shows them and nothing scores them. That is exactly why they still have to
+# be validated here -- a field nothing scores is a field nobody notices is
+# wrong, and it reaches a human's screen either way.
+
+
+def test_observation_carries_the_informational_fields():
+    obs = parse_observation(_obs(exercise="squat", rep_count=12, form_ok=False), VOCAB)
+    assert obs.exercise == "squat"
+    assert obs.rep_count == 12
+    assert obs.form_ok is False
+
+
+def test_informational_fields_are_optional():
+    """A phone that sends none of them is well-formed, not degraded."""
+    obs = parse_observation(_obs(), VOCAB)
+    assert obs.exercise == ""
+    assert obs.rep_count is None
+    assert obs.form_ok is None
+
+
+def test_a_missing_form_ok_is_unknown_rather_than_a_pass():
+    """`None` and `False` must stay distinguishable all the way to the
+    console: "the phone did not say" is not "the phone said it was fine"."""
+    assert parse_observation(_obs(), VOCAB).form_ok is None
+    assert parse_observation(_obs(form_ok=False), VOCAB).form_ok is False
+
+
+def test_observation_rejects_a_non_string_exercise():
+    with pytest.raises(ProtocolError, match="exercise"):
+        parse_observation(_obs(exercise=7), VOCAB)
+
+
+def test_observation_rejects_an_overlong_exercise():
+    """The one field a phone fills freely is bounded, so it cannot become a
+    free-text channel into the trainer's view."""
+    with pytest.raises(ProtocolError, match="exercise"):
+        parse_observation(_obs(exercise="x" * 500), VOCAB)
+
+
+def test_observation_rejects_a_non_int_rep_count():
+    with pytest.raises(ProtocolError, match="rep_count"):
+        parse_observation(_obs(rep_count="12"), VOCAB)
+
+
+def test_observation_rejects_a_boolean_rep_count():
+    """`bool` is a subclass of `int`, so `true` would otherwise display as 1."""
+    with pytest.raises(ProtocolError, match="rep_count"):
+        parse_observation(_obs(rep_count=True), VOCAB)
+
+
+def test_observation_rejects_a_negative_rep_count():
+    with pytest.raises(ProtocolError, match="rep_count"):
+        parse_observation(_obs(rep_count=-1), VOCAB)
+
+
+def test_observation_rejects_a_non_bool_form_ok():
+    with pytest.raises(ProtocolError, match="form_ok"):
+        parse_observation(_obs(form_ok="yes"), VOCAB)
+
+
 # -- server -> client messages ------------------------------------------------
 
 

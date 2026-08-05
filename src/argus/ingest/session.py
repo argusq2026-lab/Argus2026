@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from argus.config import ScoringConfig
+from argus.outputs import StationView
 from argus.triage import FrameObservation, TrackState
 
 
@@ -61,6 +62,16 @@ class SessionRegistry:
     def __len__(self) -> int:
         return len(self._sessions)
 
+    def is_connected(self, trainee_id: str) -> bool:
+        """Whether a *live* socket already claims this id.
+
+        Distinct from `in`: a session inside its disconnect grace window is
+        registered but not connected, and reconnecting to it is the normal
+        case rather than a collision.
+        """
+        session = self._sessions.get(trainee_id)
+        return session is not None and session.connected
+
     def register(self, station_id: str, trainee_id: str, now: float) -> StationSession:
         """Start a new session, or resume one within its disconnect grace window."""
         existing = self._sessions.get(trainee_id)
@@ -98,6 +109,40 @@ class SessionRegistry:
     def tracks(self) -> dict[str, TrackState]:
         """Every session's history, connected or still in its grace window."""
         return {trainee_id: s.track for trainee_id, s in self._sessions.items()}
+
+    def station_views(self) -> list[StationView]:
+        """A snapshot of every session for the trainer console.
+
+        Ordered by `trainee_id` rather than by score: the console ranks the
+        help queue itself, and a station grid whose cards reordered every
+        time a score ticked would be unreadable — a trainer looking at one
+        station would lose it mid-glance.
+
+        Carries each session's *latest* observation only, not its history.
+        The rolling history is what the scorer reads; the console draws one
+        pose, so handing it thirty would be shipping 29 poses nothing renders.
+        """
+        views = []
+        for trainee_id, session in sorted(self._sessions.items()):
+            history = session.track.history
+            latest = history[-1] if history else None
+            views.append(
+                StationView(
+                    station_id=session.station_id,
+                    trainee_id=trainee_id,
+                    connected=session.connected,
+                    last_seen_ts=session.last_seen_ts,
+                    observations=len(history),
+                    bbox_xyxy=latest.bbox_xyxy if latest else None,
+                    keypoints_xy=tuple(latest.keypoints_xy) if latest else None,
+                    keypoints_conf=tuple(latest.keypoints_conf) if latest else None,
+                    form_reason_codes=latest.form_reason_codes if latest else (),
+                    exercise=latest.exercise if latest else "",
+                    rep_count=latest.rep_count if latest else None,
+                    form_ok=latest.form_ok if latest else None,
+                )
+            )
+        return views
 
     def expire_stale(self, now: float) -> list[str]:
         """Drop sessions silent for longer than `track_ttl_s`; return their ids."""

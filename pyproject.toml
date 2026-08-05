@@ -35,6 +35,12 @@ dev = [
     "pytest>=7.0",
     "pytest-timeout>=2.1",
 ]
+# Build-time only: freezing the laptop side into a standalone executable, so a
+# trainer's machine needs no Python install. Nothing in src/argus/ imports it,
+# and the test suite does not go through the binary.
+build = [
+    "pyinstaller>=6.0",
+]
 
 [project.scripts]
 argus = "argus.cli:main"

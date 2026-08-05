@@ -1,5 +1,24 @@
 # Handoff: the host side — trainer console and live phone↔laptop operation
 
+> **Status: §2 and §6 have since been worked through.** This document is kept
+> as written — it is the handoff, not a status page — but do not read §2 as a
+> description of the tree. What has changed:
+>
+> - The console is built. See [`CONSOLE.md`](CONSOLE.md) and
+>   [`src/argus/console.py`](../src/argus/console.py): per-station cards, a
+>   live skeleton, the ranked queue, visible staleness, prose reason codes.
+> - `exercise` / `rep_count` / `form_ok` are parsed and displayed. §2 said
+>   `parse_observation` validated them; it did not — it dropped them
+>   entirely, and now it does validate them.
+> - The synthetic scene emits a form-error code, so `form_error` is no longer
+>   inert in the fixture the console is developed against. The on-device
+>   classifier is still not started; that part of §2 stands.
+> - Phones can discover the laptop over the LAN rather than being handed an
+>   IP (PROTOCOL.md, "Discovery"), and the laptop side builds to a standalone
+>   binary (`scripts/build_binary.py`).
+> - Still true and still the honest gap: **nothing has run over real Wi-Fi**
+>   (§2, §6.4) and the weights remain unvalidated (§7).
+
 Written against `main` at `e4e4b7c`. Every claim here was checked against the
 tree rather than recalled; where something is unverified it says so.
 

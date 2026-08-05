@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 
 #: Shipped default config. Present both in a source checkout (repo-root
 #: ``configs/``) and in an installed wheel (``argus/_data/``).
@@ -115,11 +115,110 @@ class IngestConfig:
 
 
 @dataclass(frozen=True)
+class SessionConfig:
+    """Who is running this floor, and who gets to join it.
+
+    A session is one instructor's floor: a name phones can recognise in a room
+    where more than one laptop is running, plus the rule for admitting a phone
+    that asks to join.
+
+    `approval` defaults to `"auto"`, which is exactly the behaviour that
+    existed before admission was a concept — a well-formed `hello` is
+    acknowledged immediately. `"manual"` parks the connection until the
+    instructor decides. Auto is the default because the failure modes are not
+    symmetric: an unwanted phone on the console is a nuisance an instructor
+    can see and disconnect, whereas a trainee standing at a rack unmonitored
+    because nobody noticed a prompt is the thing this system exists to
+    prevent.
+    """
+
+    #: Shown in the beacon and on the console. Free-form; an empty name is
+    #: legal and shows as the server's address instead.
+    name: str = ""
+    approval: str = "auto"
+    #: How long an unanswered join request waits before the phone is told to
+    #: stop waiting. A prompt nobody is going to answer should end, and end
+    #: with a reason, rather than leave a phone hanging indefinitely.
+    join_timeout_s: float = 120.0
+
+    APPROVAL_MODES = ("auto", "manual")
+    MAX_NAME_LEN = 64
+
+    def __post_init__(self) -> None:
+        if self.approval not in self.APPROVAL_MODES:
+            raise ConfigError(
+                f"[session] approval must be one of {list(self.APPROVAL_MODES)}, "
+                f"got {self.approval!r}"
+            )
+        if len(self.name) > self.MAX_NAME_LEN:
+            raise ConfigError(
+                f"[session] name must be at most {self.MAX_NAME_LEN} characters"
+            )
+        if self.join_timeout_s <= 0:
+            raise ConfigError("[session] join_timeout_s must be > 0")
+
+
+@dataclass(frozen=True)
+class DiscoveryConfig:
+    """The LAN beacon that lets a phone find this laptop without being told.
+
+    Outward-facing, so it is worth being explicit about what enabling it
+    does: the laptop broadcasts its own WebSocket address to the local
+    network once per `interval_s`. It carries no trainee data — see
+    `argus.discovery` — and it advertises a port that `ingest.ws_host =
+    "0.0.0.0"` already left open, so it publishes the fact of the service
+    rather than any new access to it. Set `enabled = false` on a network
+    where announcing the service at all is not wanted; phones can still be
+    pointed at the address by hand.
+    """
+
+    enabled: bool = True
+    port: int = 8766
+    interval_s: float = 1.0
+    #: Blank uses the limited-broadcast address. Set a subnet-directed
+    #: address (e.g. "192.168.1.255") on a network that drops it.
+    broadcast: str = ""
+
+    def __post_init__(self) -> None:
+        if not 0 <= self.port <= 65535:
+            raise ConfigError("[discovery] port must be in [0, 65535]")
+        if self.interval_s <= 0:
+            raise ConfigError("[discovery] interval_s must be > 0")
+
+
+@dataclass(frozen=True)
 class OutputsConfig:
+    #: Whether the *stderr alert* sink prints. Distinct from the `console_*`
+    #: keys below, which tune the trainer console page served at `GET /`.
     console: bool = True
     json_log: str = ""
     http_port: int = 0
     http_host: str = "127.0.0.1"
+    #: How often the trainer console re-reads `GET /console`. Served to the
+    #: page in the snapshot rather than baked into it, so the refresh cadence
+    #: is a config edit like every other cadence here. The default is well
+    #: under a phone's own 5-15 Hz so a skeleton moves rather than steps.
+    console_poll_interval_ms: int = 200
+    #: How long a station may go silent before the console shows it as stale
+    #: rather than calm. This is a display threshold, not an eviction one:
+    #: `ingest.track_ttl_s` still decides when a track is actually dropped.
+    #: Keep it well under that ttl -- set longer, a station is evicted before
+    #: it is ever drawn as stale, so a trainee who went silent leaves the
+    #: grid without having been flagged. `argus doctor` warns when it is.
+    console_stale_after_s: float = 2.0
+    #: Whether `POST /join/decide` is accepted from anywhere but this machine.
+    #: Off by default, and checked against the *client's* address rather than
+    #: the bind address, so serving the console on a second screen does not
+    #: quietly hand the rest of the LAN the power to decide who monitors a
+    #: trainee. Turning it on makes admission decisions unauthenticated to
+    #: anyone who can reach `http_host`.
+    allow_remote_join_control: bool = False
+
+    def __post_init__(self) -> None:
+        if self.console_poll_interval_ms <= 0:
+            raise ConfigError("[outputs] console_poll_interval_ms must be > 0")
+        if self.console_stale_after_s <= 0:
+            raise ConfigError("[outputs] console_stale_after_s must be > 0")
 
 
 @dataclass(frozen=True)
@@ -127,6 +226,8 @@ class ArgusConfig:
     scoring: ScoringConfig
     ingest: IngestConfig = field(default_factory=IngestConfig)
     outputs: OutputsConfig = field(default_factory=OutputsConfig)
+    session: SessionConfig = field(default_factory=SessionConfig)
+    discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     source_path: Path | None = None
 
 
@@ -204,7 +305,7 @@ def load_config(path: str | Path | None = None) -> ArgusConfig:
         form_error_vocab={k.lower(): float(v) for k, v in vocab.items()},
     )
 
-    known_top = {"config_version", "scoring", "ingest", "outputs"}
+    known_top = {"config_version", "scoring", "ingest", "outputs", "session", "discovery"}
     unknown_top = set(raw) - known_top
     if unknown_top:
         raise ConfigError(f"unknown top-level section(s): {sorted(unknown_top)}")
@@ -213,6 +314,8 @@ def load_config(path: str | Path | None = None) -> ArgusConfig:
         scoring=scoring,
         ingest=_build(IngestConfig, _section(raw, "ingest"), "ingest"),
         outputs=_build(OutputsConfig, _section(raw, "outputs"), "outputs"),
+        session=_build(SessionConfig, _section(raw, "session"), "session"),
+        discovery=_build(DiscoveryConfig, _section(raw, "discovery"), "discovery"),
         source_path=cfg_path.resolve(),
     )
 
