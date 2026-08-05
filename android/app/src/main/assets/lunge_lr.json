@@ -1,0 +1,154 @@
+{
+  "format": "multinomial_logistic_regression",
+  "artifact_version": 1,
+  "exercise": "lunge",
+  "encoding": "bbox",
+  "source_dataset": "NgoQuocBao1010/Exercise-Correction (MIT), core/lunge_model (err.* split)",
+  "generated_by": "scripts/train_form_model.py",
+  "test_accuracy": 0.999097,
+  "test_accuracy_caveat": "Held-out frames from the source dataset's own recordings, which feature a small number of people. This is not a per-subject generalisation estimate and must not be quoted as accuracy on a new trainee. See docs/VALIDATION.md.",
+  "probability_threshold": 0.6,
+  "feature_names": [
+    "nose_x",
+    "nose_y",
+    "left_shoulder_x",
+    "left_shoulder_y",
+    "right_shoulder_x",
+    "right_shoulder_y",
+    "left_hip_x",
+    "left_hip_y",
+    "right_hip_x",
+    "right_hip_y",
+    "left_knee_x",
+    "left_knee_y",
+    "right_knee_x",
+    "right_knee_y",
+    "left_ankle_x",
+    "left_ankle_y",
+    "right_ankle_x",
+    "right_ankle_y"
+  ],
+  "feature_kinds": [
+    "x",
+    "y"
+  ],
+  "landmarks": [
+    "nose",
+    "left_shoulder",
+    "right_shoulder",
+    "left_hip",
+    "right_hip",
+    "left_knee",
+    "right_knee",
+    "left_ankle",
+    "right_ankle"
+  ],
+  "classes": [
+    "C",
+    "L"
+  ],
+  "class_to_code": {
+    "C": null,
+    "L": "knee_over_toe"
+  },
+  "min_visible_landmarks": 7,
+  "scaler_mean": [
+    0.4820531915465619,
+    0.027746802806875196,
+    0.5070110953513735,
+    0.07135034359379057,
+    0.4706028710460531,
+    0.07682664765705405,
+    0.5256286962628679,
+    0.5582115775833617,
+    0.47371129927485955,
+    0.559611203695563,
+    0.4725939105571457,
+    0.7705593651893655,
+    0.5249298909747085,
+    0.7672359218010172,
+    0.4642916856079949,
+    0.9226475659385441,
+    0.5450704087601658,
+    0.9293538144456258
+  ],
+  "scaler_scale": [
+    0.41318836027835276,
+    0.04597479487366937,
+    0.2509009652761143,
+    0.0640362902351801,
+    0.2467732680924889,
+    0.06015241662055281,
+    0.07549640984155717,
+    0.05055020129711508,
+    0.06983911540764644,
+    0.04931784216608095,
+    0.3210035472078788,
+    0.19774325283395464,
+    0.3255831966699443,
+    0.19976882329696943,
+    0.4361126545947483,
+    0.06805028039322651,
+    0.433132328765864,
+    0.06619458001234434
+  ],
+  "min_scaler_scale": 0.04597479487366937,
+  "coef": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      -0.454644379465134,
+      1.4498165064977753,
+      -1.0149934951325177,
+      -2.41316393245485,
+      1.473747858626763,
+      -1.1119141867673177,
+      -0.3708501843668957,
+      0.687253241209897,
+      0.1613208710959246,
+      -1.6215663728703333,
+      1.0658390608000803,
+      1.5530663864137455,
+      0.14926812412181092,
+      1.9876934807592166,
+      0.640394868474989,
+      -0.4668165283464698,
+      0.40466110523783777,
+      0.5089437908576584
+    ]
+  ],
+  "intercept": [
+    0.0,
+    0.34324978210331686
+  ],
+  "depth_gate": {
+    "numerator_landmarks": [
+      "left_ankle",
+      "right_ankle"
+    ],
+    "reference_landmarks": [
+      "left_hip",
+      "right_hip"
+    ],
+    "min": 0.09505614638328552,
+    "max": 0.3014101982116699
+  }
+}

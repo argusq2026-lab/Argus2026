@@ -1,0 +1,132 @@
+{
+  "format": "multinomial_logistic_regression",
+  "artifact_version": 1,
+  "exercise": "bicep",
+  "encoding": "bbox",
+  "source_dataset": "NgoQuocBao1010/Exercise-Correction (MIT), core/bicep_model",
+  "generated_by": "scripts/train_form_model.py",
+  "test_accuracy": 0.629139,
+  "test_accuracy_caveat": "Held-out frames from the source dataset's own recordings, which feature a small number of people. This is not a per-subject generalisation estimate and must not be quoted as accuracy on a new trainee. See docs/VALIDATION.md.",
+  "probability_threshold": 0.6,
+  "feature_names": [
+    "left_shoulder_x",
+    "left_shoulder_y",
+    "right_shoulder_x",
+    "right_shoulder_y",
+    "left_elbow_x",
+    "left_elbow_y",
+    "right_elbow_x",
+    "right_elbow_y",
+    "left_wrist_x",
+    "left_wrist_y",
+    "right_wrist_x",
+    "right_wrist_y",
+    "left_hip_x",
+    "left_hip_y",
+    "right_hip_x",
+    "right_hip_y"
+  ],
+  "feature_kinds": [
+    "x",
+    "y"
+  ],
+  "landmarks": [
+    "left_shoulder",
+    "right_shoulder",
+    "left_elbow",
+    "right_elbow",
+    "left_wrist",
+    "right_wrist",
+    "left_hip",
+    "right_hip"
+  ],
+  "classes": [
+    "C",
+    "L"
+  ],
+  "class_to_code": {
+    "C": null,
+    "L": "lean_back_error"
+  },
+  "min_visible_landmarks": 7,
+  "scaler_mean": [
+    0.6281694932015774,
+    0.036681757405180676,
+    0.34489078220353925,
+    0.03654151189853905,
+    0.6893447781583599,
+    0.505299676538819,
+    0.28270834660127075,
+    0.5113447827331798,
+    0.6809199909476922,
+    0.5774643081745653,
+    0.3394729186102372,
+    0.573679771917783,
+    0.5743372484241492,
+    0.9883331188609497,
+    0.4327632425151743,
+    0.9844179124871234
+  ],
+  "scaler_scale": [
+    0.33229989080771516,
+    0.0565085018419996,
+    0.3074032041934657,
+    0.05708185203507259,
+    0.2997797587261028,
+    0.06786169565305046,
+    0.27490136070963733,
+    0.07186176682611936,
+    0.3931289990021839,
+    0.3583480906989171,
+    0.42125621169450084,
+    0.3585344713271393,
+    0.2893014043748059,
+    0.019903049613284034,
+    0.29324870734153236,
+    0.021673185799619334
+  ],
+  "min_scaler_scale": 0.019903049613284034,
+  "coef": [
+    [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      -2.2018079858697113,
+      -0.6572771326681248,
+      2.224807578547529,
+      1.423608338468312,
+      -1.9201212941591606,
+      1.1783886719320809,
+      1.682362424737513,
+      0.32317910430627345,
+      2.384715140271516,
+      -0.8093598498716084,
+      -1.9910581645785752,
+      0.30307563321128816,
+      1.598589046425747,
+      0.12460201600719147,
+      -1.5740207584088775,
+      -0.8012004540864488
+    ]
+  ],
+  "intercept": [
+    0.0,
+    -0.229967346776332
+  ],
+  "depth_gate": null
+}
