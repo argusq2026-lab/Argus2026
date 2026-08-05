@@ -90,6 +90,22 @@ def main() -> int:
                 "form_reason_codes": [],
             },
         },
+        {
+            "name": "observation_plank_sagging",
+            "why": "the plank classifier's output: `exercise` selects the scoring "
+                   "weight profile, so it is load-bearing here in a way it is not "
+                   "for exercises with no profile — a phone that omits it gets a "
+                   "correct plank scored as a fall",
+            "message": {
+                "type": "observation", "ts": 1730649602.5,
+                # Wide and short: a plank's bounding box.
+                "bbox_xyxy": [0.18, 0.4, 0.88, 0.62],
+                "keypoints_xy": [[0.2 + 0.04 * i, 0.45 + 0.005 * i] for i in range(17)],
+                "keypoints_conf": [0.88] * 17,
+                "exercise": "plank", "form_ok": False,
+                "form_reason_codes": ["hips_sagging"],
+            },
+        },
     ]
 
     # Prove every valid message parses, right here at generation time.

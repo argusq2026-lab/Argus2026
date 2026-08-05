@@ -158,6 +158,43 @@ and the real enforcement moved to the boundary where it belongs:
 unrecognised code from a phone is a version-skew bug, not an open-ended
 observation to score as best it can.
 
+### A feature can be wrong for an exercise, so weights are per-exercise
+
+The five features were written against a floor of standing HIIT movements,
+where "horizontal" and "not moving" are both good evidence something has gone
+wrong. Adding a plank classifier surfaced that this is an assumption rather
+than a fact: a correct plank is horizontal *and* motionless *and* oriented
+away from the station-facing reference, so `fall`, `stillness`, and `off_task`
+all read a textbook rep as trouble. Scored on the default weights, a correct
+plank reached 0.42 against a 0.5 alert threshold and reported
+`prolonged_stillness, off_task_orientation`.
+
+The fix is not a special case inside the scorer. `docs/PROTOCOL.md` already
+carried an `exercise` field, so `compute_triage` looks up a whole weight
+vector for the trainee's current exercise
+(`ScoringConfig.weights_for`) and `[scoring.exercise_weights.plank]` names one
+where `fall`, `stillness`, and `off_task` are 0 and `form_error` carries 0.85.
+Occlusion survives at its default weight, because a trainee the phone cannot
+see is worth flagging whatever they are doing.
+
+Two properties fall out of doing it this way rather than with a suppression
+list:
+
+* **A profile is a complete vector, held to the same contract as the default** —
+  every feature named, non-negative, summing to 1.0. So "what does a plank
+  actually score on" has one answer in one place, and a score stays comparable
+  against `alert_threshold` without renormalisation.
+* **Zero weight also suppresses the reason code.** One number decides both
+  whether a feature contributes and whether it may explain the result, so the
+  dashboard cannot report `prolonged_stillness` for a score that contains no
+  stillness term. A reason that explains no part of the score is worse than no
+  reason.
+
+`exercise` stays deliberately open, unlike `form_reason_codes`: an exercise
+with no profile scores on the defaults rather than being rejected, because it
+is a free-form label and always has been. The closed vocabulary is where
+version skew must be caught; the exercise label is not.
+
 ### Privacy by wiring, now with less to guard
 
 `TriageRecord` is still frozen with exactly four scalar fields, and

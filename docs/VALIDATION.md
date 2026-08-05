@@ -46,6 +46,14 @@ them. `alert_threshold = 0.5` is equally unvalidated: nobody has measured how
 many alerts an instructor would receive per hour, or what fraction would be
 real.
 
+`[scoring.exercise_weights.plank]` is newer and no better evidenced. Zeroing
+`fall`, `stillness`, and `off_task` for a plank follows from geometry — those
+features describe a correct plank, which was measured — but the 0.85 given to
+`form_error` was picked so that the two plank codes land either side of the
+threshold (`hips_sagging` 0.68, `hips_piked` 0.51), not from any observation
+of what an instructor would want to be called over for. `hips_piked` clearing
+the threshold by 0.01 is arithmetic, not a judgement about piked planks.
+
 The weights live in `configs/argus.default.toml` rather than in code, so
 retuning is a config edit and a `config_version` bump — the mechanism is
 ready, the evidence is not.

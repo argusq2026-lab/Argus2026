@@ -108,12 +108,21 @@ def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, flo
             "[scoring.form_error_vocab]; phone and server vocabularies have diverged"
         )
 
+    # `exercise` selects the scoring weight profile, but stays deliberately
+    # open: an exercise this server has no profile for scores on the default
+    # weights. Only its *type* is enforced, unlike form_reason_codes, whose
+    # closed vocabulary is what keeps the form feature auditable.
+    exercise = raw.get("exercise")
+    if exercise is not None and not isinstance(exercise, str):
+        raise ProtocolError("exercise must be a string")
+
     return FrameObservation(
         ts=ts,
         bbox_xyxy=bbox_xyxy,
         keypoints_xy=keypoints_xy,
         keypoints_conf=keypoints_conf,
         form_reason_codes=tuple(codes_raw),
+        exercise=exercise or None,
     )
 
 

@@ -59,6 +59,7 @@ def make_observation(
     kp_conf: list[float] | None = None,
     form_reason_codes: tuple[str, ...] = (),
     torso_y: float = 140.0,
+    exercise: str | None = None,
 ) -> FrameObservation:
     """A well-formed 17-keypoint observation, fully confident by default."""
     return FrameObservation(
@@ -67,6 +68,43 @@ def make_observation(
         keypoints_xy=kp_xy if kp_xy is not None else standing_pose_kp_xy(torso_y),
         keypoints_conf=kp_conf if kp_conf is not None else [0.9] * 17,
         form_reason_codes=form_reason_codes,
+        exercise=exercise,
+    )
+
+
+def plank_pose_kp_xy() -> list[tuple[float, float]]:
+    """A horizontal, motionless COCO-17 pose — a correct plank.
+
+    Deliberately the shape the standing-trainee features misread: the torso
+    runs along x rather than y, so the shoulder line is far from the
+    station-facing reference, and the bounding box in `make_plank_observation`
+    is wider than it is tall, which is the `fall` feature's aspect-flip
+    trigger. Both are correct readings of the geometry and wrong readings of
+    the situation, which is what `[scoring.exercise_weights.plank]` exists for.
+    """
+    kp = [(0.20, 0.42)] * 17
+    kp[5], kp[6] = (0.30, 0.45), (0.30, 0.55)     # shoulders
+    kp[7], kp[8] = (0.26, 0.55), (0.26, 0.65)     # elbows
+    kp[9], kp[10] = (0.24, 0.60), (0.24, 0.70)    # wrists
+    kp[11], kp[12] = (0.55, 0.47), (0.55, 0.57)   # hips
+    kp[13], kp[14] = (0.70, 0.48), (0.70, 0.58)   # knees
+    kp[15], kp[16] = (0.85, 0.49), (0.85, 0.59)   # ankles
+    return kp
+
+
+def make_plank_observation(
+    ts: float,
+    form_reason_codes: tuple[str, ...] = (),
+    exercise: str | None = "plank",
+) -> FrameObservation:
+    """One tick of a held plank. Wide, short box; horizontal, static pose."""
+    return FrameObservation(
+        ts=ts,
+        bbox_xyxy=(0.18, 0.40, 0.88, 0.62),
+        keypoints_xy=plank_pose_kp_xy(),
+        keypoints_conf=[0.9] * 17,
+        form_reason_codes=form_reason_codes,
+        exercise=exercise,
     )
 
 
