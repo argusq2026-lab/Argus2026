@@ -15,7 +15,7 @@ import kotlin.math.exp
  * ## Why there is no model runtime here
  *
  * The classifier is a multinomial logistic regression: standardize the
- * features, multiply by a 3x39 matrix, add an intercept, softmax. That is
+ * features, multiply by a 3x26 matrix, add an intercept, softmax. That is
  * arithmetic, so it runs in Kotlin directly — no ONNX session, no second NPU
  * dispatch on a path where dispatch alone costs ~500 us (android/README.md),
  * and no third artifact to stage on the device. The weights ship as
@@ -32,7 +32,7 @@ import kotlin.math.exp
  *
  * ## Accuracy
  *
- * 99.6% on the source dataset's held-out frames, which is **not** a claim
+ * 99.0% on the source dataset's held-out frames, which is **not** a claim
  * about a new trainee: those frames come from the same few recordings as the
  * training data. See docs/VALIDATION.md. Below
  * [probabilityThreshold] this class returns no codes at all rather than its
