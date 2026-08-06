@@ -583,3 +583,11 @@ def test_the_page_does_not_show_a_rate_it_was_not_given():
     """`fault_rate` is null until enough work is seen, and null must stay
     visible as "not enough to say" rather than becoming a reassuring 0%."""
     assert "too little work to call a rate yet" in CONSOLE_HTML
+
+
+def test_the_page_names_persistent_form_failure_as_its_own_thing():
+    """"This rep was wrong" and "they cannot hold the movement" ask different
+    things of an instructor -- a cue versus stop-and-reset -- so they must not
+    read as the same sentence."""
+    assert "persistent_form_fault: " in CONSOLE_HTML
+    assert "Cannot hold form" in CONSOLE_HTML

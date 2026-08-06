@@ -49,6 +49,10 @@ REASON_STILLNESS = "prolonged_stillness"
 REASON_OCCLUSION = "hands_face_occluded"
 REASON_OFF_TASK = "off_task_orientation"
 REASON_FORM_ERROR = "form_error"
+#: Not "a rep was wrong" but "they cannot hold the movement". Distinct from
+#: `form_error` because they call for different things from an instructor:
+#: one is a cue, the other is stop-and-reset.
+REASON_PERSISTENT_FORM = "persistent_form_fault"
 
 
 @dataclass
@@ -138,6 +142,14 @@ class SessionMetrics:
     #: "this trainee was briefly in real trouble" should survive being
     #: forgotten by the mean.
     peak_score: float = 0.0
+    #: Decayed share of observed time carrying *any* form code, and the
+    #: decayed mean severity over the same window. Together they answer the
+    #: question an instructor actually asks — "can this person hold the
+    #: movement, or not?" — which no single frame can. Measured on time
+    #: rather than on reps deliberately: the phone's rep counter must stay out
+    #: of anything that can raise an alert.
+    form_fault_fraction: float = 0.0
+    form_severity_mean: float = 0.0
 
     # Cursors. Leading underscore because they are bookkeeping rather than
     # anything a console should render.
@@ -145,6 +157,7 @@ class SessionMetrics:
     _last_rep_count: int | None = None
     _rep_flagged: bool = False
     _rolling_ts: float | None = None
+    _persist_seeded: bool = False
 
     def observe(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
         """Fold one observation into the session's running account."""
@@ -164,6 +177,20 @@ class SessionMetrics:
                 dt = delta
         self._last_ts = obs.ts
         self.active_s += dt
+
+        # "Can this person hold the movement?" -- decayed over its own,
+        # longer half-life than the urgency mean, so a trainee who fixes their
+        # form stops being flagged within a minute or two rather than carrying
+        # a bad first set for the rest of the session.
+        severity = score_form_codes(obs.form_reason_codes, cfg)
+        if not self._persist_seeded:
+            self.form_fault_fraction = 1.0 if flagged else 0.0
+            self.form_severity_mean = severity
+            self._persist_seeded = True
+        elif dt > 0:
+            alpha = 1.0 - 0.5 ** (dt / cfg.form_persistence_half_life_s)
+            self.form_fault_fraction += alpha * ((1.0 if flagged else 0.0) - self.form_fault_fraction)
+            self.form_severity_mean += alpha * (severity - self.form_severity_mean)
 
         if obs.rep_count is None:
             # No rep counter: a held exercise, where work is time.
@@ -208,6 +235,36 @@ class SessionMetrics:
             alpha = 1.0 - 0.5 ** (dt / half_life_s)
             self.rolling_score += alpha * (score - self.rolling_score)
         self._rolling_ts = ts
+
+    def persistent_form_score(self, cfg: ScoringConfig) -> float:
+        """How bad it is that this trainee *cannot hold the movement*.
+
+        The instructor's actual question is not "is this frame wrong" but "can
+        they do it at all", and the weighted sum could not answer it. Form is
+        weighted 0.15 in the default vector, so a trainee getting **every
+        single squat rep wrong** produced 0.15 x 0.8 = 0.12 against a 0.5
+        threshold: no matter how badly or how long they struggled, nobody was
+        ever sent. That is not a tuning nit, it is the coaching case failing
+        silently, and the profile weight cannot fix it — raising `form_error`
+        enough to alert would make one bad frame outrank a fall.
+
+        So persistence is scored on its own terms and joins the score as a
+        floor (`max`), not as another weighted term. Once a trainee has been
+        wrong for the *majority* of a meaningful stretch, they are escalated
+        at the severity of the fault they keep making — `hips_sagging` at 0.8
+        alerts, a 0.4 `incomplete_lockout` still does not, which is right.
+
+        Dividing the mean severity by the fault fraction recovers "how bad it
+        is *when* it is wrong", so being wrong 60% of the time with a 0.8 fault
+        escalates at 0.8 rather than at 0.48 — being wrong most of the time is
+        the trigger, and the severity is the fault's, not an average diluted by
+        the good reps.
+        """
+        if self.active_s < cfg.form_persistence_min_s:
+            return 0.0
+        if self.form_fault_fraction < cfg.form_persistence_threshold:
+            return 0.0
+        return min(1.0, self.form_severity_mean / self.form_fault_fraction)
 
     def fault_rate(self, cfg: ScoringConfig) -> float | None:
         """Flagged work over observed work, or `None` if too little is done.
@@ -442,6 +499,16 @@ def compute_triage(
         + w["form_error"] * form_error
     )
 
+    # A trainee who cannot hold the movement is escalated on their own terms
+    # rather than through the weighted sum, which cannot express it -- see
+    # `SessionMetrics.persistent_form_score`. A floor, not a sixth term: it
+    # can only raise a score, never dilute the four features that answer
+    # "is this person in danger right now".
+    persistent = (
+        track.session.persistent_form_score(cfg) if w["form_error"] > 0 else 0.0
+    )
+    score = max(score, persistent)
+
     reasons: list[str] = []
     if fall_hit and w["fall"] > 0:
         reasons.append(REASON_FALL)
@@ -451,7 +518,12 @@ def compute_triage(
         reasons.append(REASON_OCCLUSION)
     if off_task_hit and w["off_task"] > 0:
         reasons.append(REASON_OFF_TASK)
-    if form_error >= 0.5 and w["form_error"] > 0:
+    # One or the other, never both: "cannot hold the movement" already says
+    # everything "this rep was wrong" would, and an instructor reading two
+    # codes for one problem learns to skim them.
+    if persistent > 0:
+        reasons.append(REASON_PERSISTENT_FORM)
+    elif form_error >= 0.5 and w["form_error"] > 0:
         reasons.append(REASON_FORM_ERROR)
 
     return TriageRecord(

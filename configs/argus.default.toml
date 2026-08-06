@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 6
+config_version = 7
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +53,21 @@ max_frame_gap_s = 1.0         # a longer gap is a reconnect, not work done
 # one is not a 100% fault rate; it is not yet a rate.
 min_reps_for_fault_rate = 3
 min_hold_s_for_fault_rate = 10.0
+
+# -- "cannot hold the movement" ---------------------------------------------
+# The weighted sum above cannot express sustained form failure. With
+# form_error at 0.15, a trainee getting EVERY rep wrong scores 0.15 x 0.8 =
+# 0.12 against a 0.5 alert threshold -- no matter how badly or how long they
+# struggle, nobody is sent. Raising the weight is not the fix either: enough
+# to alert on form would make one bad frame outrank a fall.
+#
+# So sustained failure is scored on its own terms and joins as a floor: once
+# a trainee has been wrong for the majority of a meaningful stretch, they are
+# escalated at the severity of the fault they keep making. hips_sagging (0.8)
+# summons an instructor; incomplete_lockout (0.4) still does not.
+form_persistence_threshold = 0.5      # "the majority of the time"
+form_persistence_half_life_s = 45.0   # so corrected form clears in a minute or two
+form_persistence_min_s = 20.0         # never fires on a handful of frames
 
 [scoring.weights]
 fall = 0.40

@@ -224,14 +224,149 @@ def test_pushing_an_observation_updates_the_session(scoring):
     assert track.session.code_counts == {"knee_valgus": 1}
 
 
-def test_the_scorer_stays_a_pure_function_of_history(scoring):
-    """The rolling score is advanced by the rank tick, never by
-    `compute_triage` -- the scorer's purity is what tests/test_determinism.py
-    protects, and session state must not creep into it."""
+def test_the_scorer_never_reads_a_tick_driven_number(scoring):
+    """The line the scorer must not cross is *tick timing*, not session state.
+
+    `persistent_form_score` is derived from the observation stream alone —
+    same frames in, same answer out — so the scorer may read it and the rank
+    stays reproducible from an observation log. `rolling_score` and
+    `peak_score` are advanced by the rank tick, so they depend on *when ticks
+    happened*; reading either would make the score a function of the server's
+    schedule and quietly break what tests/test_determinism.py asserts.
+    """
     import inspect
 
     from argus import triage
 
     source = inspect.getsource(triage.compute_triage)
-    assert "session" not in source
-    assert "rolling" not in source
+    assert "rolling_score" not in source
+    assert "peak_score" not in source
+    assert "observe_score" not in source
+
+
+def test_persistence_is_reproducible_from_the_observations_alone(scoring):
+    """The property the test above is really protecting: replay the same
+    frames twice, with no ticks at all, and get the same score."""
+    from argus.triage import TrackState, compute_triage
+
+    def replay():
+        track = TrackState(history_len=scoring.history_len)
+        ts = 0.0
+        while ts < 60.0:
+            track.push(_obs(ts, codes=("knee_valgus",) if ts % 1.0 < 0.7 else ()), scoring)
+            ts += 0.1
+        return compute_triage("t", track, 60.0, scoring)
+
+    assert replay() == replay()
+
+
+# -- "cannot hold the movement" -----------------------------------------------
+#
+# The instructor's question is not "was that rep wrong" but "can this person do
+# it at all". Before this existed the weighted sum could not answer it: with
+# `form_error` at 0.15 in the default vector, a trainee getting EVERY squat rep
+# wrong scored 0.12 against a 0.5 threshold, so no matter how badly or how long
+# they struggled, nobody was ever sent to them.
+
+
+def _struggle(scoring, seconds, fault_share, code="knee_valgus"):
+    """Observe a trainee who gets `fault_share` of their time wrong."""
+    m = SessionMetrics()
+    ts = 0.0
+    n = 0
+    while ts < seconds:
+        bad = (n % 100) < int(fault_share * 100)
+        m.observe(_obs(ts, codes=(code,) if bad else ()), scoring)
+        ts += 0.1
+        n += 1
+    return m
+
+
+def test_a_trainee_who_cannot_hold_form_is_marked_for_help(scoring):
+    """The requirement, stated as a test: wrong for the majority of the time
+    means an instructor is sent, on the default squat-ish weights where form
+    is worth only 0.15."""
+    m = _struggle(scoring, seconds=90, fault_share=0.8)
+    assert m.persistent_form_score(scoring) >= scoring.alert_threshold
+
+
+def test_the_escalation_is_the_severity_of_the_fault_they_keep_making(scoring):
+    """Not an average diluted by their good reps: being wrong 60% of the time
+    with a 0.8 fault escalates at 0.8, not at 0.48."""
+    m = _struggle(scoring, seconds=120, fault_share=0.6, code="knee_valgus")
+    assert m.persistent_form_score(scoring) == pytest.approx(0.8, abs=0.05)
+
+
+def test_a_mild_fault_still_does_not_summon_anyone(scoring):
+    """`incomplete_lockout` is worth 0.4. Persistent sloppiness is a coaching
+    note, not an alert, and the severity ladder still decides which."""
+    m = _struggle(scoring, seconds=120, fault_share=1.0, code="incomplete_lockout")
+    score = m.persistent_form_score(scoring)
+    assert 0 < score < scoring.alert_threshold
+
+
+def test_a_minority_of_bad_reps_is_not_persistence(scoring):
+    """Everyone gets reps wrong. Only "most of the time" is the trigger."""
+    m = _struggle(scoring, seconds=120, fault_share=0.3)
+    assert m.persistent_form_score(scoring) == 0.0
+
+
+def test_it_cannot_fire_before_enough_has_been_watched(scoring):
+    """It escalates straight to full severity, so a few bad frames on arrival
+    must not reach an instructor."""
+    m = _struggle(scoring, seconds=5, fault_share=1.0)
+    assert m.active_s < scoring.form_persistence_min_s
+    assert m.persistent_form_score(scoring) == 0.0
+
+
+def test_a_trainee_who_fixes_their_form_stops_being_flagged(scoring):
+    """A coaching tool has to let people recover. Otherwise a bad first set
+    marks someone for the rest of the session and the instructor learns to
+    ignore it."""
+    m = _struggle(scoring, seconds=90, fault_share=1.0)
+    assert m.persistent_form_score(scoring) > 0
+    ts = 90.0
+    while ts < 300.0:                      # several half-lives of clean work
+        m.observe(_obs(ts), scoring)
+        ts += 0.1
+    assert m.persistent_form_score(scoring) == 0.0
+
+
+def test_persistence_reaches_the_score_and_the_reason_codes(scoring):
+    """End to end through the scorer, on the default weights."""
+    from argus.triage import REASON_PERSISTENT_FORM, TrackState, compute_triage
+
+    track = TrackState(history_len=scoring.history_len)
+    ts = 0.0
+    while ts < 90.0:
+        track.push(_obs(ts, codes=("knee_valgus",)), scoring)
+        ts += 0.1
+
+    record = compute_triage("t", track, 90.0, scoring)
+    assert record.score >= scoring.alert_threshold
+    assert REASON_PERSISTENT_FORM in record.reason_codes
+
+
+def test_a_profile_that_silences_form_silences_persistence_too(scoring):
+    """A zero weight suppresses the feature *and* its reason code. Persistence
+    is a floor on the same feature and obeys the same rule, or an operator who
+    switched form off would still be alerted by it."""
+    import dataclasses as dc
+
+    from argus.triage import TrackState, compute_triage
+
+    silent = dc.replace(scoring, exercise_weights={
+        **scoring.exercise_weights,
+        "shadowbox": {"fall": 0.5, "stillness": 0.2, "occlusion": 0.2,
+                      "off_task": 0.1, "form_error": 0.0},
+    })
+    track = TrackState(history_len=silent.history_len)
+    ts = 0.0
+    while ts < 90.0:
+        track.push(
+            dc.replace(_obs(ts, codes=("knee_valgus",)), exercise="shadowbox"), silent
+        )
+        ts += 0.1
+    record = compute_triage("t", track, 90.0, silent)
+    assert "persistent_form_fault" not in record.reason_codes
+    assert record.score < silent.alert_threshold

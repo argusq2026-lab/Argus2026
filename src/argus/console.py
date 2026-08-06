@@ -313,6 +313,7 @@ const PROSE = {
   hands_face_occluded: "Face and hands out of view",
   off_task_orientation: "Turned away from the station",
   form_error: "Form flagged by the phone",
+  persistent_form_fault: "Cannot hold form — wrong most of this set",
   insufficient_depth: "Not reaching depth",
   knee_valgus: "Knees caving inward",
   rounded_back: "Rounded back",
