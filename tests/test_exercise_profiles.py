@@ -239,7 +239,12 @@ def test_the_scorer_cannot_mutate_a_profile(scoring):
 
 @pytest.mark.parametrize(
     ("hold_fn", "exercise", "code"),
-    [(hold_bicep, "bicep", "lean_back_error"), (hold_lunge, "lunge", "knee_over_toe")],
+    [
+        (hold_bicep, "bicep", "lean_back_error"),
+        (hold_bicep, "bicep", "loose_upper_arm"),
+        (hold_lunge, "lunge", "knee_over_toe"),
+        (hold_lunge, "lunge", "knee_angle_out_of_range"),
+    ],
 )
 def test_a_correct_rep_scores_zero_and_explains_nothing(scoring, hold_fn, exercise, code):
     record = compute_triage("t", hold_fn(scoring, scoring.history_len), 2.0, scoring)
@@ -249,7 +254,12 @@ def test_a_correct_rep_scores_zero_and_explains_nothing(scoring, hold_fn, exerci
 
 @pytest.mark.parametrize(
     ("hold_fn", "exercise", "code"),
-    [(hold_bicep, "bicep", "lean_back_error"), (hold_lunge, "lunge", "knee_over_toe")],
+    [
+        (hold_bicep, "bicep", "lean_back_error"),
+        (hold_bicep, "bicep", "loose_upper_arm"),
+        (hold_lunge, "lunge", "knee_over_toe"),
+        (hold_lunge, "lunge", "knee_angle_out_of_range"),
+    ],
 )
 def test_a_flagged_rep_alerts(scoring, hold_fn, exercise, code):
     track = hold_fn(scoring, scoring.history_len, form_reason_codes=(code,))
@@ -269,7 +279,15 @@ def test_the_shipped_profile_zeroes_fall_stillness_and_off_task(scoring, exercis
     assert profile["form_error"] > 0.0
 
 
-@pytest.mark.parametrize("exercise, code", [("bicep", "lean_back_error"), ("lunge", "knee_over_toe")])
+@pytest.mark.parametrize(
+    "exercise, code",
+    [
+        ("bicep", "lean_back_error"),
+        ("bicep", "loose_upper_arm"),
+        ("lunge", "knee_over_toe"),
+        ("lunge", "knee_angle_out_of_range"),
+    ],
+)
 def test_the_vocab_weight_and_profile_together_clear_the_alert_threshold(scoring, exercise, code):
     """The Trap 4 check: the arithmetic, not just the intent, must alert.
 

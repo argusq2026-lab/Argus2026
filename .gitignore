@@ -8,6 +8,9 @@ models/
 # Runtime output
 out/
 *.jsonl
+# `argus run` redirected to files during device testing; not build output that
+# belongs to any target, just whatever the last local session happened to say.
+argus_server_*.log
 
 # `argus demo` regenerates this fixture; it is build output, not an asset.
 demo/synthetic_stream.json

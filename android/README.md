@@ -32,6 +32,8 @@ fields, ever leaves the device.
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
 | **Form classifiers** | **working** — `FormClassifier.kt`, a logistic regression evaluated in Kotlin arithmetic, one instance per exercise (plank 3x26, bicep 2x16, lunge 2x18). No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
+| Geometric form checks | **working** — `GeometricFormChecks.kt`, a second fault per exercise upstream never collected ML labels for: `loose_upper_arm` (bicep, elbow-shoulder angle vs. vertical) and `knee_angle_out_of_range` (lunge, hip-knee-ankle angle, gated behind the same `depth_gate` as `knee_over_toe`). Both thresholds are upstream's own stated cutoffs, unvalidated here — see `docs/VALIDATION.md` §1c/§1d |
+| Rep counting | **working, bicep and lunge only** — `RepCounter.kt`, a debounced peak/valley crossing on the same joint angle the geometric checks use (elbow flex for bicep, knee angle for lunge). Counts a rep regardless of form quality — a flagged rep still counts — and is display-only on the wire (`rep_count`, `docs/PROTOCOL.md`), never scored. Plank has no counter: it is a hold, not a rep. The hysteresis thresholds are a hand-picked heuristic, not fit or measured against real reps — see the class docstring |
 | Other exercises | not started (`form_reason_codes` empty for any exercise without a shipped `<exercise>_lr.json`; see `docs/ADDING_AN_EXERCISE.md`) |
 
 ## How detection stays honest

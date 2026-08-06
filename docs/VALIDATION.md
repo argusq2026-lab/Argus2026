@@ -138,6 +138,17 @@ ML -- a geometric approach in the spirit of §5's squat recommendation may
 simply be the better fit for bicep's diagnostic cue too) or collect real
 data and refit.
 
+**Update:** `loose_upper_arm` now ships, as exactly that geometric check --
+`GeometricFormChecks.kt` computes the elbow-shoulder angle from vertical and
+flags it past upstream's stated 40-degree cutoff. This closes nothing above:
+the cutoff is copied verbatim from their README with no graph, no evaluation
+against held-out data, and no check by anyone (including upstream) that it
+generalises past the videos they tuned it on -- arguably less evidenced than
+the ML-fit `lean_back_error`, which at least has a held-out accuracy number to
+distrust. `weak peak contraction` (their third bicep fault) is not
+implemented: it requires tracking an arm across a rep to find its peak, which
+conflicts with Argus's deliberate no-rep-phase design (see §1d).
+
 ---
 
 ## 1d. The lunge classifier: a label that only ever meant "at the bottom of a rep"
@@ -187,6 +198,19 @@ confirm on-device that the depth gate's bounds -- fit on MediaPipe recordings,
 applied to YOLO26 keypoints -- actually track "bottom of a lunge" and not some
 artifact of the source dataset's camera placement; nothing here checked that
 beyond the internal consistency of upstream's own two datasets.
+
+**Update:** `knee_angle_out_of_range` now ships alongside `knee_over_toe` --
+`GeometricFormChecks.kt` computes the hip-knee-ankle angle of whichever
+visible knee is more bent (the working leg) and flags it outside upstream's
+stated 60-135 degree range. Unlike bicep's 40-degree cutoff above, this one
+*is* backed by upstream plotting contributors' knee angle during correct-form
+lunges (`core/lunge_model/README.md`, referencing an unincluded graph) -- but
+it is still their evaluation on their recordings, not anything measured here.
+It is deliberately gated the same way `knee_over_toe` is: `MainActivity.kt`
+only calls it once `FormClassifier`'s own `depth_gate` has accepted the pose,
+because the angle alone cannot distinguish "standing" from "a lunge bottom
+this dataset never modelled" -- both would need the same external phase
+signal this check does not have.
 
 ---
 
