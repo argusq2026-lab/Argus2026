@@ -135,6 +135,8 @@ def test_station_view_fields_are_the_closed_set():
         "rep_count",
         "form_ok",
         "session",
+        "display_name",
+        "subject_present",
     }
 
 

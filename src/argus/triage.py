@@ -289,6 +289,11 @@ class TrackState:
     last_form_error_score: float = 0.0
     #: The session-long account behind the instant score. See `SessionMetrics`.
     session: SessionMetrics = field(default_factory=SessionMetrics)
+    #: Whether the phone currently has anyone in frame. False after an `idle`
+    #: message. A station whose trainee has walked away still holds their last
+    #: two seconds of pose, and scoring it would report `prolonged_stillness`
+    #: about an empty rack — the history describes somebody who is not there.
+    subject_present: bool = True
     #: The exercise most recently reported, which selects the weight profile.
     #: Latest-wins rather than a majority over the window: a trainee who has
     #: just dropped into a plank should be scored as planking immediately, not
@@ -305,7 +310,13 @@ class TrackState:
         self.history.append(obs)
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
         self.last_exercise = obs.exercise
+        self.subject_present = True
         self.session.observe(obs, cfg)
+
+    def note_idle(self) -> None:
+        """The phone is watching an empty station. Nobody to score."""
+        self.subject_present = False
+        self.last_form_error_score = 0.0
 
 
 @dataclass(frozen=True)
@@ -484,6 +495,13 @@ def compute_triage(
     dashboard as a reason, or the explanation stops matching the number it
     claims to explain.
     """
+    # An empty station is not a calm trainee, and it is not a trainee at all.
+    # Its stale history would otherwise score `prolonged_stillness` about a
+    # rack nobody is standing at. The console shows the state separately; what
+    # matters here is that nothing is *asserted* about a person who is absent.
+    if not track.subject_present:
+        return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+
     fall, fall_hit = score_fall(track.history, cfg)
     still, still_hit = score_stillness(track.history, cfg)
     occl, occl_hit = score_occlusion(track.history, cfg)

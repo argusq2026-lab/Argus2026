@@ -16,5 +16,10 @@
     <string name="session_none">Not joining a named session</string>
     <string name="session_joining">Joining %1$s</string>
     <string name="session_joining_manual">Joining %1$s — the instructor approves each station</string>
-    <string name="display_name_hint">name shown to the instructor (optional)</string>
+    <!-- One identity field: the trainee id is the device's and is never asked
+         for. See the comment in MainActivity.showConnectDialog. -->
+    <string name="trainee_name_hint">e.g. Alex</string>
+    <string name="field_server">Server</string>
+    <string name="field_trainee">Who is at this station?</string>
+    <string name="field_exercise">Exercise (sets how the laptop scores them)</string>
 </resources>

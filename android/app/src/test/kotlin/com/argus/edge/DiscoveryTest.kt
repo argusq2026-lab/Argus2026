@@ -171,3 +171,25 @@ class JoinPendingTest {
         assertEquals("Coach Riley", full.getString("session_name"))
     }
 }
+
+/** The empty-station heartbeat. Mirrors `tests/test_admission.py`. */
+class IdleTest {
+
+    @Test
+    fun `idle encodes as its own message type`() {
+        val obj = JSONObject(encodeIdle(12.5))
+        assertEquals("idle", obj.getString("type"))
+        assertEquals(12.5, obj.getDouble("ts"), 1e-9)
+    }
+
+    @Test
+    fun `idle carries no subject fields at all`() {
+        // Not an observation with the pose nulled: an observation asserts a
+        // reading about a person, and a null inside one gets scored as a zero.
+        val obj = JSONObject(encodeIdle(1.0))
+        for (key in listOf("bbox_xyxy", "keypoints_xy", "keypoints_conf",
+                           "form_reason_codes", "exercise")) {
+            assertEquals(key, false, obj.has(key))
+        }
+    }
+}

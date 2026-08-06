@@ -39,6 +39,15 @@ def _cfg(default_config, **session):
     )
 
 
+def _observation(ts: float) -> str:
+    return json.dumps({
+        "type": "observation", "ts": ts,
+        "bbox_xyxy": [0.4, 0.1, 0.5, 0.9],
+        "keypoints_xy": [[0.45, 0.3]] * 17,
+        "keypoints_conf": [0.9] * 17,
+    })
+
+
 async def _hello(port, trainee_id="t0", **extra):
     ws = await websockets.connect(f"ws://127.0.0.1:{port}")
     await ws.send(
@@ -326,6 +335,118 @@ def test_a_phone_that_names_no_session_is_still_admitted(default_config):
             ws = await _hello(server.ws_port)
             assert json.loads(await ws.recv())["type"] == "hello_ack"
             await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+# -- the empty station --------------------------------------------------------
+#
+# A phone watching a rack whose trainee has not arrived sends no observations,
+# because there is nobody to observe. Before `idle`, that was indistinguishable
+# from a dead phone: `track_ttl_s` evicted the healthy station, refused its next
+# message, and it reconnected — a flap that starts the moment a station is set
+# up early, which is the normal case.
+
+
+def test_an_idle_station_is_not_evicted(default_config):
+    async def run():
+        cfg = dataclasses.replace(
+            _cfg(default_config),
+            ingest=dataclasses.replace(
+                default_config.ingest, ws_host="127.0.0.1", ws_port=0, track_ttl_s=0.3
+            ),
+        )
+        clock = {"t": 0.0}
+        server = IngestServer(cfg, now=lambda: clock["t"])
+        await server.start()
+        try:
+            ws = await _hello(server.ws_port, "t0")
+            assert json.loads(await ws.recv())["type"] == "hello_ack"
+
+            # Well past the ttl, saying only "nobody is here".
+            for step in range(1, 6):
+                clock["t"] = step * 0.2
+                await ws.send(json.dumps({"type": "idle", "ts": float(step)}))
+                await asyncio.sleep(0.05)
+                server.tick()
+
+            assert server.active_trainee_ids == ["t0"], "a healthy station was evicted"
+            await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_an_empty_station_scores_nothing_and_says_nothing(default_config):
+    """Its last two seconds of pose describe somebody who has left. Scoring
+    them reports `prolonged_stillness` about an empty rack."""
+
+    async def run():
+        server = IngestServer(_cfg(default_config), now=lambda: 0.0)
+        await server.start()
+        try:
+            ws = await _hello(server.ws_port, "t0")
+            assert json.loads(await ws.recv())["type"] == "hello_ack"
+            for i in range(40):
+                await ws.send(_observation(i * 0.1))
+            await asyncio.sleep(0.2)
+
+            before = server.tick().records[0]
+            assert before.reason_codes, "the fixture should score something first"
+
+            await ws.send(json.dumps({"type": "idle", "ts": 99.0}))
+            await asyncio.sleep(0.2)
+            after = server.tick().records[0]
+            assert after.score == 0.0
+            assert after.reason_codes == ()
+            await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_a_truly_silent_phone_is_still_evicted(default_config):
+    """`idle` must not become a way for a wedged phone to look alive. It has
+    to actually keep sending."""
+
+    async def run():
+        cfg = dataclasses.replace(
+            _cfg(default_config),
+            ingest=dataclasses.replace(
+                default_config.ingest, ws_host="127.0.0.1", ws_port=0, track_ttl_s=0.2
+            ),
+        )
+        clock = {"t": 0.0}
+        server = IngestServer(cfg, now=lambda: clock["t"])
+        await server.start()
+        try:
+            ws = await _hello(server.ws_port, "t0")
+            assert json.loads(await ws.recv())["type"] == "hello_ack"
+            clock["t"] = 100.0
+            server.tick()
+            assert server.active_trainee_ids == []
+            await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_a_malformed_idle_is_refused_like_any_other_message(default_config):
+    async def run():
+        server = IngestServer(_cfg(default_config), now=lambda: 0.0)
+        await server.start()
+        try:
+            ws = await _hello(server.ws_port, "t0")
+            assert json.loads(await ws.recv())["type"] == "hello_ack"
+            await ws.send(json.dumps({"type": "idle"}))       # no ts
+            error = json.loads(await ws.recv())
+            assert error["type"] == "error"
+            assert "ts" in error["message"]
         finally:
             await server.stop()
 

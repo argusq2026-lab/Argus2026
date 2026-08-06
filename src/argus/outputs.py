@@ -106,6 +106,16 @@ class StationView:
     #: window is full, so a console that showed a half-warm station as simply
     #: "nothing wrong" would be overstating what the scorer had looked at.
     observations: int
+    #: What the trainee is called, if the phone offered a name at handshake.
+    #: `trainee_id` is a device identifier and is the key an alert is
+    #: dispatched against; it is not a thing to put in front of an instructor
+    #: who has to find a person in a room. Phone-chosen and length-bounded;
+    #: rendered as text, never as markup.
+    display_name: str = ""
+    #: Whether the phone currently has anyone in frame. A station waiting for
+    #: its trainee is *ready*, not broken, and must not be drawn like a phone
+    #: that has gone silent — the two used to be indistinguishable.
+    subject_present: bool = True
     bbox_xyxy: tuple[float, float, float, float] | None = None
     keypoints_xy: tuple[tuple[float, float], ...] | None = None
     keypoints_conf: tuple[float, ...] | None = None

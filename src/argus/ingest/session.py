@@ -35,6 +35,9 @@ class StationSession:
     track: TrackState
     last_seen_ts: float
     connected: bool = True
+    #: Carried from the `hello` so the console can name a person rather than
+    #: a device. Re-set on reconnect: the same rack may be a different trainee.
+    display_name: str = ""
 
 
 class DuplicateTraineeError(ValueError):
@@ -72,7 +75,9 @@ class SessionRegistry:
         session = self._sessions.get(trainee_id)
         return session is not None and session.connected
 
-    def register(self, station_id: str, trainee_id: str, now: float) -> StationSession:
+    def register(
+        self, station_id: str, trainee_id: str, now: float, display_name: str = ""
+    ) -> StationSession:
         """Start a new session, or resume one within its disconnect grace window."""
         existing = self._sessions.get(trainee_id)
         if existing is not None:
@@ -81,6 +86,7 @@ class SessionRegistry:
             existing.station_id = station_id
             existing.connected = True
             existing.last_seen_ts = now
+            existing.display_name = display_name
             return existing
 
         session = StationSession(
@@ -88,6 +94,7 @@ class SessionRegistry:
             trainee_id=trainee_id,
             track=TrackState(history_len=self._scoring.history_len),
             last_seen_ts=now,
+            display_name=display_name,
         )
         self._sessions[trainee_id] = session
         return session
@@ -104,6 +111,19 @@ class SessionRegistry:
         the caller closes the socket and tells the phone to reconnect fresh."""
         session = self._sessions[trainee_id]
         session.track.push(obs, self._scoring)
+        session.last_seen_ts = now
+
+    def note_idle(self, trainee_id: str, now: float) -> None:
+        """The station is alive and watching nobody.
+
+        Refreshes `last_seen_ts` exactly as an observation does — that is the
+        point: a healthy station pointed at an empty rack must not be evicted
+        and forced to reconnect. Raises `KeyError` on an already-expired
+        session, same as `push_observation`, so the caller's handling is one
+        path rather than two.
+        """
+        session = self._sessions[trainee_id]
+        session.track.note_idle()
         session.last_seen_ts = now
 
     def tracks(self) -> dict[str, TrackState]:
@@ -151,9 +171,11 @@ class SessionRegistry:
                 StationView(
                     station_id=session.station_id,
                     trainee_id=trainee_id,
+                    display_name=session.display_name,
                     connected=session.connected,
                     last_seen_ts=session.last_seen_ts,
                     observations=len(history),
+                    subject_present=session.track.subject_present,
                     bbox_xyxy=latest.bbox_xyxy if latest else None,
                     keypoints_xy=tuple(latest.keypoints_xy) if latest else None,
                     keypoints_conf=tuple(latest.keypoints_conf) if latest else None,

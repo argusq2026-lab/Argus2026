@@ -222,6 +222,38 @@ an unrecognised `form_reason_codes` entry) gets the same treatment as a bad
 `hello`: an `error` message, then the connection closes with code `1008`.
 There is no partial acceptance of a malformed message.
 
+## Idle — "nobody is in frame"
+
+When the phone has no subject, it must say so rather than going quiet:
+
+```json
+{ "type": "idle", "ts": 1730649600.125 }
+```
+
+Send it about once a second — it is a liveness fact, not a measurement, and
+only has to arrive comfortably inside `ingest.track_ttl_s`.
+
+**This is not optional for a station that will ever be pointed at an empty
+rack**, which is every station: they get set up before their trainee arrives.
+Without it, a healthy phone watching nobody is indistinguishable from a dead
+one — both send nothing — so the server evicts the session at `track_ttl_s`,
+refuses the phone's next message, and the phone reconnects. That flap runs for
+as long as the rack is empty.
+
+It is deliberately **not** an observation with the subject fields nulled. An
+observation asserts a reading about a person; this asserts that there is no
+person to read. Making the difference a null inside a message everything else
+treats as a measurement is how a null ends up scored as a zero.
+
+On the server it refreshes the session exactly as an observation does, and
+marks the trainee absent: the station stops being ranked (its last two seconds
+of pose describe somebody who has left, and scoring them would report
+`prolonged_stillness` about an empty rack) and the console draws it as **ready**
+rather than as silent. A phone that sends *neither* observations nor idles is
+still evicted — `idle` is not a way for a wedged app to look alive.
+
+---
+
 ### Keypoint layout
 
 Standard COCO-17, in this exact order:

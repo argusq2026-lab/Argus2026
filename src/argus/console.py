@@ -158,6 +158,12 @@ CONSOLE_HTML = """<!doctype html>
     border-top: 3px solid var(--live); border-radius: 6px;
     padding: 0.75rem 0.8rem 0.65rem;
   }
+  /* Ready, not live and not broken: a station whose trainee has not arrived
+     is working perfectly, and drawing it green would claim someone is being
+     watched while drawing it amber would send an instructor to a rack with
+     nothing wrong. Its own, quieter colour. */
+  .card.waiting { border-top-color: var(--bone); }
+  .card.waiting .cchip { background: rgba(152, 162, 179, 0.16); color: var(--bone); }
   .card.stale { border-top-color: var(--stale); }
   .card.dropped, .card.gone, .card.nolink { border-top-color: var(--down); }
   /* Fade the pose, not the frame: the note explaining the silence lives in
@@ -468,7 +474,7 @@ function draw(canvas, station, faded) {
 function makeCard(traineeId) {
   const root = el("div", "card");
   const head = el("div", "chead");
-  const who = el("div", "cwho", traineeId);
+  const who = el("div", "cwho", traineeId);   // replaced per render
   const chip = el("span", "cchip");
   head.appendChild(who);
   head.appendChild(chip);
@@ -499,7 +505,7 @@ function makeCard(traineeId) {
 
   root.append(head, where, frame, bar, score, rolling, reasons, work, meta, profile, warm);
   const refs = {
-    root, chip, where, canvas, fnote, fill, scoreVal, scoreAge,
+    root, who, chip, where, canvas, fnote, fill, scoreVal, scoreAge,
     rolling, reasons, work, meta, profile, warm,
   };
   state.cards.set(traineeId, refs);
@@ -511,10 +517,15 @@ function statusOf(entry, snapshotTs) {
   const s = entry.station;
   if (!s.connected) return "dropped";
   const age = snapshotTs - s.last_seen_ts;
-  return age >= state.cfg.stale_after_s ? "stale" : "live";
+  if (age >= state.cfg.stale_after_s) return "stale";
+  // Reporting, but with nobody in frame. A station set up before its trainee
+  // arrives is ready, and drawing it like a silent phone taught an instructor
+  // to walk over to a rack that was working perfectly.
+  return s.subject_present ? "live" : "waiting";
 }
 
-const CHIP = { live: "live", stale: "silent", dropped: "dropped", gone: "left floor" };
+const CHIP = { live: "live", waiting: "ready", stale: "silent",
+               dropped: "dropped", gone: "left floor" };
 
 function renderCard(traineeId, entry, record, snapshotTs) {
   const c = state.cards.get(traineeId) || makeCard(traineeId);
@@ -524,7 +535,12 @@ function renderCard(traineeId, entry, record, snapshotTs) {
 
   c.root.className = "card " + status;
   c.chip.textContent = CHIP[status];
-  c.where.textContent = s.station_id;
+  // A trainee_id is a device identifier. An instructor has to find a person
+  // in a room, so the name leads and the id stays available underneath.
+  c.who.textContent = s.display_name || s.trainee_id;
+  c.where.textContent = (s.display_name && s.trainee_id !== s.station_id)
+    ? s.station_id + " · " + s.trainee_id
+    : (s.display_name ? s.trainee_id : s.station_id);
 
   // The frame note is where silence gets said in words rather than implied
   // by a greyed-out skeleton, which is easy to read as "calm" at a glance.
@@ -535,6 +551,8 @@ function renderCard(traineeId, entry, record, snapshotTs) {
     c.fnote.textContent = "Phone disconnected — dropping in " + left.toFixed(0) + "s";
   } else if (status === "stale") {
     c.fnote.textContent = "No frames for " + age.toFixed(1) + "s";
+  } else if (!s.subject_present) {
+    c.fnote.textContent = "Ready — waiting for a trainee";
   } else if (!s.keypoints_xy) {
     c.fnote.textContent = "Connected — no frames yet";
   } else {
@@ -553,10 +571,11 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   c.fill.style.width = (shown === null ? 0 : Math.min(100, shown * 100)) + "%";
   c.fill.className = hot ? "hot" : "";
   c.scoreVal.textContent = shown === null ? "—" : shown.toFixed(2);
-  c.scoreVal.className = status === "live" ? "" : "frozen";
+  const livelike = status === "live" || status === "waiting";
+  c.scoreVal.className = livelike ? "" : "frozen";
   c.scoreAge.textContent = status === "gone"
     ? "no longer scored"
-    : (status === "live" ? "last seen " : "frozen, last seen ") + age.toFixed(1) + "s ago";
+    : (livelike ? "last seen " : "frozen, last seen ") + age.toFixed(1) + "s ago";
 
   // Say plainly that the big number is a session average and what the
   // trainee is doing this instant, so nobody reads a settled 0.31 as a claim
@@ -578,6 +597,9 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   if (status === "live") {
     c.reasons.className = codes.length ? "creasons hot" : "creasons quiet";
     c.reasons.textContent = codes.length ? proseList(codes) : "Nothing flagged";
+  } else if (status === "waiting") {
+    c.reasons.className = "creasons quiet";
+    c.reasons.textContent = "No trainee at this station yet";
   } else if (codes.length) {
     c.reasons.className = "creasons quiet";
     c.reasons.textContent = "Last reading before it went quiet: " + proseList(codes);
@@ -639,7 +661,7 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   }
 
   const need = state.cfg.history_len;
-  if (status !== "gone" && s.observations < need) {
+  if (status !== "gone" && status !== "waiting" && s.observations < need) {
     c.warm.textContent = "Warming up " + s.observations + "/" + need +
                          " frames — some checks cannot fire yet";
   } else {
@@ -722,7 +744,8 @@ function renderQueue(payload, order) {
     mid.appendChild(el("span", "qtier",
       over ? "above alert threshold · now"
            : (rank > rollingScore ? "ranked on fault rate" : "session average")));
-    mid.appendChild(el("div", "qwho", r.trainee_id));
+    mid.appendChild(el("div", "qwho",
+      (entry && entry.station.display_name) || r.trainee_id));
     mid.appendChild(el("div", "qwhy",
       proseList(r.reason_codes) || (session && volume(session)) || "No reason code fired"));
     row.appendChild(mid);
@@ -741,13 +764,14 @@ function renderQueue(payload, order) {
   for (const traineeId of order) {
     const entry = state.known.get(traineeId);
     const status = statusOf(entry, payload.ts);
-    if (status === "live") continue;
+    if (status === "live" || status === "waiting") continue;
     const age = payload.ts - entry.station.last_seen_ts;
     const row = el("div", "qrow silent");
     row.appendChild(el("div", "qscore", "?"));
     const mid = el("div");
     mid.appendChild(el("span", "qtier", "not reporting"));
-    mid.appendChild(el("div", "qwho", traineeId));
+    mid.appendChild(el("div", "qwho",
+      entry.station.display_name || traineeId));
     let why;
     if (status === "gone") why = "Track dropped — no longer being scored";
     else if (status === "dropped") why = "Phone disconnected " + age.toFixed(1) + "s ago";
@@ -930,7 +954,10 @@ function render(payload, wall) {
   document.getElementById("session").textContent =
     state.cfg.session_name || "trainer console";
 
-  const live = order.filter((t) => statusOf(state.known.get(t), payload.ts) === "live").length;
+  const live = order.filter((t) => {
+    const st = statusOf(state.known.get(t), payload.ts);
+    return st === "live" || st === "waiting";
+  }).length;
   const flagged = (payload.records || []).filter((r) => r.score >= state.cfg.alert_threshold).length;
   let counts = order.length + " station" + (order.length === 1 ? "" : "s") + " · " +
     live + " reporting · " + flagged + " above threshold";

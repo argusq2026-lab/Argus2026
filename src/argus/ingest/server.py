@@ -37,6 +37,7 @@ from argus.ingest.protocol import (
     hello_ack_message,
     join_pending_message,
     parse_hello,
+    parse_idle,
     parse_observation,
 )
 from argus.ingest.session import DuplicateTraineeError, SessionRegistry
@@ -325,7 +326,9 @@ class IngestServer:
             return
 
         try:
-            self._registry.register(hello.station_id, hello.trainee_id, self._now())
+            self._registry.register(
+                hello.station_id, hello.trainee_id, self._now(), hello.display_name
+            )
         except DuplicateTraineeError as exc:
             # Two phones can be approved for one trainee_id in the window
             # between the check above and here. The registry is the authority
@@ -346,7 +349,17 @@ class IngestServer:
         try:
             async for raw_message in ws:
                 try:
-                    obs = parse_observation(json.loads(raw_message), self.cfg.scoring.form_error_vocab)
+                    payload = json.loads(raw_message)
+                    # `idle` says "I am here, nobody is in frame". It refreshes
+                    # the session exactly as an observation does, which is the
+                    # whole point: a station set up before its trainee arrives
+                    # must not be evicted and forced to reconnect.
+                    if isinstance(payload, dict) and payload.get("type") == "idle":
+                        parse_idle(payload)
+                        self._registry.note_idle(hello.trainee_id, self._now())
+                        self._publish_stations()
+                        continue
+                    obs = parse_observation(payload, self.cfg.scoring.form_error_vocab)
                 except (ProtocolError, json.JSONDecodeError) as exc:
                     await ws.send(json.dumps(error_message(str(exc))))
                     await ws.close(_POLICY_VIOLATION, _close_reason(str(exc)))
