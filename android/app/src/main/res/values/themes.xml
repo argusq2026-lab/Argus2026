@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The palette in colors.xml applied to the app chrome itself, not just
+         hand-drawn views: dialogs, the status bar, and anything else that
+         reads colorPrimary/colorAccent from the theme rather than being
+         styled explicitly. Parented on the same DayNight.NoActionBar the
+         manifest referenced directly before: nothing about how the app
+         behaves changes, only that its own colors are now named here instead
+         of nowhere. -->
+    <style name="Theme.ArgusEdge" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/live</item>
+        <item name="colorPrimaryDark">@color/surface</item>
+        <item name="colorAccent">@color/attention</item>
+        <item name="android:windowBackground">@color/surface</item>
+        <item name="android:textColorPrimary">@color/on_surface</item>
+        <item name="android:textColorSecondary">@color/on_surface_dim</item>
+    </style>
+</resources>

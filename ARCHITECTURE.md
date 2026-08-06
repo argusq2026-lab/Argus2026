@@ -252,9 +252,20 @@ real WebSocket connection to a running `argus run`, which is also the
 reference example a phone-app implementer should read alongside
 `docs/PROTOCOL.md`.
 
-## What is not yet built
+## The phone side
 
-The phone-side app (pose estimation, form/exercise classification, and the
-WebSocket client half of `docs/PROTOCOL.md`) is a separate, future project
-and does not exist in this repository. See `docs/VALIDATION.md` for the full
-list of what that gap means in practice.
+The phone-side app — pose estimation, form/exercise classification, and the
+WebSocket client half of `docs/PROTOCOL.md` — lives in `android/` in this
+same repository; see `android/README.md` for what it runs (YOLO-X + YOLO26-pose
+detection, three form classifiers, geometric fault checks, rep counting) and
+how it stages onto a device. It has been built, installed, and run on a real
+phone against a real laptop server, over both USB and LAN Wi-Fi.
+
+## What is not yet validated
+
+What that device testing does *not* establish is accuracy against a real
+trainee: every model's reported number is a held-out-frame figure from
+upstream's own source recordings, and the scoring weights have never been
+fitted to a real incident either. See `docs/VALIDATION.md` for the full,
+itemized list of what remains unvalidated and what closing each gap would
+take.

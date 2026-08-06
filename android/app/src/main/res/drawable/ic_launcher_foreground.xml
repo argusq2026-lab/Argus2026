@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Argus Panoptes, the many-eyed giant: after his death Hera set his hundred
+     eyes into a peacock's tail, so one ringed "peacock-feather eye" in the
+     app's own accent colors (amber ring, green iris) is the on-myth and
+     on-brand rendering, not a literal eyeball. Four small satellite eyes
+     nod at "many"; they sit outside the 66dp safe zone on purpose and are
+     allowed to be cropped by a round/squircle launcher mask, the same way
+     any adaptive-icon foreground bleeds past the safe circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- outer ring: attention amber -->
+    <path
+        android:pathData="M22,54 a32,32 0 1,0 64,0 a32,32 0 1,0 -64,0"
+        android:fillColor="#FFBE3D"/>
+    <!-- iris: live green -->
+    <path
+        android:pathData="M30,54 a24,24 0 1,0 48,0 a24,24 0 1,0 -48,0"
+        android:fillColor="#3DDC97"/>
+    <!-- pupil: near-black, matches the background so it reads as a hole -->
+    <path
+        android:pathData="M42,54 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0"
+        android:fillColor="#0E1113"/>
+    <!-- highlight -->
+    <path
+        android:pathData="M42,46 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="#F2F5F7"/>
+
+    <!-- four small satellite eyes, "many eyes" -->
+    <path android:pathData="M12,14 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" android:fillColor="#3DDC97"/>
+    <path android:pathData="M14,16 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" android:fillColor="#0E1113"/>
+
+    <path android:pathData="M86,14 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" android:fillColor="#FF6B6B"/>
+    <path android:pathData="M88,16 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" android:fillColor="#0E1113"/>
+
+    <path android:pathData="M12,94 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" android:fillColor="#FF6B6B"/>
+    <path android:pathData="M14,96 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" android:fillColor="#0E1113"/>
+
+    <path android:pathData="M86,94 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" android:fillColor="#3DDC97"/>
+    <path android:pathData="M88,96 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0" android:fillColor="#0E1113"/>
+</vector>

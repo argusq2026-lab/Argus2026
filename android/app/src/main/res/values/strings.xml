@@ -22,4 +22,23 @@
     <string name="field_server">Server</string>
     <string name="field_trainee">Who is at this station?</string>
     <string name="field_exercise">Exercise (sets how the laptop scores them)</string>
+
+    <!-- DashboardActivity: the app's launcher screen, one tile per domain.
+         Fitness is real; the rest name where this is headed without
+         pretending they're built; see the "Coming soon" body text. -->
+    <string name="dashboard_tagline">Many eyes, one mind</string>
+    <string name="tile_fitness_title">Fitness</string>
+    <string name="tile_fitness_subtitle">Trainee triage on the floor</string>
+    <string name="tile_nursing_title">Nursing</string>
+    <string name="tile_nursing_subtitle">Patient rounds, one phone per bed</string>
+    <string name="tile_lab_title">Lab</string>
+    <string name="tile_lab_subtitle">Procedure safety, one phone per station</string>
+    <string name="tile_welding_title">Welding</string>
+    <string name="tile_welding_subtitle">PPE and technique, one phone per station</string>
+    <string name="coming_soon_title">Coming soon</string>
+    <string name="coming_soon_body">%1$s will run on the same engine Fitness
+        already does: one phone per person, a triage rank surfacing who needs
+        you right now. What is missing is a %1$s-specific on-device
+        classifier and real data to fit it on -- the same work bicep and
+        lunge needed before they shipped (see docs/ADDING_AN_EXERCISE.md).</string>
 </resources>

@@ -61,6 +61,25 @@ Adding an exercise on top of this generalized shape (§3) is now: an
 `ExerciseSpec` entry, a `formClassifierAssets` line, a vocabulary entry, and a
 weight profile -- nothing above needs a new class or a new test file.
 
+**Two siblings worth knowing about, both optional and both separate from the
+fitted classifier above:**
+
+- **A second fault via plain arithmetic, not a model.** Bicep and lunge each
+  ship a fault upstream never collected ML labels for at all --
+  `GeometricFormChecks.kt` computes a joint angle (elbow-shoulder-vs-vertical
+  for bicep, hip-knee-ankle for lunge) and flags it past a fixed threshold.
+  No artifact, no scaler, no fixture -- just a function and a vocabulary
+  entry. Reach for this when upstream (or your own analysis) states a
+  threshold-based check for a fault it never fit a model on; see
+  `docs/VALIDATION.md` §1c/§1d for what "unvalidated" means for a threshold
+  copied verbatim versus a model with a held-out accuracy number to distrust.
+- **Rep counting is a different concern from form.** `RepCounter.kt` counts a
+  full cycle of the same joint angle `GeometricFormChecks` reads (a debounced
+  peak/valley crossing), independent of whether the rep was flagged --
+  `rep_count` is display-only on the wire and never scored, same as
+  `form_ok`. Not every exercise has one: plank is a hold, not a rep, and has
+  no counter.
+
 ---
 
 ## 2. The recipe
@@ -391,10 +410,8 @@ number without the caveat.
 Tests passing is necessary and was not sufficient — the visibility bug passed
 everything.
 
-1. `pytest tests/ -q` — currently 341.
-2. `cd android && ./gradlew testDebugUnitTest` — currently 37 plus the
-   discovery and join-pending cases; **not run since the console merge, and
-   the Kotlin has not been compiled since either**.
+1. `pytest tests/ -q` — currently 361.
+2. `cd android && ./gradlew testDebugUnitTest` — currently 77.
 3. Re-run the training script; artifact and fixture must be **byte-identical**.
 4. Check `min_scaler_scale` in the artifact. Under 0.01 means a near-constant
    feature and the model will not survive the change of pose model.

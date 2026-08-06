@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A tile's icon badge: a plain circle, colored per-tile at runtime
+     (DashboardActivity.kt mutates and re-colors one shared drawable rather
+     than shipping four near-identical XML files that differ only by a
+     hardcoded color). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
+    <solid android:color="@color/live"/>
+</shape>

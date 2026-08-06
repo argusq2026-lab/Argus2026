@@ -1,11 +1,12 @@
 # Argus wire protocol — phone to laptop
 
-This is the contract a phone app must implement to feed Argus. It is not
-implemented in this repository — the Android (or iOS) client is a separate,
-future project — so this document has to be precise enough to build against
-without seeing the server's code. `demo/replay_client.py` is a small
-reference implementation of the client side of exactly this protocol, in
-Python; read it alongside this document.
+This is the contract a phone app must implement to feed Argus. The Android
+client that implements it lives in [`android/`](../android/) in this same
+repository (see `android/README.md`); an iOS client does not exist. This
+document stays precise enough to build a client against without reading the
+server's code either way. `demo/replay_client.py` is a small reference
+implementation of the client side of exactly this protocol, in Python; read
+it alongside this document.
 
 Everything here is enforced by `argus.ingest.protocol` and covered by
 `tests/test_ingest_protocol.py` and `tests/test_ingest_server.py` — if this

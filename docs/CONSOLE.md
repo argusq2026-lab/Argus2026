@@ -247,9 +247,8 @@ argus replay --fixture fixture.json --speed 1.0
 `--speed 1.0` streams at the fixture's own pace, which is what makes the
 console behave like a real floor rather than filling instantly. The synthetic
 scene includes one trainee reporting a form-error code (see
-`argus.synthetic`), because no phone reports one yet — without it the
-`form_error` path would be unexercised in the only fixture the console is
-developed against.
+`argus.synthetic`), so the `form_error` path stays exercised in this fixture
+without needing a phone physically present to develop the console against.
 
 To see the silent and dropped states, stop the replay part-way: the stations
 stay in `ingest.track_ttl_s`'s grace window before being evicted.

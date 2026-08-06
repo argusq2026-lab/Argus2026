@@ -14,11 +14,12 @@ scorer and gives the trainer a live view.
 > things would need revisiting before it went anywhere near a gym floor. The
 > scoring weights have never been fitted to an incident
 > ([VALIDATION.md](docs/VALIDATION.md) §2). No pose or detection accuracy claim
-> is supported, because no real trainee footage exists (§1). And the phone's
-> pose model is AGPL-3.0, which is fine to demo and develop against but is a
-> licensing decision before distributing an application built on it — see
-> [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), where the permissively
-> licensed alternatives are already scouted.
+> is supported, because the app has been run on real devices but has never
+> watched a real trainee whose reps were labelled and checked against ([§1](docs/VALIDATION.md)).
+> And the phone's pose model is AGPL-3.0, which is fine to demo and develop
+> against but is a licensing decision before distributing an application
+> built on it — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), where
+> the permissively licensed alternatives are already scouted.
 
 **Privacy is a property of the wiring.** No frame ever exists past a phone's
 own camera pipeline, and every sink's signature accepts only
@@ -27,10 +28,15 @@ boundary import no image library at all. This is enforced structurally and
 checked by [`tests/test_privacy.py`](tests/test_privacy.py), not by a runtime
 redaction filter the next contributor could forget.
 
-The Android/iOS phone app is **not part of this repository** — see
-[`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the exact wire contract it needs to
-implement, and [`demo/replay_client.py`](demo/replay_client.py) for a
-reference client that stands in for a real phone during development.
+The Android phone app lives in [`android/`](android/) in this same
+repository — a dashboard front door (Fitness is real; Nursing/Lab/Welding are
+named placeholders for the same engine applied elsewhere) opens a screen that
+runs detection, pose, and form classification on the phone's own NPU, and
+streams the result to this server. See [`android/README.md`](android/README.md)
+for what it runs and [`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the exact wire
+contract it implements. [`demo/replay_client.py`](demo/replay_client.py) is a
+reference client that stands in for a real phone when developing the laptop
+side without one — an iOS app does not exist and is not started.
 
 ---
 
@@ -105,6 +111,17 @@ is the default because the failure modes are not symmetric: an unwanted phone
 on the console is a nuisance you can see and disconnect, whereas a trainee
 standing at a rack unmonitored because nobody noticed a prompt is the thing
 Argus exists to prevent. See [Admission](docs/PROTOCOL.md#admission).
+
+**Over USB, for development** — no Wi-Fi needed, and no ambiguity about which
+network the phone is on:
+
+```powershell
+adb reverse tcp:8765 tcp:8765
+```
+
+then type `ws://localhost:8765` as the server address in the app instead of
+a LAN IP. See [`android/README.md`](android/README.md#windows--powershell-without-stagesh)
+for the full device build/stage/connect workflow.
 
 ---
 
@@ -198,7 +215,8 @@ laptop are expected to deploy from copies of the same config file; see
 | [`src/argus/console.py`](src/argus/console.py) | The trainer console page served at `GET /` |
 | [`src/argus/discovery.py`](src/argus/discovery.py) | The LAN beacon that lets a phone find this laptop |
 | [`scripts/build_binary.py`](scripts/build_binary.py) | Freezes the laptop side into a standalone executable |
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract a phone app must implement |
+| [`android/`](android/) | The phone app: detection + pose on the NPU, form classifiers, the dashboard shell — see `android/README.md` |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | The wire contract the phone app implements |
 | [`docs/CONSOLE.md`](docs/CONSOLE.md) | What the trainer console shows, and what it is allowed to see |
 | [`docs/ADDING_AN_EXERCISE.md`](docs/ADDING_AN_EXERCISE.md) | Runbook for the next form classifier, and the traps plank, bicep, and lunge each hit |
 | [`docs/VALIDATION.md`](docs/VALIDATION.md) | What Argus has *not* been shown to do |
@@ -233,15 +251,21 @@ and the CLI end to end. Four are the gates that matter:
 
 ## Status
 
-Runnable and tested today: the full ingest -> triage -> alert path, replayed
-over a real WebSocket against a canned multi-trainee fixture with no phone
-involved; the trainer dashboard and JSON/HTTP sinks; the CLI.
+Runnable and tested today: the full ingest -> triage -> alert path, both
+replayed over a real WebSocket against a canned multi-trainee fixture with no
+phone involved, and driven end to end by a real Android phone (detection,
+pose, and form classification on its own NPU) over both USB and LAN Wi-Fi;
+the trainer dashboard and JSON/HTTP sinks; the CLI.
 
-**Not yet built: the phone app.** Pose estimation, form/exercise
-classification, and the client half of `docs/PROTOCOL.md` are a separate,
-future project. No accuracy figure exists for any on-device model, because
-none has been built yet. [docs/VALIDATION.md](docs/VALIDATION.md) is the
-honest list, with what each gap would take to close.
+**The phone app is built and runs — see [`android/`](android/).** Plank,
+bicep, and lunge all have working on-device form classifiers, plus geometric
+fault checks and rep counting for bicep/lunge, and a dashboard front door
+naming where this is headed next (Nursing, Lab, Welding). What is still
+missing is validation against a real trainee: every accuracy figure any
+classifier reports is a held-out-frame number from its training dataset's own
+recordings, not a measurement against anyone this app has watched.
+[docs/VALIDATION.md](docs/VALIDATION.md) is the honest list, with what each
+gap would take to close.
 
 ---
 

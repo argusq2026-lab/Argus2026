@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A dashboard tile's card. One shared shape for all four tiles; what makes
+     each tile read as its own domain is the colored icon badge drawn on top
+     (DashboardActivity.kt), not the card itself. -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/action_pressed"/>
+            <corners android:radius="20dp"/>
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/surface_raised"/>
+            <corners android:radius="20dp"/>
+        </shape>
+    </item>
+</selector>

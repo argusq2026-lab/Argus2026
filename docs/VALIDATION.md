@@ -8,30 +8,45 @@ Ordered by how much a wrong assumption would cost.
 
 ---
 
-## 1. The phone app does not exist yet
+## 1. The phone app exists and runs, but has never seen a real trainee
 
-**Status:** blocking for everything else on this list.
+**Status:** blocking for any claim about a real floor; no longer blocking for
+"does the wire contract work at all", which is now closed.
 
-This repository is the laptop side only. [`docs/PROTOCOL.md`](PROTOCOL.md)
-specifies exactly what a phone app must send, and
-[`demo/replay_client.py`](../demo/replay_client.py) is a reference
-implementation of the client half of that protocol — but no on-device pose
-model, no form/exercise classifier, and no real camera has ever driven this
-server. Every test in this repository exercises the ingest -> triage -> alert
-path against a synthetic observation fixture (`argus.synthetic`), not a real
-trainee.
+The phone app is `android/` in this repository — it is not a separate,
+future project. It runs YOLO-X (detector) and YOLO26-pose (single-stage
+detection + COCO-17 pose) on the Hexagon NPU, three form classifiers
+(`FormClassifier.kt`: plank, bicep, lunge), two geometric fault checks
+(`GeometricFormChecks.kt`: `loose_upper_arm`, `knee_angle_out_of_range`), and
+rep counting (`RepCounter.kt`: bicep, lunge). `DashboardActivity` is the
+launcher; Fitness opens the camera/triage screen the rest of this list
+describes. All of it has been built, installed, and run on a real device
+(Galaxy S25 Ultra) against a real running laptop server, both over USB
+(`adb reverse`) and over LAN Wi-Fi, streaming real camera frames through
+detection, pose, classification, and the WebSocket ingest protocol into a
+live `/triage` rank. `docs/PROTOCOL.md`'s wire contract is exercised by that
+traffic, not only by `demo/replay_client.py`'s synthetic fixture.
 
-**To close:** build the phone app against `docs/PROTOCOL.md`; pick and
-validate an on-device pose model and a form/exercise classifier; run it
-against real trainees and confirm the wire contract holds up (frame rate,
-keypoint layout, timestamp behaviour) under a real Wi-Fi network, not a
-loopback socket in a test.
+What that device testing establishes: the pipeline runs end to end without
+crashing, the protocol round-trips, and a correct/incorrect rep visibly
+scores differently on the console. What it does **not** establish is
+accuracy — nobody has recorded a real trainee's set, labelled what actually
+happened, and checked the on-device verdict against it. Every accuracy
+number in §1b–§1d is a held-out-*frame* number from upstream's own source
+recordings, not a measurement against anyone this app has watched. That gap
+is real and is the one this section is actually about now.
 
-**Owner decision needed:** which on-device pose model and form-classifier
-architecture, and which specific form errors the closed vocabulary in
-`[scoring.form_error_vocab]` should actually cover for the exercises this
-floor runs — the nine entries shipped in the default config are
-illustrative, not the result of any domain review.
+**To close:** record real trainees (plank, bicep, lunge at minimum), label
+what actually happened, and measure per-subject held-out accuracy — the
+split has to be by person, not by frame, for the reasons §1b lays out. Then
+do the same for the geometric checks' two thresholds (§1c, §1d), which have
+never been evaluated by anyone, including upstream.
+
+**Owner decision needed:** which specific form errors the closed vocabulary
+in `[scoring.form_error_vocab]` should actually cover for the exercises this
+floor runs — the entries shipped in the default config came from upstream's
+own dataset labels and stated thresholds, not from a domain review of what a
+real instructor would want flagged.
 
 ---
 
@@ -323,18 +338,22 @@ guard against overlapping ticks if it becomes an issue in practice.
 
 ---
 
-## 6. No accuracy figure exists for pose or form/exercise classification
+## 6. No accuracy figure exists for pose or form/exercise classification against a real trainee
 
-**Status:** inherited from §1 — there is no model to measure yet.
+**Status:** inherited from §1 — the models exist and run; measuring them
+against real footage is the part that hasn't happened.
 
-Whatever on-device pose model and form classifier the phone app eventually
-uses will need its own accuracy validation (keypoint error, exercise
-classification precision/recall, false-positive rate on
-`form_reason_codes`) against real trainee footage before any claim about
-correctness can be made. None of that exists today because the model choice
-itself hasn't been made.
+The on-device pose model (YOLO26-pose) and the three form classifiers
+(§1b–§1d) are built, shipped, and running today — this is not a model-choice
+gap anymore. What is still missing is accuracy validation (keypoint error,
+exercise classification precision/recall, false-positive rate on
+`form_reason_codes`) against real trainee footage rather than upstream's
+held-out frames. None of that exists today because no real trainee has been
+recorded and labelled yet, not because the model or the pipeline is
+unbuilt.
 
 **Owner decision needed:** same as §1 — this is one gap, not two, restated
 here because it is the reason §2's weight-fitting work can't start yet
-either: there is no real per-feature signal to fit weights against until a
-real classifier exists.
+either: there is real per-feature *signal* now (a real classifier runs on a
+real device), but no real per-feature *ground truth* to fit weights against
+until real trainee footage is recorded and labelled.
