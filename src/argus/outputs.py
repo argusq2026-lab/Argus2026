@@ -117,6 +117,9 @@ class StationView:
     #: Display-only: nothing scores these two.
     rep_count: int | None = None
     form_ok: bool | None = None
+    #: The session-long account behind the instant score. `None` only for a
+    #: station that has completed its handshake and sent no frames.
+    session: SessionSummary | None = None
 
 
 def station_to_json_dict(view: StationView) -> dict:
@@ -129,7 +132,41 @@ def station_to_json_dict(view: StationView) -> dict:
         payload["keypoints_xy"] = [list(p) for p in view.keypoints_xy]
     if view.keypoints_conf is not None:
         payload["keypoints_conf"] = list(view.keypoints_conf)
-    return payload
+    return payload   # asdict already recursed into `session`
+
+
+@dataclass(frozen=True)
+class SessionSummary:
+    """A trainee's session as the instructor reads it, not as the scorer does.
+
+    The instant score answers "who needs a human right now" and must keep
+    doing exactly that — it is what fires alerts, and a fall averaged over
+    twenty seconds is a fall nobody was told about. But it is a poor thing to
+    *watch*: recomputed every rank tick off a two-second window, it moves
+    constantly and cannot be compared with the same trainee a minute ago.
+
+    So this is the other view. `rolling_score` is the same number decayed over
+    `scoring.rolling_half_life_s`, and the volume fields are what let a fault
+    be a rate instead of a coin flip: reps for a curl, **seconds for a plank**,
+    which has no reps and whose entire quality is how long it was held well.
+
+    Closed and pinned like the other views here. `fault_rate` is `None` rather
+    than zero when too little work has been seen, because "no faults yet" and
+    "not enough evidence to say" are different things to put in front of
+    someone deciding who to walk over to.
+    """
+
+    rolling_score: float
+    peak_score: float
+    active_s: float
+    reps: int
+    reps_flagged: int
+    hold_s: float
+    hold_flagged_s: float
+    fault_rate: float | None = None
+    #: Per-code frame tallies, so a card can say *which* fault dominates a
+    #: session rather than only that one is occurring now.
+    code_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

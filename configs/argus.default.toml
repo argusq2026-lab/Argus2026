@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 5
+config_version = 6
 
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,20 @@ stillness_motion_threshold_frac = 0.003
 # score a full off-task deviation. Override per-station under [[stations]]
 # if a future release adds one; today every station shares this reference.
 off_task_reference_angle_deg = 180.0
+
+# -- the instructor-facing rolling score ------------------------------------
+# The triage score is instantaneous by design: it answers "who needs a human
+# right now", and a fall must not be averaged away. That makes it correct and
+# almost unreadable -- computed off a ~2 s window, recomputed every
+# rank_interval_s, moving constantly. These turn it into a session account an
+# instructor can actually watch. Alerts still fire on the instant score; only
+# what is displayed and how the calm end of the queue is ordered changes.
+rolling_half_life_s = 20.0    # how fast the rolling score forgets
+max_frame_gap_s = 1.0         # a longer gap is a reconnect, not work done
+# How much work before a fault *rate* is reported at all. One bad rep out of
+# one is not a 100% fault rate; it is not yet a rate.
+min_reps_for_fault_rate = 3
+min_hold_s_for_fault_rate = 10.0
 
 [scoring.weights]
 fall = 0.40

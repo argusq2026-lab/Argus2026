@@ -134,7 +134,33 @@ def test_station_view_fields_are_the_closed_set():
         "exercise",
         "rep_count",
         "form_ok",
+        "session",
     }
+
+
+def test_session_summary_fields_are_the_closed_set():
+    """The nested view gets the same discipline as the one that holds it.
+    Session accounting is where "just one more number for the dashboard"
+    pressure lands, so what it may carry is a reviewed list."""
+    fields = {f.name for f in dataclasses.fields(outputs.SessionSummary)}
+    assert fields == {
+        "rolling_score",
+        "peak_score",
+        "active_s",
+        "reps",
+        "reps_flagged",
+        "hold_s",
+        "hold_flagged_s",
+        "fault_rate",
+        "code_counts",
+    }
+
+
+def test_session_summary_holds_no_image_capable_field():
+    for field in dataclasses.fields(outputs.SessionSummary):
+        text = str(field.type)
+        for forbidden in FORBIDDEN_TYPE_NAMES:
+            assert forbidden not in text, f"SessionSummary.{field.name} can hold {forbidden}"
 
 
 def test_station_view_is_frozen():

@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from argus.config import ScoringConfig
-from argus.outputs import StationView
+from argus.outputs import SessionSummary, StationView
 from argus.triage import FrameObservation, TrackState
 
 
@@ -110,6 +110,27 @@ class SessionRegistry:
         """Every session's history, connected or still in its grace window."""
         return {trainee_id: s.track for trainee_id, s in self._sessions.items()}
 
+    def _summarise(self, track: TrackState) -> SessionSummary:
+        """Project a track's running account into the console's closed view.
+
+        `fault_rate` is resolved here rather than on the page, so the "is
+        there enough work to call this a rate" judgement lives next to the
+        thresholds that decide it instead of being re-implemented in
+        JavaScript where it could drift.
+        """
+        metrics = track.session
+        return SessionSummary(
+            rolling_score=round(metrics.rolling_score, 4),
+            peak_score=round(metrics.peak_score, 4),
+            active_s=round(metrics.active_s, 2),
+            reps=metrics.reps,
+            reps_flagged=metrics.reps_flagged,
+            hold_s=round(metrics.hold_s, 2),
+            hold_flagged_s=round(metrics.hold_flagged_s, 2),
+            fault_rate=metrics.fault_rate(self._scoring),
+            code_counts=dict(metrics.code_counts),
+        )
+
     def station_views(self) -> list[StationView]:
         """A snapshot of every session for the trainer console.
 
@@ -140,6 +161,7 @@ class SessionRegistry:
                     exercise=latest.exercise if latest else "",
                     rep_count=latest.rep_count if latest else None,
                     form_ok=latest.form_ok if latest else None,
+                    session=self._summarise(session.track) if latest else None,
                 )
             )
         return views

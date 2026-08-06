@@ -31,7 +31,36 @@ doctor` warns when it is on.
 Under `"auto"`, the default, this section never appears — phones are admitted
 on a well-formed `hello` exactly as they were before admission existed.
 
-**The help queue**, in three tiers that are deliberately not styled alike:
+**The score an instructor reads is the rolling one.** The triage score is
+instantaneous by design — computed off a ~2 s window, recomputed every
+`ingest.rank_interval_s` — which makes it correct and nearly unwatchable: it
+moves constantly and cannot be compared against the same trainee a minute
+ago. The card's headline number is that score decayed over
+`scoring.rolling_half_life_s`, labelled `session avg`, with `now` and `peak`
+beside it.
+
+Two things deliberately did **not** become rolling:
+
+- **Alerts.** A fall averaged over twenty seconds is a fall nobody was told
+  about. The red bar and the top tier of the queue are still the *instant*
+  score crossing `scoring.alert_threshold`.
+- **The peak.** A rolling mean is supposed to forget, and "this trainee was
+  briefly in real trouble" should survive being forgotten.
+
+**Work is counted in the unit the exercise actually has.** Reps for a curl or
+a squat; seconds for a plank, which has no reps and whose entire quality is
+how long it was held well. One `fault_rate` then means the same thing for
+both — "3 of 14 reps flagged", "18s of 2m10s flagged". Below
+`scoring.min_reps_for_fault_rate` / `min_hold_s_for_fault_rate` the rate is
+withheld and the card says so: one bad rep out of one is not a 100% fault
+rate, and should not put anyone at the top of a queue.
+
+**The help queue**, in three tiers that are deliberately not styled alike.
+Alerts are ordered by the instant score; everything below is ordered by the
+rolling one, with the fault rate breaking ties — two trainees can average the
+same because the same non-form feature dominates both, and only the volume
+distinguishes the one doing half their reps badly from the one doing them
+cleanly:
 
 | Tier | When | Why it is separate |
 |---|---|---|

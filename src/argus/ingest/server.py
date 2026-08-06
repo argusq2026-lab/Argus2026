@@ -190,8 +190,21 @@ class IngestServer:
             for trainee_id in expired:
                 forget(trainee_id)
 
-        records = rank_trainees(self._registry.tracks(), now, self.cfg.scoring)
+        tracks = self._registry.tracks()
+        records = rank_trainees(tracks, now, self.cfg.scoring)
         alerts = needs_instructor(records, self.cfg.scoring)
+
+        # Advance each trainee's rolling score here rather than inside
+        # `compute_triage`, which stays a pure function of history — that
+        # purity is what tests/test_determinism.py protects. Alerts above are
+        # computed first and from the *instant* score, deliberately: a fall
+        # must fire on the frame it happens, not once a mean catches up.
+        for record in records:
+            track = tracks.get(record.trainee_id)
+            if track is not None:
+                track.session.observe_score(
+                    record.score, now, self.cfg.scoring.rolling_half_life_s
+                )
 
         if self._alert_sink is not None:
             for record in alerts:

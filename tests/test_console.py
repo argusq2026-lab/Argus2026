@@ -491,3 +491,95 @@ def test_the_page_names_the_plank_form_codes_in_prose():
     assert "hips_sagging: " in CONSOLE_HTML
     assert "hips_piked: " in CONSOLE_HTML
     assert "Hips sagging" in CONSOLE_HTML
+
+
+# -- the rolling session view -------------------------------------------------
+
+
+def test_the_session_summary_reaches_the_console(scoring):
+    """The instant score is what fires alerts; this is what a human reads."""
+    registry = SessionRegistry(scoring, track_ttl_s=10.0)
+    registry.register("s0", "t0", now=0.0)
+    for i in range(6):
+        obs = dataclasses.replace(
+            make_observation(ts=i * 0.1, form_reason_codes=("knee_valgus",) if i == 2 else ()),
+            rep_count=i,
+        )
+        registry.push_observation("t0", obs, now=i * 0.1)
+    registry.tracks()["t0"].session.observe_score(0.4, ts=1.0, half_life_s=20.0)
+
+    [view] = registry.station_views()
+    assert view.session is not None
+    assert view.session.reps == 5
+    assert view.session.reps_flagged == 1
+    assert view.session.rolling_score == pytest.approx(0.4)
+    assert view.session.peak_score == pytest.approx(0.4)
+    assert view.session.code_counts == {"knee_valgus": 1}
+
+
+def test_a_held_exercise_reports_seconds_not_reps(scoring):
+    """A plank has no reps, so its work is time -- the console has to be able
+    to say "18s of 2m10s flagged" as readily as "3 of 14 reps"."""
+    registry = SessionRegistry(scoring, track_ttl_s=10.0)
+    registry.register("s0", "t0", now=0.0)
+    ts = 0.0
+    while ts < 12.0:
+        registry.push_observation("t0", make_observation(ts=ts), now=ts)
+        ts += 0.2
+
+    [view] = registry.station_views()
+    assert view.session.reps == 0
+    assert view.session.hold_s > 10.0
+    assert view.session.fault_rate == pytest.approx(0.0)
+
+
+def test_a_station_with_no_frames_has_no_session(scoring):
+    registry = SessionRegistry(scoring, track_ttl_s=10.0)
+    registry.register("s0", "t0", now=0.0)
+    assert registry.station_views()[0].session is None
+
+
+def test_the_session_serialises_into_the_snapshot(server):
+    from argus.outputs import SessionSummary
+
+    server.update_stations(1.0, [_view(session=SessionSummary(
+        rolling_score=0.31, peak_score=0.62, active_s=95.0,
+        reps=14, reps_flagged=3, hold_s=0.0, hold_flagged_s=0.0,
+        fault_rate=3 / 14, code_counts={"knee_valgus": 22},
+    ))])
+    served = _get(server.port, "/console")["stations"][0]["session"]
+    assert served["rolling_score"] == 0.31
+    assert served["peak_score"] == 0.62
+    assert served["reps_flagged"] == 3
+    assert served["code_counts"] == {"knee_valgus": 22}
+
+
+def test_the_page_reads_the_rolling_score_not_the_instant_one():
+    """The whole point: an instructor watching a number that moves every tick
+    cannot compare it with the same trainee a minute ago."""
+    assert "rolling_score" in CONSOLE_HTML
+    assert "session avg" in CONSOLE_HTML
+
+
+def test_the_page_still_colours_on_the_instant_score():
+    """A fall must colour the card on the frame it happens, not once a mean
+    catches up. If this ever reads `rolling` the smoothing has eaten the
+    alert."""
+    assert "score >= state.cfg.alert_threshold" in CONSOLE_HTML
+
+
+def test_the_page_shows_the_peak_the_mean_forgot():
+    assert "peak_score" in CONSOLE_HTML
+    assert "peak " in CONSOLE_HTML
+
+
+def test_the_page_expresses_work_in_reps_or_seconds():
+    assert "reps flagged" in CONSOLE_HTML
+    assert "hold_s" in CONSOLE_HTML
+    assert "fault rate" in CONSOLE_HTML
+
+
+def test_the_page_does_not_show_a_rate_it_was_not_given():
+    """`fault_rate` is null until enough work is seen, and null must stay
+    visible as "not enough to say" rather than becoming a reassuring 0%."""
+    assert "too little work to call a rate yet" in CONSOLE_HTML

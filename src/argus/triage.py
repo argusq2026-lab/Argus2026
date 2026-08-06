@@ -67,13 +67,21 @@ class FrameObservation:
     being rejected, because the protocol has always described this field as a
     free-form label.
 
-    `rep_count` and `form_ok` are the protocol's purely informational fields.
-    **Nothing in this module reads them**, and nothing may start to: beyond
-    `exercise` above, the rank is a pure function of the numeric pose/box
-    history plus the closed-vocabulary form codes, and scoring a
-    phone-maintained rep counter would make it a function of an unauditable
-    device-side counter. They exist so the trainer console can display them
-    (see `argus.outputs.StationView`), and for no other reason.
+    `rep_count` is read by `SessionMetrics` — and by nothing else. It counts
+    the trainee's work so a form fault can be expressed as a *rate* ("3 of 14
+    reps") rather than as whichever frame happened to arrive last, and a plank
+    with no reps at all is measured in seconds instead. The line that has not
+    moved is the one that matters: **it never enters the score that fires an
+    alert.** `compute_triage` does not read it, so a phone with a broken
+    counter can misorder the calm end of the instructor's queue and cannot
+    cause or suppress an alert. That is a real dependency on a device-side
+    value, bounded to display and ordering, and it is stated rather than
+    hidden — the closed-vocabulary `form_reason_codes` remain the only thing
+    the phone says that the score itself believes.
+
+    `form_ok` is read by nothing. The server derives whether form is flagged
+    from `form_reason_codes` being non-empty, because those can be checked
+    against a vocabulary and a bare boolean cannot.
     """
 
     ts: float
@@ -88,12 +96,142 @@ class FrameObservation:
 
 
 @dataclass
+class SessionMetrics:
+    """What a trainee has *done* this session, as against what they are doing
+    in the last two seconds.
+
+    The triage score is instantaneous by design — it answers "who needs a
+    human right now", and a fall must not be averaged away. But it is a poor
+    thing to read: it is computed from a ~2 s window and recomputed every
+    `rank_interval_s`, so an instructor watching the console sees a number
+    that moves constantly and cannot be compared with the same trainee's
+    number a minute ago. This is the other half: a rolling account of the
+    session that changes slowly, on purpose.
+
+    Work is measured in whatever unit the exercise actually has. Reps for a
+    squat or a curl; **seconds for a plank**, which has no reps at all and
+    whose whole quality is how long it was held well. A single `fault_rate`
+    over "flagged work / observed work" then means the same thing for both.
+
+    Durations come from the phone's own `ts`, not the server's clock. That
+    looks like it contradicts "phone and laptop clocks are not synchronised",
+    and does not: a *delta between two frames from one phone* is exactly the
+    measurement that phone's clock is good for. What is forbidden is
+    comparing timestamps across devices, and nothing here does.
+    """
+
+    frames: int = 0
+    #: Seconds of this trainee actually being observed, gaps excluded.
+    active_s: float = 0.0
+    reps: int = 0
+    #: Reps during which the phone reported at least one form-error code.
+    reps_flagged: int = 0
+    hold_s: float = 0.0
+    hold_flagged_s: float = 0.0
+    #: How many frames carried each code. A tally, not a rate — the rate
+    #: needs a denominator and `fault_rate` is where that judgement lives.
+    code_counts: dict[str, int] = field(default_factory=dict)
+    #: Time-decayed mean of the instantaneous score: the number an instructor
+    #: reads. Advanced by `observe_score` on the rank tick, never here.
+    rolling_score: float = 0.0
+    #: The worst instant the session has seen. A rolling mean forgets, and
+    #: "this trainee was briefly in real trouble" should survive being
+    #: forgotten by the mean.
+    peak_score: float = 0.0
+
+    # Cursors. Leading underscore because they are bookkeeping rather than
+    # anything a console should render.
+    _last_ts: float | None = None
+    _last_rep_count: int | None = None
+    _rep_flagged: bool = False
+    _rolling_ts: float | None = None
+
+    def observe(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
+        """Fold one observation into the session's running account."""
+        self.frames += 1
+        flagged = bool(obs.form_reason_codes)
+        for code in obs.form_reason_codes:
+            self.code_counts[code] = self.code_counts.get(code, 0) + 1
+
+        # A gap longer than a plausible frame interval is a reconnect, a
+        # backgrounded app, or a phone that was put down — not work done. It
+        # is skipped rather than accumulated, so "held for 4 minutes" cannot
+        # be earned by a station that was away for three of them.
+        dt = 0.0
+        if self._last_ts is not None:
+            delta = obs.ts - self._last_ts
+            if 0.0 < delta <= cfg.max_frame_gap_s:
+                dt = delta
+        self._last_ts = obs.ts
+        self.active_s += dt
+
+        if obs.rep_count is None:
+            # No rep counter: a held exercise, where work is time.
+            self.hold_s += dt
+            if flagged:
+                self.hold_flagged_s += dt
+            return
+
+        if flagged:
+            self._rep_flagged = True
+        if self._last_rep_count is not None:
+            advanced = obs.rep_count - self._last_rep_count
+            if advanced < 0:
+                # The counter went backwards: the phone started a new set.
+                # Credit the reps of the new set, not a negative count.
+                advanced = obs.rep_count
+            if advanced > 0:
+                self.reps += advanced
+                # One flag per completed rep. If several reps landed between
+                # frames we saw, the ones we did not see are not accused.
+                if self._rep_flagged:
+                    self.reps_flagged += 1
+                self._rep_flagged = False
+        self._last_rep_count = obs.rep_count
+
+    def observe_score(self, score: float, ts: float, half_life_s: float) -> None:
+        """Advance the rolling mean to `ts`. Called once per rank tick.
+
+        Deliberately separate from `observe`, and deliberately not inside
+        `compute_triage`: the scorer stays a pure function of history, which
+        is the property `tests/test_determinism.py` exists to protect. The
+        stateful part is here, where it can be seen and tested on its own.
+
+        Decays by half-life rather than by tick count, so the number means the
+        same thing whether ticks arrive every 0.5 s or every 2 s.
+        """
+        self.peak_score = max(self.peak_score, score)
+        if self._rolling_ts is None:
+            self.rolling_score = score
+        else:
+            dt = max(0.0, ts - self._rolling_ts)
+            alpha = 1.0 - 0.5 ** (dt / half_life_s)
+            self.rolling_score += alpha * (score - self.rolling_score)
+        self._rolling_ts = ts
+
+    def fault_rate(self, cfg: ScoringConfig) -> float | None:
+        """Flagged work over observed work, or `None` if too little is done.
+
+        `None` rather than 0.0 or 1.0 on thin evidence: one bad rep out of one
+        is not a 100% fault rate, it is not yet a rate at all, and showing it
+        as one would put a trainee at the top of a queue on a single frame.
+        """
+        if self.reps >= cfg.min_reps_for_fault_rate:
+            return self.reps_flagged / self.reps
+        if self.hold_s >= cfg.min_hold_s_for_fault_rate:
+            return self.hold_flagged_s / self.hold_s
+        return None
+
+
+@dataclass
 class TrackState:
     """Rolling per-trainee history. Owned by the caller, one per trainee id."""
 
     history_len: int = 30
     history: deque[FrameObservation] = field(default_factory=deque)
     last_form_error_score: float = 0.0
+    #: The session-long account behind the instant score. See `SessionMetrics`.
+    session: SessionMetrics = field(default_factory=SessionMetrics)
     #: The exercise most recently reported, which selects the weight profile.
     #: Latest-wins rather than a majority over the window: a trainee who has
     #: just dropped into a plank should be scored as planking immediately, not
@@ -110,6 +248,7 @@ class TrackState:
         self.history.append(obs)
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
         self.last_exercise = obs.exercise
+        self.session.observe(obs, cfg)
 
 
 @dataclass(frozen=True)

@@ -391,7 +391,7 @@ number without the caveat.
 Tests passing is necessary and was not sufficient — the visibility bug passed
 everything.
 
-1. `pytest tests/ -q` — currently 311.
+1. `pytest tests/ -q` — currently 341.
 2. `cd android && ./gradlew testDebugUnitTest` — currently 37 plus the
    discovery and join-pending cases; **not run since the console merge, and
    the Kotlin has not been compiled since either**.
