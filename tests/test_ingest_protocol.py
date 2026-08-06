@@ -76,6 +76,46 @@ def test_hello_rejects_an_empty_trainee_id():
         parse_hello({"type": "hello", "protocol_version": 1, "station_id": "s0", "trainee_id": ""}, 1)
 
 
+# -- hello use_case: server and phone must agree ---------------------------
+
+
+def _hello(**overrides) -> dict:
+    base = {"type": "hello", "protocol_version": 1, "station_id": "s0", "trainee_id": "t0"}
+    base.update(overrides)
+    return base
+
+
+def test_hello_defaults_to_fitness_and_matches_a_fitness_session():
+    hello = parse_hello(_hello(), 1, session_use_case="fitness")
+    assert hello.use_case == "fitness"
+
+
+def test_hello_matches_an_explicit_use_case():
+    hello = parse_hello(_hello(use_case="welding"), 1, session_use_case="welding")
+    assert hello.use_case == "welding"
+
+
+def test_hello_rejects_a_use_case_mismatch():
+    """A fitness phone connecting to a welding session must be refused, the
+    same as a `session_name` mismatch -- not admitted and scored by nothing."""
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_hello(_hello(), 1, session_use_case="welding")
+
+
+def test_hello_rejects_a_legacy_phone_against_a_non_fitness_session():
+    """A phone that predates this field omits `use_case` entirely and
+    defaults to `"fitness"` -- that default must still be checked, not
+    treated as "said nothing, so assume it agrees"."""
+    with pytest.raises(ProtocolError, match="fitness"):
+        parse_hello({"type": "hello", "protocol_version": 1, "station_id": "s0", "trainee_id": "t0"},
+                    1, session_use_case="welding")
+
+
+def test_hello_rejects_a_non_string_use_case():
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_hello(_hello(use_case=7), 1, session_use_case="fitness")
+
+
 # -- observation ----------------------------------------------------------
 
 
@@ -186,6 +226,121 @@ def test_observation_rejects_a_negative_rep_count():
 def test_observation_rejects_a_non_bool_form_ok():
     with pytest.raises(ProtocolError, match="form_ok"):
         parse_observation(_obs(form_ok="yes"), VOCAB)
+
+
+# -- use_case dispatch ---------------------------------------------------
+#
+# `use_case` selects which parser reads the rest of the message (see
+# `docs/PROTOCOL.md`). Only "fitness" is implemented today; everything else
+# here is about that dispatch staying a clean rejection rather than a
+# confusing failure three fields into a parser that expected a different
+# message shape.
+
+
+def test_observation_defaults_to_fitness_when_use_case_is_absent():
+    """Every phone in the field predates this field; omitting it must not
+    refuse them."""
+    obs = parse_observation(_obs(), VOCAB)
+    assert obs.use_case == "fitness"
+
+
+def test_observation_accepts_an_explicit_fitness_use_case():
+    obs = parse_observation(_obs(use_case="fitness"), VOCAB)
+    assert obs.use_case == "fitness"
+    assert obs.bbox_xyxy == (0.1, 0.1, 0.5, 0.9)
+
+
+def test_observation_rejects_an_unimplemented_use_case():
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_observation(_obs(use_case="nursing"), VOCAB)
+
+
+def test_observation_rejects_a_non_string_use_case():
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_observation(_obs(use_case=7), VOCAB)
+
+
+def test_observation_rejects_an_empty_use_case():
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_observation(_obs(use_case=""), VOCAB)
+
+
+def test_observation_rejects_an_overlong_use_case():
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_observation(_obs(use_case="x" * 100), VOCAB)
+
+
+def test_an_explicit_null_use_case_falls_back_to_fitness():
+    """Same posture as `exercise=None`: an explicit null is not reported,
+    not a malformed value."""
+    assert parse_observation(_obs(use_case=None), VOCAB).use_case == "fitness"
+
+
+# -- welding: a placeholder use case --------------------------------------
+#
+# There is no welding classifier, so its parser validates only the envelope
+# (`ts`) and carries an opaque `payload` through uninterpreted. See
+# `argus.triage.compute_triage_welding` for why the scorer is equally inert.
+
+
+def test_welding_observation_parses_with_no_payload():
+    obs = parse_observation({"type": "observation", "use_case": "welding", "ts": 5.0}, VOCAB)
+    assert obs.use_case == "welding"
+    assert obs.payload == {}
+
+
+def test_welding_observation_carries_an_opaque_payload_through_uninterpreted():
+    raw = {
+        "type": "observation",
+        "use_case": "welding",
+        "ts": 5.0,
+        "payload": {"torch_angle_deg": 12.5, "anything": "at all"},
+    }
+    obs = parse_observation(raw, VOCAB)
+    assert obs.payload == {"torch_angle_deg": 12.5, "anything": "at all"}
+
+
+def test_welding_observation_rejects_a_non_object_payload():
+    raw = {"type": "observation", "use_case": "welding", "ts": 5.0, "payload": "not an object"}
+    with pytest.raises(ProtocolError, match="payload"):
+        parse_observation(raw, VOCAB)
+
+
+def test_welding_observation_still_requires_ts():
+    raw = {"type": "observation", "use_case": "welding"}
+    with pytest.raises(ProtocolError, match="ts"):
+        parse_observation(raw, VOCAB)
+
+
+def test_welding_observation_ignores_fitness_only_fields():
+    """A welding message need not — and does not have to — carry `bbox_xyxy`
+    or any other fitness field; welding's parser never looks for them."""
+    obs = parse_observation({"type": "observation", "use_case": "welding", "ts": 5.0}, VOCAB)
+    assert obs.bbox_xyxy is None
+    assert obs.keypoints_xy is None
+
+
+# -- expected_use_case: an observation must match what hello agreed to ------
+
+
+def test_observation_matching_expected_use_case_parses():
+    obs = parse_observation(_obs(), VOCAB, expected_use_case="fitness")
+    assert obs.use_case == "fitness"
+
+
+def test_observation_rejects_a_use_case_hello_did_not_agree_to():
+    """The connection agreed to fitness at hello; a message switching to
+    welding mid-stream is a protocol violation, not a mode change."""
+    raw = {"type": "observation", "use_case": "welding", "ts": 5.0}
+    with pytest.raises(ProtocolError, match="use_case"):
+        parse_observation(raw, VOCAB, expected_use_case="fitness")
+
+
+def test_expected_use_case_none_skips_the_check():
+    """The default: existing callers that never pass `expected_use_case`
+    keep working exactly as before."""
+    obs = parse_observation(_obs(use_case="fitness"), VOCAB)
+    assert obs.use_case == "fitness"
 
 
 # -- server -> client messages ------------------------------------------------

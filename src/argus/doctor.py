@@ -194,6 +194,7 @@ def _check_discovery(cfg: ArgusConfig) -> list[Check]:
         cfg.ingest.protocol_version,
         cfg.session.name,
         cfg.session.approval,
+        cfg.session.use_case,
     )
     if payload is None:
         return [

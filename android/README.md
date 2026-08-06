@@ -35,6 +35,7 @@ fields, ever leaves the device.
 | Geometric form checks | **working** — `GeometricFormChecks.kt`, a second fault per exercise upstream never collected ML labels for: `loose_upper_arm` (bicep, elbow-shoulder angle vs. vertical) and `knee_angle_out_of_range` (lunge, hip-knee-ankle angle, gated behind the same `depth_gate` as `knee_over_toe`). Both thresholds are upstream's own stated cutoffs, unvalidated here — see `docs/VALIDATION.md` §1c/§1d |
 | Rep counting | **working, bicep and lunge only** — `RepCounter.kt`, a debounced peak/valley crossing on the same joint angle the geometric checks use (elbow flex for bicep, knee angle for lunge). Counts a rep regardless of form quality — a flagged rep still counts — and is display-only on the wire (`rep_count`, `docs/PROTOCOL.md`), never scored. Plank has no counter: it is a hold, not a rep. The hysteresis thresholds are a hand-picked heuristic, not fit or measured against real reps — see the class docstring |
 | Other exercises | not started (`form_reason_codes` empty for any exercise without a shipped `<exercise>_lr.json`; see `docs/ADDING_AN_EXERCISE.md`) |
+| **Dashboard shell + launcher icon** | **working** — `DashboardActivity`, the app's launcher, replaces the old direct-to-camera start. One tile per domain: Fitness opens `MainActivity` unchanged; Nursing/Lab/Welding are named placeholders that explain what shipping them would take rather than pretending they exist. First launcher icon the app has ever had (an adaptive icon, Argus-Panoptes eye motif). See below |
 
 ## How detection stays honest
 
@@ -247,6 +248,34 @@ python scripts/train_form_model.py --exercise plank   # or bicep, lunge, all
 Each exercise's artifact and fixture come out of one run; committing only one
 is what `test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
 
+## The dashboard shell
+
+`DashboardActivity` is the app's launcher now — `MainActivity` lost its
+`LAUNCHER` intent-filter and is reached only via `Intent` from a tile. This
+is a plain second Activity, not Fragments or Navigation-Component: the app
+had zero navigation infrastructure before, and a second Activity is the
+smallest addition consistent with the single-Activity, single-layout style
+`MainActivity` already used. Nothing in `MainActivity`'s own logic changed —
+same models, same classifiers, same protocol client.
+
+Four tiles, one per domain this triage engine could watch:
+
+- **Fitness** — real, opens `MainActivity`.
+- **Nursing**, **Lab**, **Welding** — named placeholders. Tapping one shows
+  what it would actually take to ship: the same phone-per-subject,
+  triage-rank engine Fitness already runs, needing a domain-specific
+  on-device classifier and real data to fit it on, the same gap
+  `docs/ADDING_AN_EXERCISE.md` documents for a new exercise. No stub
+  Activities, no fake data behind them.
+
+The launcher icon (`res/mipmap-anydpi-v26/ic_launcher.xml` +
+`drawable/ic_launcher_{background,foreground}.xml`) is the first this app has
+ever had — there was no `android:icon` in the manifest before. It renders
+Argus Panoptes, the many-eyed giant of the myth the project is named for, as
+a ringed eye in the app's own accent colors (amber ring, green iris) rather
+than a literal eyeball, plus four small satellite eyes for "many". Built as
+plain `VectorDrawable`s, no external image asset.
+
 ## Open
 
 - **Resampler parity**: Android's bilinear vs OpenCV's `INTER_LINEAR` are not
@@ -283,7 +312,6 @@ is what `test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
   axis; this takes an axis-aligned square, the same simplification the PC
   pipeline made and recorded. A trainee lying down is fed upright-boxed, which
   is exactly the case fall detection cares about.
-- **Form classifier**: not started; `form_reason_codes` always empty.
 - The AI Hub profile job on `Snapdragon 8 Elite QRD` (`jp2e44lxp`) failed with
   an infra-side "unexpected device error"; on-device measurement supersedes it
   for now.
@@ -304,3 +332,63 @@ cd android
 > symptom is simply that nothing happens: no app, no model, no explanation.
 > Always re-run `./stage.sh` after a device-test run. That is what the script is
 > for.
+
+### Windows / PowerShell, without `stage.sh`
+
+`stage.sh` needs a POSIX shell; on plain Windows PowerShell, do the same
+steps directly. `$adb` below is `platform-tools\adb.exe` under your Android
+SDK (typically `%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe`).
+
+```powershell
+$env:JAVA_HOME = "<path to a JDK 17>"
+cd android
+.\gradlew.bat assembleDebug          # APK only
+.\gradlew.bat installDebug           # APK + install on a connected, authorized device
+
+$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+$pkg = "com.argus.edge"
+$models = "<dir with yolox.onnx, yolox.data, yolox.json, yolo26_pose_fp32.onnx>"
+
+foreach ($f in @("yolox.onnx","yolox.data","yolox.json","yolo26_pose_fp32.onnx")) {
+    & $adb push "$models\$f" /data/local/tmp/
+}
+& $adb shell "run-as $pkg mkdir -p files/models"
+foreach ($f in @("yolox.onnx","yolox.data","yolox.json","yolo26_pose_fp32.onnx")) {
+    & $adb shell "run-as $pkg cp /data/local/tmp/$f files/models/"
+}
+& $adb shell pm grant $pkg android.permission.CAMERA
+```
+
+`yolox.json` is generated once from the model with
+`python scripts/gen_yolox_fixture.py <dir>/yolox.onnx` (see "Staging a model"
+above); `yolo26_pose_fp32.onnx` comes from
+`python scripts/fetch_edge_models.py --out models/edge` (see
+`scripts/fetch_edge_models.py`'s own docstring — it needs `torch` and
+`qai_hub_models`, not part of the normal runtime install).
+
+**Connecting a phone over USB** instead of Wi-Fi, for development — no
+network needed:
+
+```powershell
+& $adb reverse tcp:8765 tcp:8765
+```
+
+then in the app's connect dialog, type `ws://localhost:8765` as the server
+address (instead of the laptop's LAN IP). The tunnel does not persist across
+`adb` reconnects or device reboots; re-run it if the app reports it cannot
+connect.
+
+**Saving a built APK.** `assembleDebug`/`installDebug` always leave the
+current build at
+`android\app\build\outputs\apk\debug\app-debug.apk`; copy it out if you want
+to keep or share a specific build rather than rebuilding later (the file is
+~90 MB — it bundles the ONNX Runtime QNN native libraries):
+
+```powershell
+New-Item -ItemType Directory -Force ..\dist | Out-Null
+Copy-Item app\build\outputs\apk\debug\app-debug.apk ..\dist\argus-edge-debug.apk
+```
+
+`dist/` is git-ignored; install the saved copy on any device with
+`adb install -r dist\argus-edge-debug.apk`, or copy the file to the phone
+and open it directly (needs "install from unknown sources" allowed).

@@ -15,4 +15,12 @@
     <color name="action">#2A3138</color>
     <color name="action_pressed">#39424A</color>
     <color name="scrim">#B3000000</color>
+
+    <!-- Dashboard tile accents (DashboardActivity). One color per domain so
+         the tiles read as genuinely different modes, not four reskins of the
+         same card. `live` (fitness's own accent, above) doubles as the
+         Fitness tile's color: it is the one domain that is actually live. -->
+    <color name="tile_nursing">#4FB3D9</color>
+    <color name="tile_lab">#B084F5</color>
+    <color name="tile_welding">#FF7A33</color>
 </resources>

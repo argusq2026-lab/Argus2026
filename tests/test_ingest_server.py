@@ -120,6 +120,131 @@ def test_unknown_protocol_version_is_rejected(default_config, tmp_path):
     asyncio.run(run())
 
 
+def test_a_use_case_mismatch_is_rejected_at_handshake(default_config, tmp_path):
+    """A fitness phone (the only kind that omits `use_case`) must not be
+    admitted onto a laptop configured for welding."""
+    cfg = _cfg(default_config, tmp_path)
+    cfg = dataclasses.replace(cfg, session=dataclasses.replace(cfg.session, use_case="welding"))
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            ws, ack = await _connect_and_hello(server.ws_port, "s0", "t0")
+            assert ack["type"] == "error"
+            assert "use_case" in ack["message"]
+            with pytest.raises(websockets.ConnectionClosed):
+                await ws.recv()
+            assert ws.close_code == 1008
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_a_matching_use_case_is_admitted(default_config, tmp_path):
+    cfg = _cfg(default_config, tmp_path)
+    cfg = dataclasses.replace(cfg, session=dataclasses.replace(cfg.session, use_case="welding"))
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            ws = await websockets.connect(f"ws://127.0.0.1:{server.ws_port}")
+            await ws.send(json.dumps({
+                "type": "hello", "protocol_version": 1, "station_id": "s0",
+                "trainee_id": "t0", "use_case": "welding",
+            }))
+            ack = json.loads(await ws.recv())
+            assert ack == {"type": "hello_ack", "accepted": True}
+            await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_an_observation_switching_use_case_mid_stream_is_rejected(default_config, tmp_path):
+    """`hello` fixes the connection's use case; an `observation` naming a
+    different one is a protocol violation, not a mode change."""
+    async def run():
+        server = IngestServer(_cfg(default_config, tmp_path))
+        await server.start()
+        try:
+            ws, ack = await _connect_and_hello(server.ws_port, "s0", "t0")
+            assert ack == {"type": "hello_ack", "accepted": True}
+            await ws.send(json.dumps({"type": "observation", "use_case": "welding", "ts": 0.0}))
+            error = json.loads(await ws.recv())
+            assert error["type"] == "error"
+            assert "use_case" in error["message"]
+            with pytest.raises(websockets.ConnectionClosed):
+                await ws.recv()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_set_use_case_changes_what_future_hellos_are_checked_against(default_config, tmp_path):
+    async def run():
+        server = IngestServer(_cfg(default_config, tmp_path))
+        await server.start()
+        try:
+            ok, message = server.set_use_case("welding")
+            assert ok is True
+            assert message == ""
+            assert server.cfg.session.use_case == "welding"
+
+            # A fitness phone (the implicit default) is now the mismatch.
+            ws, ack = await _connect_and_hello(server.ws_port, "s0", "t0")
+            assert ack["type"] == "error"
+            assert "use_case" in ack["message"]
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_set_use_case_rejects_one_this_build_cannot_score(default_config, tmp_path):
+    async def run():
+        server = IngestServer(_cfg(default_config, tmp_path))
+        await server.start()
+        try:
+            ok, message = server.set_use_case("nursing")
+            assert ok is False
+            assert "nursing" in message
+            # Unchanged: a rejected change must not partially apply.
+            assert server.cfg.session.use_case == "fitness"
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_set_use_case_does_not_affect_an_already_connected_phone(default_config, tmp_path):
+    """An instructor switching floors mid-session must not retroactively
+    reclassify a trainee someone is already relying on."""
+    async def run():
+        server = IngestServer(_cfg(default_config, tmp_path))
+        await server.start()
+        try:
+            ws, ack = await _connect_and_hello(server.ws_port, "s0", "t0")
+            assert ack == {"type": "hello_ack", "accepted": True}
+
+            ok, _ = server.set_use_case("welding")
+            assert ok is True
+
+            # The already-admitted fitness phone keeps working.
+            await ws.send(_observation_message(0.0))
+            await asyncio.sleep(0.05)
+            result = server.tick()
+            assert result.active_stations == 1
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
 def test_duplicate_trainee_id_is_rejected(default_config, tmp_path):
     async def run():
         server = IngestServer(_cfg(default_config, tmp_path))

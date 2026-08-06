@@ -116,6 +116,11 @@ class StationView:
     #: its trainee is *ready*, not broken, and must not be drawn like a phone
     #: that has gone silent — the two used to be indistinguishable.
     subject_present: bool = True
+    #: Which use case this station is running (see `docs/PROTOCOL.md`). The
+    #: console dispatches its per-station rendering on this field; today it
+    #: is always `"fitness"`, since that is the only use case a phone can
+    #: complete a handshake for.
+    use_case: str = "fitness"
     bbox_xyxy: tuple[float, float, float, float] | None = None
     keypoints_xy: tuple[tuple[float, float], ...] | None = None
     keypoints_conf: tuple[float, ...] | None = None
@@ -229,6 +234,16 @@ class ConsoleSettings:
     #: very different things under `auto` and under `manual`.
     session_name: str = ""
     approval: str = "auto"
+    #: What this floor is running (`[session] use_case`). Shown next to the
+    #: session name so an instructor looking at the console — not just a
+    #: phone at handshake time — can confirm which use case this laptop is
+    #: locked to.
+    use_case: str = "fitness"
+    #: Every use case this build can actually score (`argus.triage.
+    #: known_use_cases()`), so the console's use-case dropdown offers exactly
+    #: what `POST /session/use_case` will accept — not a hardcoded list in
+    #: JavaScript that could drift from what the server can dispatch to.
+    known_use_cases: tuple[str, ...] = ()
     #: The scoring weight vectors, default and per-exercise, so the page can
     #: say *which checks are switched off* for a given trainee.
     #:
@@ -276,21 +291,26 @@ class _TriageRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self) -> None:  # noqa: N802 (stdlib method name)
-        """The one mutating route: admitting or refusing a phone.
+        """The mutating routes: admitting/refusing a phone, or changing the
+        session's use case.
 
-        Guarded on the *client* address rather than on what the server was
-        bound to, so it keeps working for the instructor's own browser even
-        when an operator has opened `outputs.http_host` to serve the console
-        on a second screen — while never letting the rest of the LAN decide
-        who is allowed to monitor a trainee.
+        Both are guarded on the *client* address rather than on what the
+        server was bound to, so they keep working for the instructor's own
+        browser even when an operator has opened `outputs.http_host` to
+        serve the console on a second screen — while never letting the rest
+        of the LAN make either decision.
         """
-        if self.path != "/join/decide":
-            # JSON rather than a bare 404: every other reply on this route is
-            # JSON, and a caller that has to special-case the error shape is a
-            # caller that will get it wrong.
+        if self.path == "/join/decide":
+            self._handle_join_decide()
+        elif self.path == "/session/use_case":
+            self._handle_use_case_change()
+        else:
+            # JSON rather than a bare 404: every other reply on these routes
+            # is JSON, and a caller that has to special-case the error shape
+            # is a caller that will get it wrong.
             self._respond(404, b'{"error":"no such route"}', "application/json")
-            return
 
+    def _handle_join_decide(self) -> None:
         if not _is_loopback(self.client_address[0]) and not self.server.allow_remote_control:  # type: ignore[attr-defined]
             self._respond(
                 403,
@@ -332,6 +352,52 @@ class _TriageRequestHandler(BaseHTTPRequestHandler):
                 {"settled": settled}
                 if settled
                 else {"settled": False, "error": "that request is no longer waiting"}
+            ).encode("utf-8"),
+            "application/json",
+        )
+
+    def _handle_use_case_change(self) -> None:
+        """The console's dropdown: change `[session] use_case` at runtime.
+
+        Guarded the same as an admission decision, for the same reason --
+        this decides which phones the floor will admit from now on, which is
+        exactly the kind of decision `allow_remote_join_control` already
+        exists to keep off the rest of the LAN by default.
+        """
+        if not _is_loopback(self.client_address[0]) and not self.server.allow_remote_control:  # type: ignore[attr-defined]
+            self._respond(
+                403,
+                b'{"error":"use_case changes are accepted from this machine only"}',
+                "application/json",
+            )
+            return
+
+        change = self.server.on_use_case_change  # type: ignore[attr-defined]
+        if change is None:
+            self._respond(
+                503, b'{"error":"no server is attached to change"}', "application/json"
+            )
+            return
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+            use_case = body["use_case"]
+            if not isinstance(use_case, str):
+                raise ValueError("use_case must be a string")
+        except (ValueError, KeyError, UnicodeDecodeError) as exc:
+            self._respond(
+                400,
+                json.dumps({"error": f"malformed request: {exc}"}).encode("utf-8"),
+                "application/json",
+            )
+            return
+
+        ok, message = change(use_case)
+        self._respond(
+            200 if ok else 400,
+            json.dumps(
+                {"ok": True, "use_case": use_case} if ok else {"ok": False, "error": message}
             ).encode("utf-8"),
             "application/json",
         )
@@ -397,7 +463,7 @@ class _TriageRequestHandler(BaseHTTPRequestHandler):
 class TriageHTTPServer:
     """Background HTTP server: the triage ranking, and the trainer console.
 
-    Four routes, and deliberately only four — this is not a general-purpose
+    Five routes, and deliberately only five — this is not a general-purpose
     API:
 
     * `GET /triage` -> `{"ts": float, "records": [{trainee_id, score,
@@ -407,6 +473,9 @@ class TriageHTTPServer:
       renders a skeleton and a score from two different instants.
     * `GET /healthz` -> liveness.
     * `GET /` -> the trainer console page, which polls `/console`.
+    * `POST /session/use_case` -> change what use case this floor is
+      running, the console's half of the same control `--use-case` and
+      `[session] use_case` are the CLI/config half of. See `set_use_case`.
 
     Binds to 127.0.0.1 by default, and that default matters more now than it
     did: `/triage` describes who on a floor needs attention, and `/console`
@@ -422,6 +491,7 @@ class TriageHTTPServer:
         host: str = "127.0.0.1",
         console: ConsoleSettings | None = None,
         on_join_decision: Callable[[str, bool], bool] | None = None,
+        on_use_case_change: Callable[[str], tuple[bool, str]] | None = None,
         allow_remote_control: bool = False,
     ):
         self._server = ThreadingHTTPServer((host, port), _TriageRequestHandler)
@@ -431,12 +501,27 @@ class TriageHTTPServer:
         self._server.latest_records = []
         self._server.latest_stations = []
         self._server.latest_pending = []
-        # Immutable for the server's lifetime, so they need no lock; built
-        # once here rather than per request.
+        # Read under `state_lock` alongside the rank/station snapshot (see
+        # `_console_payload`) because `set_use_case` mutates one key of this
+        # at runtime -- everything else in it really is immutable for the
+        # server's lifetime, but the dict as a whole is no longer safe to
+        # read lock-free.
         self._server.console_config = asdict(console or ConsoleSettings())
         self._server.on_join_decision = on_join_decision
+        self._server.on_use_case_change = on_use_case_change
         self._server.allow_remote_control = allow_remote_control
         self._thread: threading.Thread | None = None
+
+    def set_use_case(self, use_case: str) -> None:
+        """Update what `GET /console`'s `config.use_case` reports.
+
+        Called back from `IngestServer.set_use_case` once the change is
+        accepted — this method only updates what the console *displays*; the
+        decision of whether `use_case` is one this build can score is
+        `IngestServer`'s, via `on_use_case_change`.
+        """
+        with self._server.state_lock:
+            self._server.console_config["use_case"] = use_case
 
     @property
     def port(self) -> int:

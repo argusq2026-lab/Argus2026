@@ -137,6 +137,7 @@ def test_station_view_fields_are_the_closed_set():
         "session",
         "display_name",
         "subject_present",
+        "use_case",
     }
 
 
