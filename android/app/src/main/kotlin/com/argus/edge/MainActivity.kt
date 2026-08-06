@@ -12,6 +12,7 @@ import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import android.graphics.drawable.GradientDrawable
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -170,6 +171,29 @@ class MainActivity : AppCompatActivity() {
     /** The most recent verdict, for the status strip only — never sent. */
     private var lastVerdict: FormClassifier.Verdict? = null
 
+    /**
+     * The codes actually sent for the most recent frame — `lastVerdict`'s own
+     * plus any `GeometricFormChecks` flagged. Kept separate from
+     * `lastVerdict.formReasonCodes` because the geometric checks are not part
+     * of that classifier's contract; the status strip reads this so it never
+     * shows "form ok" while a geometric fault was in fact reported.
+     */
+    private var lastFormCodes: List<String> = emptyList()
+
+    /**
+     * One [RepCounter] per exercise that has a natural cyclic joint angle.
+     * Plank has none -- it is a hold, not a rep -- so it is absent here and
+     * `updateRepCount` reports no count for it. Thresholds are looser than
+     * the matching fault check's "correct" range on purpose: a rep still
+     * counts even when `knee_angle_out_of_range` or `loose_upper_arm` also
+     * fired for it, since counting effort and judging form are different
+     * questions (`rep_count` is display-only, docs/PROTOCOL.md).
+     */
+    private val repCounters: Map<String, RepCounter> = mapOf(
+        "bicep" to RepCounter(contractedDeg = 90.0, extendedDeg = 160.0),
+        "lunge" to RepCounter(contractedDeg = 140.0, extendedDeg = 165.0),
+    )
+
     private var scoreThreshold = 0.35
     private var lensFacing = CameraSelector.LENS_FACING_BACK
     private var frameCount = 0L
@@ -242,6 +266,9 @@ class MainActivity : AppCompatActivity() {
                 lastGood = null
                 framesInferred = 0; framesWithDetection = 0
                 lastDetections = 0
+                // A rep count belongs to the set just stopped; the next Start
+                // begins a new one, not a continuation.
+                repCounters.values.forEach { it.reset() }
             }
             render()
         }
@@ -547,6 +574,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (subject != null) {
                     val codes = classifyForm(subjectPose, upright.width, upright.height)
+                    val reps = updateRepCount(subjectPose, upright.width, upright.height)
                     client?.send(
                         Observation.fromDetection(
                             ts = System.currentTimeMillis() / 1000.0,
@@ -556,6 +584,7 @@ class MainActivity : AppCompatActivity() {
                             exercise = exercise,
                             formOk = if (subjectPose != null) codes.isEmpty() else null,
                             formReasonCodes = codes,
+                            repCount = reps,
                         )
                     )
                 } else {
@@ -563,6 +592,7 @@ class MainActivity : AppCompatActivity() {
                     // form judgement that outlives the person it was made
                     // about is worse than a blank: it reads as current.
                     lastVerdict = null
+                    lastFormCodes = emptyList()
                     // Tell the laptop we are *here and watching nobody*, at a
                     // low rate. Sending nothing at all is what made an empty
                     // rack indistinguishable from a dead phone: the server
@@ -614,6 +644,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * `PoseResult` is in frame pixels; every model here was fitted on
+     * normalized coordinates. Under the shipped `bbox` encoding the frame
+     * size cancels out of the landmark-box normalization, so this conversion
+     * is currently a no-op mathematically -- but it is done anyway, because
+     * that cancellation is a property of one encoding and not of the
+     * interface. A `raw`-encoded artifact would be silently wrong without it.
+     */
+    private fun normalizedXy(pose: PoseResult, frameWidth: Int, frameHeight: Int): FloatArray {
+        val xy = FloatArray(pose.keypointsXy.size)
+        for (k in 0 until NUM_KEYPOINTS) {
+            xy[k * 2] = pose.keypointsXy[k * 2] / frameWidth
+            xy[k * 2 + 1] = pose.keypointsXy[k * 2 + 1] / frameHeight
+        }
+        return xy
+    }
+
+    /**
      * The form verdict for one frame, or no codes when it cannot be trusted.
      *
      * Returns empty for an exercise with no shipped classifier. Reporting one
@@ -623,30 +670,63 @@ class MainActivity : AppCompatActivity() {
      */
     private fun classifyForm(pose: PoseResult?, frameWidth: Int, frameHeight: Int): List<String> {
         val classifier = formClassifiers[exercise] ?: return emptyList()
-        val p = pose ?: run { lastVerdict = null; return emptyList() }
+        val p = pose ?: run { lastVerdict = null; lastFormCodes = emptyList(); return emptyList() }
         return try {
-            // `PoseResult` is in frame pixels; the model was fitted on
-            // normalized coordinates. Under the shipped `bbox` encoding the
-            // frame size cancels out of the landmark-box normalization, so
-            // this conversion is currently a no-op mathematically -- but it is
-            // done anyway, because that cancellation is a property of one
-            // encoding and not of the interface. A `raw`-encoded artifact
-            // would be silently wrong without it.
-            val xy = FloatArray(p.keypointsXy.size)
-            for (k in 0 until NUM_KEYPOINTS) {
-                xy[k * 2] = p.keypointsXy[k * 2] / frameWidth
-                xy[k * 2 + 1] = p.keypointsXy[k * 2 + 1] / frameHeight
-            }
+            val xy = normalizedXy(p, frameWidth, frameHeight)
             val verdict = classifier.classify(xy, p.keypointsConf)
             lastVerdict = verdict
-            verdict.formReasonCodes
+            // Geometric checks (GeometricFormChecks.kt) are not part of the
+            // fitted classifier -- upstream never collected ML labels for
+            // either fault, only a joint-angle threshold. Held to the same
+            // evidence bar as the classifier's own codes: only run once
+            // `verdict` has cleared landmark visibility and (for lunge) the
+            // depth gate, or a standing trainee's ~180 degree knee angle would
+            // misreport as a lunge fault.
+            val codes = if (verdict.label == FormClassifier.UNKNOWN) {
+                verdict.formReasonCodes
+            } else {
+                val geometric = when (exercise) {
+                    "bicep" -> if (GeometricFormChecks.looseUpperArm(xy, p.keypointsConf))
+                        listOf("loose_upper_arm") else emptyList()
+                    "lunge" -> if (GeometricFormChecks.kneeAngleOutOfRange(xy, p.keypointsConf))
+                        listOf("knee_angle_out_of_range") else emptyList()
+                    else -> emptyList()
+                }
+                verdict.formReasonCodes + geometric
+            }
+            lastFormCodes = codes
+            codes
         } catch (t: Throwable) {
             // A malformed pose is a bug worth seeing, not a reason to drop the
             // whole observation: the keypoint-derived features still stand.
             formClassifierStatus = "$exercise classify failed: ${t.message}"
             lastVerdict = null
+            lastFormCodes = emptyList()
             emptyList()
         }
+    }
+
+    /**
+     * Feeds this frame's joint angle into the current exercise's
+     * [RepCounter] and returns the running total, or null for an exercise
+     * with no counter (plank is a hold, not a rep) or one with a counter that
+     * simply has not seen a rep yet -- both cases send no `rep_count`, which
+     * `docs/PROTOCOL.md` treats as "unknown", not zero.
+     *
+     * A pose too incomplete to read the angle from is skipped rather than
+     * reset: a brief occlusion mid-rep should not cost a trainee their count.
+     */
+    private fun updateRepCount(pose: PoseResult?, frameWidth: Int, frameHeight: Int): Int? {
+        val counter = repCounters[exercise] ?: return null
+        val p = pose ?: return counter.count.takeIf { counter.everUpdated }
+        val xy = normalizedXy(p, frameWidth, frameHeight)
+        val angle = when (exercise) {
+            "bicep" -> GeometricFormChecks.elbowFlexAngle(xy, p.keypointsConf)
+            "lunge" -> GeometricFormChecks.kneeAngle(xy, p.keypointsConf)
+            else -> null
+        }
+        angle?.let { counter.update(it) }
+        return counter.count.takeIf { counter.everUpdated }
     }
 
     /** A small caption above a dialog field. Hints vanish the moment someone
@@ -774,6 +854,17 @@ class MainActivity : AppCompatActivity() {
             .setView(column)
             .setPositiveButton("Connect") { _, _ ->
                 val url = urlInput.text.toString().trim()
+                // An empty or non-ws(s) address reaches OkHttp's URL parser
+                // uncaught otherwise, which throws IllegalArgumentException on
+                // the main thread -- a typo in this one field should not take
+                // the whole station down mid-class.
+                if (!isValidWsUrl(url)) {
+                    Toast.makeText(
+                        this, "enter a server address, e.g. ws://192.168.1.20:8765",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    return@setPositiveButton
+                }
                 // The device id *is* the trainee id: stable, unique across a
                 // floor, and not something a human should have to invent.
                 val trainee = deviceId
@@ -786,17 +877,25 @@ class MainActivity : AppCompatActivity() {
                     .putString("exercise", exercise)
                     .apply()
                 client?.disconnect()
-                client = IngestClient(
-                    url,
-                    stationId = deviceId,
-                    traineeId = trainee,
-                    exercisePlan = exercise,
-                    displayName = display,
-                    sessionName = chosenSession,
-                ) { s ->
-                    serverStatus = s
-                    runOnUiThread { render() }
-                }.also { it.connect() }
+                try {
+                    client = IngestClient(
+                        url,
+                        stationId = deviceId,
+                        traineeId = trainee,
+                        exercisePlan = exercise,
+                        displayName = display,
+                        sessionName = chosenSession,
+                    ) { s ->
+                        serverStatus = s
+                        runOnUiThread { render() }
+                    }.also { it.connect() }
+                } catch (t: Throwable) {
+                    // Backstop behind the scheme check above: any other
+                    // malformed-URL shape OkHttp rejects lands here instead of
+                    // crashing the activity.
+                    Toast.makeText(this, "could not connect: ${t.message}", Toast.LENGTH_LONG).show()
+                    client = null
+                }
             }
             .setNegativeButton("Disconnect") { _, _ ->
                 client?.disconnect(); client = null
@@ -804,6 +903,15 @@ class MainActivity : AppCompatActivity() {
                 render()
             }
             .show()
+    }
+
+    /** ws:// or wss:// with a non-empty host -- OkHttp's `Request.Builder.url`
+     * throws for anything else, including a blank string, which reaching it
+     * uncaught is exactly what crashed the app on an empty address field. */
+    private fun isValidWsUrl(url: String): Boolean {
+        if (!url.startsWith("ws://") && !url.startsWith("wss://")) return false
+        val uri = android.net.Uri.parse(url)
+        return !uri.host.isNullOrEmpty()
     }
 
     /**
@@ -842,9 +950,9 @@ class MainActivity : AppCompatActivity() {
                     append(
                         when {
                             v.label == FormClassifier.UNKNOWN -> "body not fully in frame"
-                            !v.confident -> "form unclear"
-                            v.formReasonCodes.isEmpty() -> "form ok"
-                            else -> v.formReasonCodes.first().replace('_', ' ')
+                            !v.confident && lastFormCodes.isEmpty() -> "form unclear"
+                            lastFormCodes.isEmpty() -> "form ok"
+                            else -> lastFormCodes.first().replace('_', ' ')
                         }
                     )
                 }
@@ -898,9 +1006,25 @@ class MainActivity : AppCompatActivity() {
                 when {
                     exercise !in formClassifiers -> "no classifier for this exercise ($formClassifierStatus)"
                     !running.get() -> formClassifierStatus
-                    else -> lastVerdict?.describe() ?: "no pose this frame"
+                    else -> {
+                        val base = lastVerdict?.describe() ?: "no pose this frame"
+                        // GeometricFormChecks codes are not part of the
+                        // classifier's own verdict (describe() only knows
+                        // about the fitted model) -- named separately here so
+                        // the debug panel does not read "correct" while a
+                        // geometric fault is what actually went on the wire.
+                        val geometricOnly = lastFormCodes.filterNot { it in (lastVerdict?.formReasonCodes ?: emptyList()) }
+                        if (geometricOnly.isNotEmpty()) {
+                            "$base + ${geometricOnly.joinToString(", ") { it.replace('_', ' ') }}"
+                        } else base
+                    }
                 }
             ).append('\n')
+            repCounters[exercise]?.let { counter ->
+                append("reps      ")
+                append(if (counter.everUpdated) "${counter.count}" else "no signal yet")
+                append('\n')
+            }
             append("server    ").append(serverStatus)
             append("\n\nlong-press Debug to import a model")
         }

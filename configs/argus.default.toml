@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 7
+config_version = 8
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +105,17 @@ form_error = 0.15
 # tracking past the toe; real but more debated than a valgus collapse, so it
 # sits at the same tier as asymmetric_form rather than knee_valgus's.
 "knee_over_toe" = 0.6
+# Bicep and lunge's second fault each, both from
+# GeometricFormChecks.kt -- plain joint-angle arithmetic against a threshold
+# upstream states in their README, not a trained classifier (see
+# docs/VALIDATION.md 1c/1d, which called for exactly this). Neither threshold
+# has been fit or evaluated by anyone, including upstream: they are stated
+# cutoffs from the author's own research, one of them (bicep's 40 degrees)
+# without even the informal graph the lunge one has. Weighted like their
+# ML-detected siblings, not lower for being "just" arithmetic -- the
+# uncertainty is in the threshold's origin, not the computation.
+"loose_upper_arm" = 0.6
+"knee_angle_out_of_range" = 0.6
 
 
 # Per-exercise weight overrides. A movement can make a feature meaningless or
