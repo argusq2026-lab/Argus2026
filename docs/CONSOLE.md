@@ -45,8 +45,28 @@ trainer watching one station would lose it mid-glance.
 
 Each card carries a live COCO-17 skeleton drawn from `keypoints_xy`, the
 bounding box, the score and its reason codes in prose, the phone's own
-`exercise` / `rep_count` / `form_ok`, and a warm-up indicator while the
-rolling history is still filling.
+`exercise` / `rep_count` / `form_ok`, a warm-up indicator while the rolling
+history is still filling — and **which scoring profile is running, and what it
+is not watching for**.
+
+That last one exists because of a trade the scorer makes deliberately. A
+correct plank is horizontal and motionless, which `fall` and `stillness` are
+built to read as an emergency, so `[scoring.exercise_weights.plank]` weights
+both at zero. A zero weight suppresses the feature's contribution *and* its
+reason code, which is right — a reason that explains no part of the score is
+worse than no reason. The cost is that a trainee who genuinely collapses
+mid-plank raises neither, and a card reading "nothing flagged" would look
+exactly like one where those checks had run and found nothing.
+
+So the page says it, in amber, on the card:
+
+> Scored as plank · not watching for falls, stillness
+
+The console resolves the profile the same way `ScoringConfig.weights_for`
+does — an exercise with no configured profile falls back to the default
+vector, not to nothing — and it reads the weights from the snapshot rather
+than knowing any of them, so a retuned profile changes the sentence without a
+code change.
 
 ---
 

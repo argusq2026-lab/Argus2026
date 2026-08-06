@@ -73,6 +73,12 @@ FORM_ERROR_ONSET_TICK = 20
 SCENE_EXERCISE = "squat"
 TICKS_PER_REP = 5
 
+#: Exercises that are held rather than repeated, and so have no rep count.
+#: A plank reporting "72 reps" is not a cosmetic wart: it is the console
+#: stating something about a trainee that nothing measured, which is the same
+#: class of mistake as showing a silent station as calm.
+HELD_EXERCISES = frozenset({"plank"})
+
 
 def _form_reason_codes(trainee_id: str, tick: int) -> tuple[str, ...]:
     """The scene's form codes for one trainee at one tick. Deterministic."""
@@ -184,6 +190,7 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
         # classifier flags the bad reps, not the whole set). They never
         # target the same trainee_id, so this is a union, not a priority.
         codes = TRAINEE_FORM_CODES.get(trainee_id) or _form_reason_codes(trainee_id, tick)
+        exercise = TRAINEE_EXERCISE[trainee_id]
         observations[trainee_id] = FrameObservation(
             ts=ts,
             bbox_xyxy=box.xyxy,
@@ -191,12 +198,11 @@ def synthetic_tick(tick: int, fps: float = 15.0) -> dict[str, FrameObservation]:
             keypoints_conf=kp_conf,
             form_reason_codes=codes,
             # Load-bearing (selects the scoring weight profile), so each
-            # trainee needs its own value rather than the scene-wide
-            # SCENE_EXERCISE constant -- a plank scored as a squat is exactly
-            # the misfire TRAINEE_EXERCISE/[scoring.exercise_weights] exist
-            # to prevent.
-            exercise=TRAINEE_EXERCISE[trainee_id],
-            rep_count=tick // TICKS_PER_REP,
+            # trainee needs its own value rather than a scene-wide constant --
+            # a plank scored as a squat is exactly the misfire
+            # TRAINEE_EXERCISE/[scoring.exercise_weights] exist to prevent.
+            exercise=exercise,
+            rep_count=None if exercise in HELD_EXERCISES else tick // TICKS_PER_REP,
             form_ok=not codes,
         )
     return observations

@@ -197,3 +197,18 @@ def test_hello_ack_message_shape():
 
 def test_error_message_shape():
     assert error_message("bad thing") == {"type": "error", "message": "bad thing"}
+
+
+def test_an_explicit_null_rep_count_means_not_reported():
+    """A held exercise has no rep count. A phone that says so plainly is
+    well-formed; refusing the connection over it would be strictness pointed
+    the wrong way, since nothing is being silently defaulted."""
+    assert parse_observation(_obs(rep_count=None), VOCAB).rep_count is None
+
+
+def test_an_explicit_null_form_ok_is_still_unknown():
+    assert parse_observation(_obs(form_ok=None), VOCAB).form_ok is None
+
+
+def test_an_explicit_null_exercise_scores_on_the_defaults():
+    assert parse_observation(_obs(exercise=None), VOCAB).exercise == ""

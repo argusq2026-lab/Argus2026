@@ -160,6 +160,17 @@ means "never report a form error". There is a test for this.
 This is the step that has nothing to do with the model and is the one most
 likely to be skipped. See §4, third trap.
 
+Two consequences reach the trainer console, and both are automatic — but know
+they are happening. The console reads `[scoring.exercise_weights]` from the
+snapshot, so any feature you weight zero is named on the station card as
+something the floor is **not** being watched for ("Scored as plank · not
+watching for falls, stillness, facing away"). And your new codes render
+through a prettifier, so `hips_piked` becomes "Hips piked" without any code
+change — good enough for a code that reads as English, not good enough for
+jargon. Add a line to `PROSE` in `src/argus/console.py` when the code would
+not mean anything to someone standing on a gym floor — `lean_back_error`
+and `knee_over_toe` both needed one.
+
 ### Step 7 — Verify on a device, not in a test
 
 The plank passed every test it had while being completely broken on a phone.
@@ -380,8 +391,10 @@ number without the caveat.
 Tests passing is necessary and was not sufficient — the visibility bug passed
 everything.
 
-1. `pytest tests/ -q` — currently 162.
-2. `cd android && ./gradlew testDebugUnitTest` — currently 37.
+1. `pytest tests/ -q` — currently 311.
+2. `cd android && ./gradlew testDebugUnitTest` — currently 37 plus the
+   discovery and join-pending cases; **not run since the console merge, and
+   the Kotlin has not been compiled since either**.
 3. Re-run the training script; artifact and fixture must be **byte-identical**.
 4. Check `min_scaler_scale` in the artifact. Under 0.01 means a near-constant
    feature and the model will not survive the change of pose model.

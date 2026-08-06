@@ -210,6 +210,15 @@ CONSOLE_HTML = """<!doctype html>
   .creasons.quiet { color: var(--muted); }
   .cmeta { color: var(--muted); font-size: 0.76rem; margin-top: 0.35rem;
            font-variant-numeric: tabular-nums; }
+  .cprofile { color: var(--muted); font-size: 0.76rem; margin-top: 0.25rem; }
+  .cprofile:empty { display: none; }
+  /* A profile that switches a check off is not a neutral fact about the
+     scoring config -- it is a gap in what the floor is being watched for, and
+     it reads as one. */
+  .cprofile.blind {
+    color: var(--stale); border-left: 2px solid var(--stale);
+    padding-left: 0.45rem; margin-left: -0.05rem;
+  }
   .cwarm { color: var(--stale); font-size: 0.74rem; margin-top: 0.2rem; }
 
   footer {
@@ -302,7 +311,22 @@ const PROSE = {
   heels_rising: "Heels lifting",
   excessive_forward_lean: "Leaning too far forward",
   incomplete_lockout: "Not locking out",
-  asymmetric_form: "Uneven left and right"
+  asymmetric_form: "Uneven left and right",
+  hips_sagging: "Hips sagging — lower back dipping",
+  hips_piked: "Hips piked — hips too high",
+  lean_back_error: "Leaning back — swinging the weight up",
+  knee_over_toe: "Front knee past the toes"
+};
+
+// The five scoring features, and what switching one off means in words. Kept
+// in the scorer's own order so the sentence reads the same way every time.
+const FEATURES = ["fall", "stillness", "occlusion", "off_task", "form_error"];
+const FEATURE_WATCH = {
+  fall: "falls",
+  stillness: "stillness",
+  occlusion: "being hidden from view",
+  off_task: "facing away",
+  form_error: "form"
 };
 
 function prose(code) {
@@ -313,6 +337,27 @@ function prose(code) {
 
 function proseList(codes) {
   return (codes || []).map(prose).join(" · ");
+}
+
+// Which weight vector a trainee is actually being scored on, resolved the
+// same way argus.config.ScoringConfig.weights_for resolves it: an exercise
+// with no profile falls back to the defaults rather than being special.
+function profileFor(exercise) {
+  const key = (exercise || "").toLowerCase();
+  const profiles = (state.cfg && state.cfg.exercise_weights) || {};
+  if (key && profiles[key]) return { name: key, weights: profiles[key] };
+  return { name: "", weights: (state.cfg && state.cfg.default_weights) || {} };
+}
+
+// A feature weighted zero contributes nothing to the score AND emits no
+// reason code -- which is right, and is also why it has to be said out loud.
+// The plank profile zeroes `fall` and `stillness` because a correct plank is
+// horizontal and motionless; the cost is that a trainee who collapses
+// mid-plank raises neither, and a card reading "nothing flagged" would look
+// identical to one where those checks had actually run.
+function notWatchedFor(weights) {
+  if (!Object.keys(weights).length) return [];
+  return FEATURES.filter((f) => !(weights[f] > 0)).map((f) => FEATURE_WATCH[f]);
 }
 
 const state = {
@@ -417,10 +462,14 @@ function makeCard(traineeId) {
 
   const reasons = el("div", "creasons");
   const meta = el("div", "cmeta");
+  const profile = el("div", "cprofile");
   const warm = el("div", "cwarm");
 
-  root.append(head, where, frame, bar, score, reasons, meta, warm);
-  const refs = { root, chip, where, canvas, fnote, fill, scoreVal, scoreAge, reasons, meta, warm };
+  root.append(head, where, frame, bar, score, reasons, meta, profile, warm);
+  const refs = {
+    root, chip, where, canvas, fnote, fill, scoreVal, scoreAge,
+    reasons, meta, profile, warm,
+  };
   state.cards.set(traineeId, refs);
   return refs;
 }
@@ -499,6 +548,24 @@ function renderCard(traineeId, entry, record, snapshotTs) {
     bits.push(proseList(s.form_reason_codes));
   }
   c.meta.textContent = bits.join(" · ");
+
+  // Which weights are running, and what they are not looking at. Only shown
+  // when a named profile applies or when something is switched off -- on the
+  // ordinary default vector with all five features live there is nothing here
+  // worth a trainer's attention.
+  const active = profileFor(s.exercise);
+  const blind = notWatchedFor(active.weights);
+  if (blind.length) {
+    c.profile.className = "cprofile blind";
+    c.profile.textContent =
+      (active.name ? "Scored as " + active.name : "Default scoring") +
+      " · not watching for " + blind.join(", ");
+  } else if (active.name) {
+    c.profile.className = "cprofile";
+    c.profile.textContent = "Scored as " + active.name + " · all checks active";
+  } else {
+    c.profile.textContent = "";
+  }
 
   const need = state.cfg.history_len;
   if (status !== "gone" && s.observations < need) {
