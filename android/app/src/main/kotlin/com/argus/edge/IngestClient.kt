@@ -144,6 +144,17 @@ class IngestClient(
         })
     }
 
+    /**
+     * Announce an empty station. Dropped silently when not streaming, and not
+     * counted against `droppedWhileDown`: failing to say "nobody is here" is
+     * not a lost measurement.
+     */
+    fun sendIdle(ts: Double): Boolean {
+        val ws = socket
+        if (state != State.STREAMING || ws == null) return false
+        return ws.send(encodeIdle(ts))
+    }
+
     /** Send one observation; drops (and counts) if the session is not live. */
     fun send(obs: Observation): Boolean {
         val ws = socket

@@ -31,7 +31,58 @@ doctor` warns when it is on.
 Under `"auto"`, the default, this section never appears — phones are admitted
 on a well-formed `hello` exactly as they were before admission existed.
 
-**The help queue**, in three tiers that are deliberately not styled alike:
+**The score an instructor reads is the rolling one.** The triage score is
+instantaneous by design — computed off a ~2 s window, recomputed every
+`ingest.rank_interval_s` — which makes it correct and nearly unwatchable: it
+moves constantly and cannot be compared against the same trainee a minute
+ago. The card's headline number is that score decayed over
+`scoring.rolling_half_life_s`, labelled `session avg`, with `now` and `peak`
+beside it.
+
+Two things deliberately did **not** become rolling:
+
+- **Alerts.** A fall averaged over twenty seconds is a fall nobody was told
+  about. The red bar and the top tier of the queue are still the *instant*
+  score crossing `scoring.alert_threshold`.
+- **The peak.** A rolling mean is supposed to forget, and "this trainee was
+  briefly in real trouble" should survive being forgotten.
+
+**Work is counted in the unit the exercise actually has.** Reps for a curl or
+a squat; seconds for a plank, which has no reps and whose entire quality is
+how long it was held well. One `fault_rate` then means the same thing for
+both — "3 of 14 reps flagged", "18s of 2m10s flagged". Below
+`scoring.min_reps_for_fault_rate` / `min_hold_s_for_fault_rate` the rate is
+withheld and the card says so: one bad rep out of one is not a 100% fault
+rate, and should not put anyone at the top of a queue.
+
+**A trainee who cannot hold the movement is marked for help.** This is the
+one case the weighted sum could not express. With `form_error` at 0.15 in the
+default vector, a trainee getting *every single squat rep wrong* scored
+0.15 x 0.8 = 0.12 against a 0.5 threshold: no matter how badly or how long
+they struggled, nobody was ever sent. Raising the weight is not the fix
+either — enough to alert on form would make one bad frame outrank a fall.
+
+So sustained failure is scored on its own terms and joins the score as a
+floor, never as a sixth weighted term. Once a trainee has been wrong for the
+*majority* of a meaningful stretch (`scoring.form_persistence_threshold`, over
+`form_persistence_min_s`), they are escalated at the severity of the fault
+they keep making, and the card reads **"Cannot hold form — wrong most of this
+set"** rather than the per-rep "Form flagged by the phone". The severity
+ladder still decides who is an alert: `hips_sagging` at 0.8 summons someone,
+a persistent `incomplete_lockout` at 0.4 stays a coaching note.
+
+It decays on `form_persistence_half_life_s`, so a trainee who corrects their
+form clears within a minute or two — a coaching tool has to let people
+recover, or a bad first set marks someone all session and the instructor
+learns to ignore the flag. And it obeys the zero-weight rule: an exercise
+profile that silences `form_error` silences this too.
+
+**The help queue**, in three tiers that are deliberately not styled alike.
+Alerts are ordered by the instant score; everything below is ordered by the
+rolling one, with the fault rate breaking ties — two trainees can average the
+same because the same non-form feature dominates both, and only the volume
+distinguishes the one doing half their reps badly from the one doing them
+cleanly:
 
 | Tier | When | Why it is separate |
 |---|---|---|

@@ -7,6 +7,9 @@ import android.text.InputType
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.ArrayAdapter
+import android.widget.AdapterView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.graphics.drawable.GradientDrawable
@@ -31,6 +34,15 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** The exercise a station assumes when none has been configured. */
 const val DEFAULT_EXERCISE = "plank"
+
+/**
+ * How often an empty station says so.
+ *
+ * Once a second, not once a frame: "nobody is here" is a liveness fact, not a
+ * measurement, and it only has to arrive comfortably inside the server's
+ * `ingest.track_ttl_s` (10 s by default) to stop the station being evicted.
+ */
+const val IDLE_INTERVAL_MS = 1_000L
 
 /**
  * The station screen — what the person setting up a phone on a tripod sees.
@@ -88,6 +100,10 @@ class MainActivity : AppCompatActivity() {
     private var lastVisibleKeypoints = 0
     private var lastPoseScore = 0f
     private val subjectTracker = SubjectTracker()
+
+    /** Last `idle` heartbeat, so an empty station is announced without
+     *  spending a frame's worth of socket traffic on saying nothing. */
+    @Volatile private var lastIdleSentMs = 0L
 
     /** The last frame that actually produced something, for the brief hold. */
     private class Snapshot(
@@ -547,6 +563,17 @@ class MainActivity : AppCompatActivity() {
                     // form judgement that outlives the person it was made
                     // about is worse than a blank: it reads as current.
                     lastVerdict = null
+                    // Tell the laptop we are *here and watching nobody*, at a
+                    // low rate. Sending nothing at all is what made an empty
+                    // rack indistinguishable from a dead phone: the server
+                    // evicted this station at track_ttl_s, refused its next
+                    // message, and it reconnected -- a flap that begins the
+                    // moment a station is set up before its trainee arrives.
+                    val nowMs = System.currentTimeMillis()
+                    if (nowMs - lastIdleSentMs >= IDLE_INTERVAL_MS) {
+                        lastIdleSentMs = nowMs
+                        client?.sendIdle(nowMs / 1000.0)
+                    }
                 }
                 upright.recycle()
             }
@@ -622,6 +649,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** A small caption above a dialog field. Hints vanish the moment someone
+     *  types, which is exactly when they stop being able to check what they
+     *  entered against what was asked for. */
+    private fun fieldLabel(resId: Int) = TextView(this).apply {
+        setText(resId)
+        textSize = 12f
+        alpha = 0.7f
+        setPadding(0, 24, 0, 0)
+    }
+
     private fun showConnectDialog() {
         val prefs = getSharedPreferences("argus_edge_server", MODE_PRIVATE)
         val urlInput = EditText(this).apply {
@@ -629,12 +666,14 @@ class MainActivity : AppCompatActivity() {
             setText(prefs.getString("url", ""))
             inputType = InputType.TYPE_TEXT_VARIATION_URI
         }
-        val traineeInput = EditText(this).apply {
-            hint = "trainee id"
-            setText(prefs.getString("trainee", deviceId))
-        }
+        // One identity field, not two. The dialog used to ask for a trainee id
+        // *and* a name shown to the instructor — a systems question and a human
+        // one about the same person. Whoever is setting up a rack has no reason
+        // to know a triage key exists. So: ask who the trainee is, and use the
+        // device's own id underneath, which is already stable and unique across
+        // a floor.
         val nameInput = EditText(this).apply {
-            hint = getString(R.string.display_name_hint)
+            hint = getString(R.string.trainee_name_hint)
             setText(prefs.getString("display_name", ""))
         }
         // Remembered from the session that was picked, and sent in the hello
@@ -698,32 +737,50 @@ class MainActivity : AppCompatActivity() {
         // profile. Setting it to something with no profile is allowed and
         // scores on the default weights -- but leaving it blank for a plank
         // means a correct plank is scored as a fall, so it defaults filled in.
-        val exerciseInput = EditText(this).apply {
-            hint = "exercise (selects the server's scoring profile)"
-            setText(prefs.getString("exercise", DEFAULT_EXERCISE))
+        // A picker, not free text. This string selects the *server's* scoring
+        // profile, so a typo does not fail loudly — it silently scores a plank
+        // on standing-HIIT weights, which is the exact misfire the profiles
+        // exist to prevent. The options are the exercises this phone can
+        // actually classify, plus whatever was configured before.
+        val exercises = (formClassifierAssets.keys.toList() +
+            listOfNotNull(prefs.getString("exercise", null))).distinct()
+        var chosenExercise = prefs.getString("exercise", DEFAULT_EXERCISE) ?: DEFAULT_EXERCISE
+        val exerciseSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@MainActivity, android.R.layout.simple_spinner_dropdown_item, exercises
+            )
+            setSelection(exercises.indexOf(chosenExercise).coerceAtLeast(0))
+            onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(
+                    parent: AdapterView<*>?, view: View?, position: Int, id: Long,
+                ) { chosenExercise = exercises[position] }
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
+            }
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(48, 24, 48, 0)
             addView(findButton)
             addView(sessionLabel)
+            addView(fieldLabel(R.string.field_server))
             addView(urlInput)
-            addView(traineeInput)
+            addView(fieldLabel(R.string.field_trainee))
             addView(nameInput)
-            addView(exerciseInput)
+            addView(fieldLabel(R.string.field_exercise))
+            addView(exerciseSpinner)
         }
         AlertDialog.Builder(this)
             .setTitle("Ingest server (docs/PROTOCOL.md)")
             .setView(column)
             .setPositiveButton("Connect") { _, _ ->
                 val url = urlInput.text.toString().trim()
-                val trainee = traineeInput.text.toString().trim().ifEmpty { deviceId }
+                // The device id *is* the trainee id: stable, unique across a
+                // floor, and not something a human should have to invent.
+                val trainee = deviceId
                 val display = nameInput.text.toString().trim()
-                exercise = exerciseInput.text.toString().trim().lowercase()
-                    .ifEmpty { DEFAULT_EXERCISE }
+                exercise = chosenExercise
                 prefs.edit()
                     .putString("url", url)
-                    .putString("trainee", trainee)
                     .putString("display_name", display)
                     .putString("session", chosenSession)
                     .putString("exercise", exercise)

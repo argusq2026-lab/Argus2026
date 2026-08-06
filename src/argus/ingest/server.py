@@ -37,6 +37,7 @@ from argus.ingest.protocol import (
     hello_ack_message,
     join_pending_message,
     parse_hello,
+    parse_idle,
     parse_observation,
 )
 from argus.ingest.session import DuplicateTraineeError, SessionRegistry
@@ -190,8 +191,21 @@ class IngestServer:
             for trainee_id in expired:
                 forget(trainee_id)
 
-        records = rank_trainees(self._registry.tracks(), now, self.cfg.scoring)
+        tracks = self._registry.tracks()
+        records = rank_trainees(tracks, now, self.cfg.scoring)
         alerts = needs_instructor(records, self.cfg.scoring)
+
+        # Advance each trainee's rolling score here rather than inside
+        # `compute_triage`, which stays a pure function of history — that
+        # purity is what tests/test_determinism.py protects. Alerts above are
+        # computed first and from the *instant* score, deliberately: a fall
+        # must fire on the frame it happens, not once a mean catches up.
+        for record in records:
+            track = tracks.get(record.trainee_id)
+            if track is not None:
+                track.session.observe_score(
+                    record.score, now, self.cfg.scoring.rolling_half_life_s
+                )
 
         if self._alert_sink is not None:
             for record in alerts:
@@ -312,7 +326,9 @@ class IngestServer:
             return
 
         try:
-            self._registry.register(hello.station_id, hello.trainee_id, self._now())
+            self._registry.register(
+                hello.station_id, hello.trainee_id, self._now(), hello.display_name
+            )
         except DuplicateTraineeError as exc:
             # Two phones can be approved for one trainee_id in the window
             # between the check above and here. The registry is the authority
@@ -333,7 +349,17 @@ class IngestServer:
         try:
             async for raw_message in ws:
                 try:
-                    obs = parse_observation(json.loads(raw_message), self.cfg.scoring.form_error_vocab)
+                    payload = json.loads(raw_message)
+                    # `idle` says "I am here, nobody is in frame". It refreshes
+                    # the session exactly as an observation does, which is the
+                    # whole point: a station set up before its trainee arrives
+                    # must not be evicted and forced to reconnect.
+                    if isinstance(payload, dict) and payload.get("type") == "idle":
+                        parse_idle(payload)
+                        self._registry.note_idle(hello.trainee_id, self._now())
+                        self._publish_stations()
+                        continue
+                    obs = parse_observation(payload, self.cfg.scoring.form_error_vocab)
                 except (ProtocolError, json.JSONDecodeError) as exc:
                     await ws.send(json.dumps(error_message(str(exc))))
                     await ws.close(_POLICY_VIOLATION, _close_reason(str(exc)))

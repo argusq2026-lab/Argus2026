@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from argus.config import ScoringConfig
-from argus.outputs import StationView
+from argus.outputs import SessionSummary, StationView
 from argus.triage import FrameObservation, TrackState
 
 
@@ -35,6 +35,9 @@ class StationSession:
     track: TrackState
     last_seen_ts: float
     connected: bool = True
+    #: Carried from the `hello` so the console can name a person rather than
+    #: a device. Re-set on reconnect: the same rack may be a different trainee.
+    display_name: str = ""
 
 
 class DuplicateTraineeError(ValueError):
@@ -72,7 +75,9 @@ class SessionRegistry:
         session = self._sessions.get(trainee_id)
         return session is not None and session.connected
 
-    def register(self, station_id: str, trainee_id: str, now: float) -> StationSession:
+    def register(
+        self, station_id: str, trainee_id: str, now: float, display_name: str = ""
+    ) -> StationSession:
         """Start a new session, or resume one within its disconnect grace window."""
         existing = self._sessions.get(trainee_id)
         if existing is not None:
@@ -81,6 +86,7 @@ class SessionRegistry:
             existing.station_id = station_id
             existing.connected = True
             existing.last_seen_ts = now
+            existing.display_name = display_name
             return existing
 
         session = StationSession(
@@ -88,6 +94,7 @@ class SessionRegistry:
             trainee_id=trainee_id,
             track=TrackState(history_len=self._scoring.history_len),
             last_seen_ts=now,
+            display_name=display_name,
         )
         self._sessions[trainee_id] = session
         return session
@@ -106,9 +113,43 @@ class SessionRegistry:
         session.track.push(obs, self._scoring)
         session.last_seen_ts = now
 
+    def note_idle(self, trainee_id: str, now: float) -> None:
+        """The station is alive and watching nobody.
+
+        Refreshes `last_seen_ts` exactly as an observation does — that is the
+        point: a healthy station pointed at an empty rack must not be evicted
+        and forced to reconnect. Raises `KeyError` on an already-expired
+        session, same as `push_observation`, so the caller's handling is one
+        path rather than two.
+        """
+        session = self._sessions[trainee_id]
+        session.track.note_idle()
+        session.last_seen_ts = now
+
     def tracks(self) -> dict[str, TrackState]:
         """Every session's history, connected or still in its grace window."""
         return {trainee_id: s.track for trainee_id, s in self._sessions.items()}
+
+    def _summarise(self, track: TrackState) -> SessionSummary:
+        """Project a track's running account into the console's closed view.
+
+        `fault_rate` is resolved here rather than on the page, so the "is
+        there enough work to call this a rate" judgement lives next to the
+        thresholds that decide it instead of being re-implemented in
+        JavaScript where it could drift.
+        """
+        metrics = track.session
+        return SessionSummary(
+            rolling_score=round(metrics.rolling_score, 4),
+            peak_score=round(metrics.peak_score, 4),
+            active_s=round(metrics.active_s, 2),
+            reps=metrics.reps,
+            reps_flagged=metrics.reps_flagged,
+            hold_s=round(metrics.hold_s, 2),
+            hold_flagged_s=round(metrics.hold_flagged_s, 2),
+            fault_rate=metrics.fault_rate(self._scoring),
+            code_counts=dict(metrics.code_counts),
+        )
 
     def station_views(self) -> list[StationView]:
         """A snapshot of every session for the trainer console.
@@ -130,9 +171,11 @@ class SessionRegistry:
                 StationView(
                     station_id=session.station_id,
                     trainee_id=trainee_id,
+                    display_name=session.display_name,
                     connected=session.connected,
                     last_seen_ts=session.last_seen_ts,
                     observations=len(history),
+                    subject_present=session.track.subject_present,
                     bbox_xyxy=latest.bbox_xyxy if latest else None,
                     keypoints_xy=tuple(latest.keypoints_xy) if latest else None,
                     keypoints_conf=tuple(latest.keypoints_conf) if latest else None,
@@ -140,6 +183,7 @@ class SessionRegistry:
                     exercise=latest.exercise if latest else "",
                     rep_count=latest.rep_count if latest else None,
                     form_ok=latest.form_ok if latest else None,
+                    session=self._summarise(session.track) if latest else None,
                 )
             )
         return views

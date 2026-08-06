@@ -49,6 +49,10 @@ REASON_STILLNESS = "prolonged_stillness"
 REASON_OCCLUSION = "hands_face_occluded"
 REASON_OFF_TASK = "off_task_orientation"
 REASON_FORM_ERROR = "form_error"
+#: Not "a rep was wrong" but "they cannot hold the movement". Distinct from
+#: `form_error` because they call for different things from an instructor:
+#: one is a cue, the other is stop-and-reset.
+REASON_PERSISTENT_FORM = "persistent_form_fault"
 
 
 @dataclass
@@ -67,13 +71,21 @@ class FrameObservation:
     being rejected, because the protocol has always described this field as a
     free-form label.
 
-    `rep_count` and `form_ok` are the protocol's purely informational fields.
-    **Nothing in this module reads them**, and nothing may start to: beyond
-    `exercise` above, the rank is a pure function of the numeric pose/box
-    history plus the closed-vocabulary form codes, and scoring a
-    phone-maintained rep counter would make it a function of an unauditable
-    device-side counter. They exist so the trainer console can display them
-    (see `argus.outputs.StationView`), and for no other reason.
+    `rep_count` is read by `SessionMetrics` — and by nothing else. It counts
+    the trainee's work so a form fault can be expressed as a *rate* ("3 of 14
+    reps") rather than as whichever frame happened to arrive last, and a plank
+    with no reps at all is measured in seconds instead. The line that has not
+    moved is the one that matters: **it never enters the score that fires an
+    alert.** `compute_triage` does not read it, so a phone with a broken
+    counter can misorder the calm end of the instructor's queue and cannot
+    cause or suppress an alert. That is a real dependency on a device-side
+    value, bounded to display and ordering, and it is stated rather than
+    hidden — the closed-vocabulary `form_reason_codes` remain the only thing
+    the phone says that the score itself believes.
+
+    `form_ok` is read by nothing. The server derives whether form is flagged
+    from `form_reason_codes` being non-empty, because those can be checked
+    against a vocabulary and a bare boolean cannot.
     """
 
     ts: float
@@ -88,12 +100,200 @@ class FrameObservation:
 
 
 @dataclass
+class SessionMetrics:
+    """What a trainee has *done* this session, as against what they are doing
+    in the last two seconds.
+
+    The triage score is instantaneous by design — it answers "who needs a
+    human right now", and a fall must not be averaged away. But it is a poor
+    thing to read: it is computed from a ~2 s window and recomputed every
+    `rank_interval_s`, so an instructor watching the console sees a number
+    that moves constantly and cannot be compared with the same trainee's
+    number a minute ago. This is the other half: a rolling account of the
+    session that changes slowly, on purpose.
+
+    Work is measured in whatever unit the exercise actually has. Reps for a
+    squat or a curl; **seconds for a plank**, which has no reps at all and
+    whose whole quality is how long it was held well. A single `fault_rate`
+    over "flagged work / observed work" then means the same thing for both.
+
+    Durations come from the phone's own `ts`, not the server's clock. That
+    looks like it contradicts "phone and laptop clocks are not synchronised",
+    and does not: a *delta between two frames from one phone* is exactly the
+    measurement that phone's clock is good for. What is forbidden is
+    comparing timestamps across devices, and nothing here does.
+    """
+
+    frames: int = 0
+    #: Seconds of this trainee actually being observed, gaps excluded.
+    active_s: float = 0.0
+    reps: int = 0
+    #: Reps during which the phone reported at least one form-error code.
+    reps_flagged: int = 0
+    hold_s: float = 0.0
+    hold_flagged_s: float = 0.0
+    #: How many frames carried each code. A tally, not a rate — the rate
+    #: needs a denominator and `fault_rate` is where that judgement lives.
+    code_counts: dict[str, int] = field(default_factory=dict)
+    #: Time-decayed mean of the instantaneous score: the number an instructor
+    #: reads. Advanced by `observe_score` on the rank tick, never here.
+    rolling_score: float = 0.0
+    #: The worst instant the session has seen. A rolling mean forgets, and
+    #: "this trainee was briefly in real trouble" should survive being
+    #: forgotten by the mean.
+    peak_score: float = 0.0
+    #: Decayed share of observed time carrying *any* form code, and the
+    #: decayed mean severity over the same window. Together they answer the
+    #: question an instructor actually asks — "can this person hold the
+    #: movement, or not?" — which no single frame can. Measured on time
+    #: rather than on reps deliberately: the phone's rep counter must stay out
+    #: of anything that can raise an alert.
+    form_fault_fraction: float = 0.0
+    form_severity_mean: float = 0.0
+
+    # Cursors. Leading underscore because they are bookkeeping rather than
+    # anything a console should render.
+    _last_ts: float | None = None
+    _last_rep_count: int | None = None
+    _rep_flagged: bool = False
+    _rolling_ts: float | None = None
+    _persist_seeded: bool = False
+
+    def observe(self, obs: FrameObservation, cfg: ScoringConfig) -> None:
+        """Fold one observation into the session's running account."""
+        self.frames += 1
+        flagged = bool(obs.form_reason_codes)
+        for code in obs.form_reason_codes:
+            self.code_counts[code] = self.code_counts.get(code, 0) + 1
+
+        # A gap longer than a plausible frame interval is a reconnect, a
+        # backgrounded app, or a phone that was put down — not work done. It
+        # is skipped rather than accumulated, so "held for 4 minutes" cannot
+        # be earned by a station that was away for three of them.
+        dt = 0.0
+        if self._last_ts is not None:
+            delta = obs.ts - self._last_ts
+            if 0.0 < delta <= cfg.max_frame_gap_s:
+                dt = delta
+        self._last_ts = obs.ts
+        self.active_s += dt
+
+        # "Can this person hold the movement?" -- decayed over its own,
+        # longer half-life than the urgency mean, so a trainee who fixes their
+        # form stops being flagged within a minute or two rather than carrying
+        # a bad first set for the rest of the session.
+        severity = score_form_codes(obs.form_reason_codes, cfg)
+        if not self._persist_seeded:
+            self.form_fault_fraction = 1.0 if flagged else 0.0
+            self.form_severity_mean = severity
+            self._persist_seeded = True
+        elif dt > 0:
+            alpha = 1.0 - 0.5 ** (dt / cfg.form_persistence_half_life_s)
+            self.form_fault_fraction += alpha * ((1.0 if flagged else 0.0) - self.form_fault_fraction)
+            self.form_severity_mean += alpha * (severity - self.form_severity_mean)
+
+        if obs.rep_count is None:
+            # No rep counter: a held exercise, where work is time.
+            self.hold_s += dt
+            if flagged:
+                self.hold_flagged_s += dt
+            return
+
+        if flagged:
+            self._rep_flagged = True
+        if self._last_rep_count is not None:
+            advanced = obs.rep_count - self._last_rep_count
+            if advanced < 0:
+                # The counter went backwards: the phone started a new set.
+                # Credit the reps of the new set, not a negative count.
+                advanced = obs.rep_count
+            if advanced > 0:
+                self.reps += advanced
+                # One flag per completed rep. If several reps landed between
+                # frames we saw, the ones we did not see are not accused.
+                if self._rep_flagged:
+                    self.reps_flagged += 1
+                self._rep_flagged = False
+        self._last_rep_count = obs.rep_count
+
+    def observe_score(self, score: float, ts: float, half_life_s: float) -> None:
+        """Advance the rolling mean to `ts`. Called once per rank tick.
+
+        Deliberately separate from `observe`, and deliberately not inside
+        `compute_triage`: the scorer stays a pure function of history, which
+        is the property `tests/test_determinism.py` exists to protect. The
+        stateful part is here, where it can be seen and tested on its own.
+
+        Decays by half-life rather than by tick count, so the number means the
+        same thing whether ticks arrive every 0.5 s or every 2 s.
+        """
+        self.peak_score = max(self.peak_score, score)
+        if self._rolling_ts is None:
+            self.rolling_score = score
+        else:
+            dt = max(0.0, ts - self._rolling_ts)
+            alpha = 1.0 - 0.5 ** (dt / half_life_s)
+            self.rolling_score += alpha * (score - self.rolling_score)
+        self._rolling_ts = ts
+
+    def persistent_form_score(self, cfg: ScoringConfig) -> float:
+        """How bad it is that this trainee *cannot hold the movement*.
+
+        The instructor's actual question is not "is this frame wrong" but "can
+        they do it at all", and the weighted sum could not answer it. Form is
+        weighted 0.15 in the default vector, so a trainee getting **every
+        single squat rep wrong** produced 0.15 x 0.8 = 0.12 against a 0.5
+        threshold: no matter how badly or how long they struggled, nobody was
+        ever sent. That is not a tuning nit, it is the coaching case failing
+        silently, and the profile weight cannot fix it — raising `form_error`
+        enough to alert would make one bad frame outrank a fall.
+
+        So persistence is scored on its own terms and joins the score as a
+        floor (`max`), not as another weighted term. Once a trainee has been
+        wrong for the *majority* of a meaningful stretch, they are escalated
+        at the severity of the fault they keep making — `hips_sagging` at 0.8
+        alerts, a 0.4 `incomplete_lockout` still does not, which is right.
+
+        Dividing the mean severity by the fault fraction recovers "how bad it
+        is *when* it is wrong", so being wrong 60% of the time with a 0.8 fault
+        escalates at 0.8 rather than at 0.48 — being wrong most of the time is
+        the trigger, and the severity is the fault's, not an average diluted by
+        the good reps.
+        """
+        if self.active_s < cfg.form_persistence_min_s:
+            return 0.0
+        if self.form_fault_fraction < cfg.form_persistence_threshold:
+            return 0.0
+        return min(1.0, self.form_severity_mean / self.form_fault_fraction)
+
+    def fault_rate(self, cfg: ScoringConfig) -> float | None:
+        """Flagged work over observed work, or `None` if too little is done.
+
+        `None` rather than 0.0 or 1.0 on thin evidence: one bad rep out of one
+        is not a 100% fault rate, it is not yet a rate at all, and showing it
+        as one would put a trainee at the top of a queue on a single frame.
+        """
+        if self.reps >= cfg.min_reps_for_fault_rate:
+            return self.reps_flagged / self.reps
+        if self.hold_s >= cfg.min_hold_s_for_fault_rate:
+            return self.hold_flagged_s / self.hold_s
+        return None
+
+
+@dataclass
 class TrackState:
     """Rolling per-trainee history. Owned by the caller, one per trainee id."""
 
     history_len: int = 30
     history: deque[FrameObservation] = field(default_factory=deque)
     last_form_error_score: float = 0.0
+    #: The session-long account behind the instant score. See `SessionMetrics`.
+    session: SessionMetrics = field(default_factory=SessionMetrics)
+    #: Whether the phone currently has anyone in frame. False after an `idle`
+    #: message. A station whose trainee has walked away still holds their last
+    #: two seconds of pose, and scoring it would report `prolonged_stillness`
+    #: about an empty rack — the history describes somebody who is not there.
+    subject_present: bool = True
     #: The exercise most recently reported, which selects the weight profile.
     #: Latest-wins rather than a majority over the window: a trainee who has
     #: just dropped into a plank should be scored as planking immediately, not
@@ -110,6 +310,13 @@ class TrackState:
         self.history.append(obs)
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
         self.last_exercise = obs.exercise
+        self.subject_present = True
+        self.session.observe(obs, cfg)
+
+    def note_idle(self) -> None:
+        """The phone is watching an empty station. Nobody to score."""
+        self.subject_present = False
+        self.last_form_error_score = 0.0
 
 
 @dataclass(frozen=True)
@@ -288,6 +495,13 @@ def compute_triage(
     dashboard as a reason, or the explanation stops matching the number it
     claims to explain.
     """
+    # An empty station is not a calm trainee, and it is not a trainee at all.
+    # Its stale history would otherwise score `prolonged_stillness` about a
+    # rack nobody is standing at. The console shows the state separately; what
+    # matters here is that nothing is *asserted* about a person who is absent.
+    if not track.subject_present:
+        return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+
     fall, fall_hit = score_fall(track.history, cfg)
     still, still_hit = score_stillness(track.history, cfg)
     occl, occl_hit = score_occlusion(track.history, cfg)
@@ -303,6 +517,16 @@ def compute_triage(
         + w["form_error"] * form_error
     )
 
+    # A trainee who cannot hold the movement is escalated on their own terms
+    # rather than through the weighted sum, which cannot express it -- see
+    # `SessionMetrics.persistent_form_score`. A floor, not a sixth term: it
+    # can only raise a score, never dilute the four features that answer
+    # "is this person in danger right now".
+    persistent = (
+        track.session.persistent_form_score(cfg) if w["form_error"] > 0 else 0.0
+    )
+    score = max(score, persistent)
+
     reasons: list[str] = []
     if fall_hit and w["fall"] > 0:
         reasons.append(REASON_FALL)
@@ -312,7 +536,12 @@ def compute_triage(
         reasons.append(REASON_OCCLUSION)
     if off_task_hit and w["off_task"] > 0:
         reasons.append(REASON_OFF_TASK)
-    if form_error >= 0.5 and w["form_error"] > 0:
+    # One or the other, never both: "cannot hold the movement" already says
+    # everything "this rep was wrong" would, and an instructor reading two
+    # codes for one problem learns to skim them.
+    if persistent > 0:
+        reasons.append(REASON_PERSISTENT_FORM)
+    elif form_error >= 0.5 and w["form_error"] > 0:
         reasons.append(REASON_FORM_ERROR)
 
     return TriageRecord(

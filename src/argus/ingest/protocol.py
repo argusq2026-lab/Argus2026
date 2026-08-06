@@ -238,6 +238,25 @@ def _parse_form_ok(raw: Mapping[str, Any]) -> bool | None:
     return value
 
 
+def parse_idle(raw: Mapping[str, Any]) -> float:
+    """Validate an `idle` message and return its timestamp.
+
+    "I am here and watching, and there is nobody in frame." Without it a
+    station pointed at an empty rack is indistinguishable from a dead phone:
+    both send nothing, so `ingest.track_ttl_s` evicts the healthy one, its
+    next message is refused, and it reconnects — a flap that starts the moment
+    a station is set up before its trainee arrives, which is the normal case.
+
+    Deliberately *not* an observation with the subject fields nulled. An
+    observation asserts a reading about a person; this asserts that there is
+    no person to read. Making the difference a null inside a message everything
+    else treats as a measurement is how a null gets scored as a zero.
+    """
+    if raw.get("type") != "idle":
+        raise ProtocolError(f"expected type 'idle', got {raw.get('type')!r}")
+    return _require(raw, "ts", float)
+
+
 def hello_ack_message() -> dict:
     return {"type": "hello_ack", "accepted": True}
 

@@ -130,6 +130,16 @@ fun encodeHello(
     return obj.toString()
 }
 
+/**
+ * "I am here and watching, and there is nobody in frame."
+ *
+ * Deliberately not an observation with the subject nulled: an observation
+ * asserts a reading about a person, this asserts that there is no person to
+ * read. See docs/PROTOCOL.md.
+ */
+fun encodeIdle(ts: Double): String =
+    JSONObject().put("type", "idle").put("ts", ts).toString()
+
 fun encodeObservation(obs: Observation): String {
     val obj = JSONObject()
         .put("type", "observation")

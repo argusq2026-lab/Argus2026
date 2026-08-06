@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 5
+CONFIG_VERSION = 7
 
 #: Shipped default config. Present both in a source checkout (repo-root
 #: ``configs/``) and in an installed wheel (``argus/_data/``).
@@ -64,6 +64,36 @@ class ScoringConfig:
     #: camera has their left shoulder at the larger image x, and
     #: atan2(rs.y - ls.y, rs.x - ls.x) is 180 degrees.
     off_task_reference_angle_deg: float = 180.0
+    #: How fast the instructor-facing rolling score forgets. The instant score
+    #: is recomputed every `ingest.rank_interval_s` off a ~2 s window, which
+    #: makes it correct and unreadable; this is the time constant that turns
+    #: it into something a human can watch. Longer is steadier and slower to
+    #: reflect a trainee who has just started struggling.
+    rolling_half_life_s: float = 20.0
+    #: A gap between frames longer than this is a reconnect or a backgrounded
+    #: app, not work done, and is excluded from session totals. Otherwise a
+    #: station that was away for three minutes returns having "held" them.
+    max_frame_gap_s: float = 1.0
+    #: How much work must be observed before a fault *rate* is reported at
+    #: all. One bad rep out of one is not a 100% fault rate; it is not yet a
+    #: rate, and showing it as one would rank a trainee on a single frame.
+    min_reps_for_fault_rate: int = 3
+    min_hold_s_for_fault_rate: float = 10.0
+    #: When a trainee is judged unable to *hold* the movement, rather than to
+    #: have got one rep wrong. Sustained failure is escalated on its own terms
+    #: (see `SessionMetrics.persistent_form_score`) because the weighted sum
+    #: cannot express it: with `form_error` at 0.15, getting every rep wrong
+    #: scored 0.12 against a 0.5 threshold and nobody was ever sent.
+    #: 0.5 = "wrong for the majority of the time".
+    form_persistence_threshold: float = 0.5
+    #: Decays over its own, longer window than `rolling_half_life_s`, so a
+    #: trainee who corrects their form stops being flagged in a minute or two
+    #: instead of carrying a bad first set all session.
+    form_persistence_half_life_s: float = 45.0
+    #: How long they must have been observed before this can fire at all. It
+    #: escalates straight to the fault's full severity, so it must never be
+    #: reachable on a few frames.
+    form_persistence_min_s: float = 20.0
 
     REQUIRED_WEIGHTS = ("fall", "stillness", "occlusion", "off_task", "form_error")
 
@@ -115,6 +145,20 @@ class ScoringConfig:
             raise ConfigError("[scoring] alert_threshold must be in [0, 1]")
         if any(not 0.0 <= v <= 1.0 for v in self.form_error_vocab.values()):
             raise ConfigError("[scoring.form_error_vocab] weights must be in [0, 1]")
+        if self.rolling_half_life_s <= 0:
+            raise ConfigError("[scoring] rolling_half_life_s must be > 0")
+        if self.max_frame_gap_s <= 0:
+            raise ConfigError("[scoring] max_frame_gap_s must be > 0")
+        if self.min_reps_for_fault_rate < 1:
+            raise ConfigError("[scoring] min_reps_for_fault_rate must be >= 1")
+        if self.min_hold_s_for_fault_rate <= 0:
+            raise ConfigError("[scoring] min_hold_s_for_fault_rate must be > 0")
+        if not 0.0 < self.form_persistence_threshold <= 1.0:
+            raise ConfigError("[scoring] form_persistence_threshold must be in (0, 1]")
+        if self.form_persistence_half_life_s <= 0:
+            raise ConfigError("[scoring] form_persistence_half_life_s must be > 0")
+        if self.form_persistence_min_s <= 0:
+            raise ConfigError("[scoring] form_persistence_min_s must be > 0")
 
 
 @dataclass(frozen=True)

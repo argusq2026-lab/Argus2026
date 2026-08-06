@@ -134,6 +134,8 @@ CONSOLE_HTML = """<!doctype html>
   .qrow.watch .qwho { font-weight: 550; }
   .qwhy { color: var(--muted); font-size: 0.87rem; }
   .qwhere { color: var(--muted); font-size: 0.8rem; text-align: right; }
+  .qvol { color: var(--muted); font-size: 0.74rem; margin-top: 0.15rem;
+          font-variant-numeric: tabular-nums; }
   .qtier {
     display: block; font-size: 0.68rem; letter-spacing: 0.09em;
     text-transform: uppercase; margin-bottom: 0.15rem;
@@ -156,6 +158,12 @@ CONSOLE_HTML = """<!doctype html>
     border-top: 3px solid var(--live); border-radius: 6px;
     padding: 0.75rem 0.8rem 0.65rem;
   }
+  /* Ready, not live and not broken: a station whose trainee has not arrived
+     is working perfectly, and drawing it green would claim someone is being
+     watched while drawing it amber would send an instructor to a rack with
+     nothing wrong. Its own, quieter colour. */
+  .card.waiting { border-top-color: var(--bone); }
+  .card.waiting .cchip { background: rgba(152, 162, 179, 0.16); color: var(--bone); }
   .card.stale { border-top-color: var(--stale); }
   .card.dropped, .card.gone, .card.nolink { border-top-color: var(--down); }
   /* Fade the pose, not the frame: the note explaining the silence lives in
@@ -205,6 +213,12 @@ CONSOLE_HTML = """<!doctype html>
      stops looking like a live number. */
   .cscore b.frozen { color: var(--muted); }
   .cscore em { font-style: normal; color: var(--muted); font-size: 0.78rem; }
+  .crolling { color: var(--muted); font-size: 0.72rem; margin-top: 0.1rem;
+              font-variant-numeric: tabular-nums; }
+  .crolling:empty { display: none; }
+  .cwork { color: #cfd4da; font-size: 0.78rem; margin-top: 0.35rem;
+           font-variant-numeric: tabular-nums; }
+  .cwork:empty { display: none; }
   .creasons { font-size: 0.82rem; margin-top: 0.3rem; min-height: 1.2em; }
   .creasons.hot { color: #ffb4b4; }
   .creasons.quiet { color: var(--muted); }
@@ -305,6 +319,7 @@ const PROSE = {
   hands_face_occluded: "Face and hands out of view",
   off_task_orientation: "Turned away from the station",
   form_error: "Form flagged by the phone",
+  persistent_form_fault: "Cannot hold form — wrong most of this set",
   insufficient_depth: "Not reaching depth",
   knee_valgus: "Knees caving inward",
   rounded_back: "Rounded back",
@@ -337,6 +352,27 @@ function prose(code) {
 
 function proseList(codes) {
   return (codes || []).map(prose).join(" · ");
+}
+
+function duration(seconds) {
+  const s = Math.max(0, Math.round(seconds || 0));
+  if (s < 60) return s + "s";
+  return Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s";
+}
+
+// How much work a trainee has done, in whatever unit their exercise has.
+// A plank has no reps and its whole quality is how long it was held well, so
+// "3 of 14 reps" and "18s of 2m10s" are the same sentence about different
+// units -- which is why `fault_rate` can be one number for both.
+function volume(session) {
+  if (!session) return "";
+  if (session.reps > 0) {
+    return session.reps_flagged + " of " + session.reps + " reps flagged";
+  }
+  if (session.hold_s > 0) {
+    return duration(session.hold_flagged_s) + " of " + duration(session.hold_s) + " flagged";
+  }
+  return "";
 }
 
 // Which weight vector a trainee is actually being scored on, resolved the
@@ -438,7 +474,7 @@ function draw(canvas, station, faded) {
 function makeCard(traineeId) {
   const root = el("div", "card");
   const head = el("div", "chead");
-  const who = el("div", "cwho", traineeId);
+  const who = el("div", "cwho", traineeId);   // replaced per render
   const chip = el("span", "cchip");
   head.appendChild(who);
   head.appendChild(chip);
@@ -460,15 +496,17 @@ function makeCard(traineeId) {
   score.appendChild(scoreVal);
   score.appendChild(scoreAge);
 
+  const rolling = el("div", "crolling");
   const reasons = el("div", "creasons");
+  const work = el("div", "cwork");
   const meta = el("div", "cmeta");
   const profile = el("div", "cprofile");
   const warm = el("div", "cwarm");
 
-  root.append(head, where, frame, bar, score, reasons, meta, profile, warm);
+  root.append(head, where, frame, bar, score, rolling, reasons, work, meta, profile, warm);
   const refs = {
-    root, chip, where, canvas, fnote, fill, scoreVal, scoreAge,
-    reasons, meta, profile, warm,
+    root, who, chip, where, canvas, fnote, fill, scoreVal, scoreAge,
+    rolling, reasons, work, meta, profile, warm,
   };
   state.cards.set(traineeId, refs);
   return refs;
@@ -479,10 +517,15 @@ function statusOf(entry, snapshotTs) {
   const s = entry.station;
   if (!s.connected) return "dropped";
   const age = snapshotTs - s.last_seen_ts;
-  return age >= state.cfg.stale_after_s ? "stale" : "live";
+  if (age >= state.cfg.stale_after_s) return "stale";
+  // Reporting, but with nobody in frame. A station set up before its trainee
+  // arrives is ready, and drawing it like a silent phone taught an instructor
+  // to walk over to a rack that was working perfectly.
+  return s.subject_present ? "live" : "waiting";
 }
 
-const CHIP = { live: "live", stale: "silent", dropped: "dropped", gone: "left floor" };
+const CHIP = { live: "live", waiting: "ready", stale: "silent",
+               dropped: "dropped", gone: "left floor" };
 
 function renderCard(traineeId, entry, record, snapshotTs) {
   const c = state.cards.get(traineeId) || makeCard(traineeId);
@@ -492,7 +535,12 @@ function renderCard(traineeId, entry, record, snapshotTs) {
 
   c.root.className = "card " + status;
   c.chip.textContent = CHIP[status];
-  c.where.textContent = s.station_id;
+  // A trainee_id is a device identifier. An instructor has to find a person
+  // in a room, so the name leads and the id stays available underneath.
+  c.who.textContent = s.display_name || s.trainee_id;
+  c.where.textContent = (s.display_name && s.trainee_id !== s.station_id)
+    ? s.station_id + " · " + s.trainee_id
+    : (s.display_name ? s.trainee_id : s.station_id);
 
   // The frame note is where silence gets said in words rather than implied
   // by a greyed-out skeleton, which is easy to read as "calm" at a glance.
@@ -503,6 +551,8 @@ function renderCard(traineeId, entry, record, snapshotTs) {
     c.fnote.textContent = "Phone disconnected — dropping in " + left.toFixed(0) + "s";
   } else if (status === "stale") {
     c.fnote.textContent = "No frames for " + age.toFixed(1) + "s";
+  } else if (!s.subject_present) {
+    c.fnote.textContent = "Ready — waiting for a trainee";
   } else if (!s.keypoints_xy) {
     c.fnote.textContent = "Connected — no frames yet";
   } else {
@@ -510,15 +560,34 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   }
   draw(c.canvas, s, status !== "live");
 
+  // The headline number is the *rolling* score: the instant one is correct
+  // and unreadable, moving every tick off a two-second window. The instant
+  // one is still what decides `hot`, because a fall must colour the card on
+  // the frame it happens rather than once a mean has caught up.
   const score = record ? record.score : null;
+  const rolling = s.session ? s.session.rolling_score : null;
+  const shown = rolling !== null ? rolling : score;
   const hot = score !== null && score >= state.cfg.alert_threshold && status === "live";
-  c.fill.style.width = (score === null ? 0 : Math.min(100, score * 100)) + "%";
+  c.fill.style.width = (shown === null ? 0 : Math.min(100, shown * 100)) + "%";
   c.fill.className = hot ? "hot" : "";
-  c.scoreVal.textContent = score === null ? "—" : score.toFixed(2);
-  c.scoreVal.className = status === "live" ? "" : "frozen";
+  c.scoreVal.textContent = shown === null ? "—" : shown.toFixed(2);
+  const livelike = status === "live" || status === "waiting";
+  c.scoreVal.className = livelike ? "" : "frozen";
   c.scoreAge.textContent = status === "gone"
     ? "no longer scored"
-    : (status === "live" ? "last seen " : "frozen, last seen ") + age.toFixed(1) + "s ago";
+    : (livelike ? "last seen " : "frozen, last seen ") + age.toFixed(1) + "s ago";
+
+  // Say plainly that the big number is a session average and what the
+  // trainee is doing this instant, so nobody reads a settled 0.31 as a claim
+  // about right now.
+  if (s.session) {
+    const bits = ["session avg"];
+    if (score !== null) bits.push("now " + score.toFixed(2));
+    if (s.session.peak_score > 0) bits.push("peak " + s.session.peak_score.toFixed(2));
+    c.rolling.textContent = bits.join(" · ");
+  } else {
+    c.rolling.textContent = "";
+  }
 
   // A silent station keeps being scored off its frozen history, so it can
   // still carry a reason code — but that code describes the last frames that
@@ -528,6 +597,9 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   if (status === "live") {
     c.reasons.className = codes.length ? "creasons hot" : "creasons quiet";
     c.reasons.textContent = codes.length ? proseList(codes) : "Nothing flagged";
+  } else if (status === "waiting") {
+    c.reasons.className = "creasons quiet";
+    c.reasons.textContent = "No trainee at this station yet";
   } else if (codes.length) {
     c.reasons.className = "creasons quiet";
     c.reasons.textContent = "Last reading before it went quiet: " + proseList(codes);
@@ -549,6 +621,27 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   }
   c.meta.textContent = bits.join(" · ");
 
+  // Volume, and the fault rate it earns. `fault_rate` is null until enough
+  // work has been seen, and that stays null on screen rather than becoming a
+  // reassuring 0% — "no faults yet" and "not enough to say" are different
+  // things to put in front of someone deciding who to walk over to.
+  if (s.session) {
+    const vol = volume(s.session);
+    const rate = s.session.fault_rate;
+    let line = vol;
+    if (rate !== null && rate !== undefined) {
+      line += " · " + Math.round(rate * 100) + "% fault rate";
+    } else if (vol) {
+      line += " · too little work to call a rate yet";
+    }
+    if (s.session.active_s > 0) {
+      line = (line ? line + " · " : "") + duration(s.session.active_s) + " observed";
+    }
+    c.work.textContent = line;
+  } else {
+    c.work.textContent = "";
+  }
+
   // Which weights are running, and what they are not looking at. Only shown
   // when a named profile applies or when something is switched off -- on the
   // ordinary default vector with all five features live there is nothing here
@@ -568,7 +661,7 @@ function renderCard(traineeId, entry, record, snapshotTs) {
   }
 
   const need = state.cfg.history_len;
-  if (status !== "gone" && s.observations < need) {
+  if (status !== "gone" && status !== "waiting" && s.observations < need) {
     c.warm.textContent = "Warming up " + s.observations + "/" + need +
                          " frames — some checks cannot fire yet";
   } else {
@@ -584,24 +677,84 @@ function renderQueue(payload, order) {
   const byId = new Map((payload.records || []).map((r) => [r.trainee_id, r]));
   const rows = [];
 
+  // Two tiers, ordered on two different numbers, on purpose.
+  //
+  // Alerts are ranked by the *instant* score and come first: that is the
+  // "someone is in trouble now" signal, and burying a fall behind a trainee
+  // with a bad session average would defeat the whole system.
+  //
+  // Everything below is ranked by the *rolling* score, which is what makes
+  // the list stable enough to read. Sorting the calm end by the instant score
+  // meant it reshuffled every tick and an instructor could not keep their
+  // place in it.
+  const listed = [];
   for (const r of payload.records || []) {
     const over = r.score >= state.cfg.alert_threshold;
-    // A code that fired below the threshold is still worth a glance, but it
-    // is not an alert. Showing it in the same red as one that crossed would
-    // make the threshold meaningless on screen even though the scorer still
-    // honours it.
-    if (!over && !r.reason_codes.length) continue;
     const entry = state.known.get(r.trainee_id);
     const status = entry ? statusOf(entry, payload.ts) : "live";
     if (status !== "live") continue;   // listed under "not reporting" instead
+    const session = entry && entry.station.session;
+    const rollingScore = session ? session.rolling_score : r.score;
+    // Below the threshold, earn a place by having either a reason code now or
+    // a session average worth reading -- not by a single frame.
+    if (!over && !r.reason_codes.length && rollingScore < 0.01) continue;
+
+    // Rank on the worse of two readings: the session average, and how much of
+    // the trainee's actual work was flagged.
+    //
+    // The average alone gets this wrong. Two trainees can both sit at 0.20
+    // because the same non-form feature dominates both -- one motionless with
+    // clean reps, one motionless with half their reps bad -- and the second
+    // is who a coach should walk to. Form is only weighted 0.15 in the
+    // default vector, so a fault rate of 50% moves the average by 0.045 and
+    // loses to a stillness term worth 0.20.
+    //
+    // A known fault rate is therefore also read on the alert scale: half your
+    // reps wrong ranks like half the alert threshold. It is a floor, never an
+    // alert -- `over` above is still the instant score alone, so this can
+    // reorder the calm end of the queue and can neither raise nor suppress an
+    // alarm. `fault_rate` is null until enough work is seen, so this cannot
+    // fire on one bad rep.
+    const known = session && session.fault_rate !== null && session.fault_rate !== undefined;
+    const rank = known
+      ? Math.max(rollingScore, session.fault_rate * state.cfg.alert_threshold)
+      : rollingScore;
+    listed.push({ r, over, entry, session, rollingScore, rank });
+  }
+  // Ties on the rolling score are broken by how much of the trainee's work
+  // was actually flagged. Two trainees can average the same because the same
+  // non-form feature dominates both -- one motionless with clean reps, one
+  // motionless with half their reps bad. The second needs a coach and the
+  // first does not, and only the volume says so.
+  const rate = (x) => (x.session && x.session.fault_rate) || 0;
+  listed.sort((a, b) =>
+    (b.over - a.over) ||
+    (b.over ? b.r.score - a.r.score : b.rank - a.rank) ||
+    (rate(b) - rate(a)) ||
+    a.r.trainee_id.localeCompare(b.r.trainee_id));
+
+  for (const item of listed) {
+    const { r, over, entry, session, rollingScore, rank } = item;
     const row = el("div", "qrow " + (over ? "attn" : "watch"));
-    row.appendChild(el("div", "qscore", r.score.toFixed(2)));
+    // Show the number the row was ordered on, and say which reading it came
+    // from. A row displaying 0.15 while sitting above one displaying 0.20
+    // looks like a bug even when the ordering is right.
+    row.appendChild(el("div", "qscore", (over ? r.score : rank).toFixed(2)));
     const mid = el("div");
-    mid.appendChild(el("span", "qtier", over ? "above alert threshold" : "flagged, below threshold"));
-    mid.appendChild(el("div", "qwho", r.trainee_id));
-    mid.appendChild(el("div", "qwhy", proseList(r.reason_codes) || "No reason code fired"));
+    mid.appendChild(el("span", "qtier",
+      over ? "above alert threshold · now"
+           : (rank > rollingScore ? "ranked on fault rate" : "session average")));
+    mid.appendChild(el("div", "qwho",
+      (entry && entry.station.display_name) || r.trainee_id));
+    mid.appendChild(el("div", "qwhy",
+      proseList(r.reason_codes) || (session && volume(session)) || "No reason code fired"));
     row.appendChild(mid);
-    row.appendChild(el("div", "qwhere", entry ? entry.station.station_id : ""));
+    const where = el("div", "qwhere");
+    where.appendChild(el("div", "", entry ? entry.station.station_id : ""));
+    if (session && volume(session) && r.reason_codes.length) {
+      where.appendChild(el("div", "qvol", volume(session)));
+    }
+    row.appendChild(where);
     rows.push(row);
   }
 
@@ -611,13 +764,14 @@ function renderQueue(payload, order) {
   for (const traineeId of order) {
     const entry = state.known.get(traineeId);
     const status = statusOf(entry, payload.ts);
-    if (status === "live") continue;
+    if (status === "live" || status === "waiting") continue;
     const age = payload.ts - entry.station.last_seen_ts;
     const row = el("div", "qrow silent");
     row.appendChild(el("div", "qscore", "?"));
     const mid = el("div");
     mid.appendChild(el("span", "qtier", "not reporting"));
-    mid.appendChild(el("div", "qwho", traineeId));
+    mid.appendChild(el("div", "qwho",
+      entry.station.display_name || traineeId));
     let why;
     if (status === "gone") why = "Track dropped — no longer being scored";
     else if (status === "dropped") why = "Phone disconnected " + age.toFixed(1) + "s ago";
@@ -800,7 +954,10 @@ function render(payload, wall) {
   document.getElementById("session").textContent =
     state.cfg.session_name || "trainer console";
 
-  const live = order.filter((t) => statusOf(state.known.get(t), payload.ts) === "live").length;
+  const live = order.filter((t) => {
+    const st = statusOf(state.known.get(t), payload.ts);
+    return st === "live" || st === "waiting";
+  }).length;
   const flagged = (payload.records || []).filter((r) => r.score >= state.cfg.alert_threshold).length;
   let counts = order.length + " station" + (order.length === 1 ? "" : "s") + " · " +
     live + " reporting · " + flagged + " above threshold";
