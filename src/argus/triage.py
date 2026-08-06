@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Callable, Iterable
 
 from argus.config import ScoringConfig
 
@@ -89,14 +89,31 @@ class FrameObservation:
     """
 
     ts: float
-    bbox_xyxy: tuple[float, float, float, float]
-    keypoints_xy: list[tuple[float, float]]  # len 17, COCO order
-    keypoints_conf: list[float]  # len 17
+    #: `None` for a use case with no pose (e.g. today's welding placeholder,
+    #: `compute_triage_welding` below) — only `compute_triage_fitness` and its
+    #: four pose-based scorers ever read these three fields, and `use_case`
+    #: dispatch guarantees a non-fitness track never reaches them.
+    bbox_xyxy: tuple[float, float, float, float] | None = None
+    keypoints_xy: list[tuple[float, float]] | None = None  # len 17, COCO order
+    keypoints_conf: list[float] | None = None  # len 17
     form_reason_codes: tuple[str, ...] = ()
     exercise: str | None = None
     #: Display-only. See the note above — the scorer must never read these.
     rep_count: int | None = None
     form_ok: bool | None = None
+    #: Which use case this observation belongs to (see `docs/PROTOCOL.md`).
+    #: Selects the entry in `_SCORERS` that `compute_triage` dispatches to.
+    #: Defaults to `"fitness"` because every other field on this dataclass —
+    #: `bbox_xyxy`, `keypoints_xy`, `exercise` — is fitness's own payload
+    #: shape; a non-fitness use case is expected to define its own
+    #: observation type rather than force its data through these fields.
+    use_case: str = "fitness"
+    #: Opaque, use-case-owned data that isn't one of the fitness fields
+    #: above. Fitness observations never set this (it is `{}`); it exists so
+    #: a use case with no typed fields of its own yet — welding today — has
+    #: somewhere to carry whatever its parser accepted, without forcing a
+    #: dataclass field to be added here for every future use case's payload.
+    payload: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -299,6 +316,11 @@ class TrackState:
     #: just dropped into a plank should be scored as planking immediately, not
     #: after the history fills.
     last_exercise: str | None = None
+    #: The use case this track's observations belong to, latest-wins like
+    #: `last_exercise`. Selects the entry in `_SCORERS` that `compute_triage`
+    #: dispatches to. A track that has never seen an observation defaults to
+    #: `"fitness"`, matching `FrameObservation.use_case`'s default.
+    use_case: str = "fitness"
 
     def __post_init__(self) -> None:
         # deque(maxlen=...) cannot be expressed as a field default that depends
@@ -310,6 +332,7 @@ class TrackState:
         self.history.append(obs)
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
         self.last_exercise = obs.exercise
+        self.use_case = obs.use_case
         self.subject_present = True
         self.session.observe(obs, cfg)
 
@@ -479,14 +502,14 @@ def score_form_codes(codes: Iterable[str], cfg: ScoringConfig) -> float:
     return max(hits) if hits else 0.0
 
 
-def compute_triage(
+def compute_triage_fitness(
     trainee_id: str,
     track: TrackState,
     ts: float,
     cfg: ScoringConfig,
     reference_angle_deg: float | None = None,
 ) -> TriageRecord:
-    """Combine the deterministic features into one ranked, explainable record.
+    """Fitness's triage scorer: the five-feature algorithm above.
 
     The weight vector is chosen by the trainee's current exercise, so a
     feature a movement makes meaningless can be zeroed for that movement
@@ -550,6 +573,75 @@ def compute_triage(
         reason_codes=tuple(reasons),
         ts=ts,
     )
+
+
+def compute_triage_welding(
+    trainee_id: str,
+    track: TrackState,
+    ts: float,
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> TriageRecord:
+    """Welding's triage scorer: a placeholder, deliberately.
+
+    There is no welding classifier and no welding data to fit thresholds
+    against, unlike fitness's five features, which — even unvalidated
+    against a real trainee (`docs/VALIDATION.md`) — are at least a stated
+    hypothesis about what a fall or a stalled rep looks like numerically.
+    Inventing a torch-angle or travel-speed threshold here would not be a
+    smaller version of that hypothesis, it would be a number with nothing
+    behind it presented on an instructor's screen as a signal. So this
+    scorer asserts nothing: every welding station reports a flat 0.0 with no
+    reason codes, regardless of what its `payload` carries. It exists to let
+    a welding station connect, stream, and appear on the console end to end
+    — proving the `use_case` wiring — without claiming to watch for
+    anything until a real classifier defines what "wrong" means for a weld.
+    """
+    return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+
+
+#: Every use case this server can score a `TrackState` for. A new use case's
+#: scorer is added here rather than by branching inside `compute_triage_
+#: fitness`, whose five features (`fall`, `stillness`, `occlusion`,
+#: `off_task`, `form_error`) are read off fitness's own pose/bbox history and
+#: mean nothing against another use case's evidence.
+_SCORERS: dict[
+    str, Callable[[str, TrackState, float, ScoringConfig, float | None], TriageRecord]
+] = {
+    "fitness": compute_triage_fitness,
+    "welding": compute_triage_welding,
+}
+
+
+def known_use_cases() -> frozenset[str]:
+    """Every use case this build of Argus can actually score.
+
+    `argus.config.SessionConfig` validates `[session] use_case` against this
+    at load time — rejecting an operator's typo (or a use case that sounds
+    plausible but was never wired up) before a laptop spends a session
+    accepting phones it cannot score. It reads `_SCORERS` rather than
+    duplicating its keys in a second list, so the two cannot drift apart.
+    """
+    return frozenset(_SCORERS)
+
+
+def compute_triage(
+    trainee_id: str,
+    track: TrackState,
+    ts: float,
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> TriageRecord:
+    """Dispatch to the scorer registered for `track.use_case`.
+
+    `argus.ingest.protocol` already refuses an `observation` naming a use
+    case with no registered parser, so in practice `track.use_case` is always
+    a key present here; the `KeyError` below is a defensive backstop for a
+    `TrackState` built directly (as tests do) rather than a path expected in
+    production.
+    """
+    scorer = _SCORERS[track.use_case]
+    return scorer(trainee_id, track, ts, cfg, reference_angle_deg)
 
 
 def rank_trainees(

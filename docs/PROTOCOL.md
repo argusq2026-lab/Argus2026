@@ -45,7 +45,8 @@ The server broadcasts one UDP datagram to port `discovery.port` (default
   "protocol_version": 1,
   "ws_url": "ws://10.73.51.76:8765",
   "session_name": "Coach Riley — 6pm HIIT",
-  "approval": "manual"
+  "approval": "manual",
+  "use_case": "welding"
 }
 ```
 
@@ -56,6 +57,7 @@ The server broadcasts one UDP datagram to port `discovery.port` (default
 | `ws_url` | string | yes | Where to connect. Always `ws://host:port`. |
 | `session_name` | string | no | The instructor's session name. This is what makes a room with three laptops choosable rather than a list of IP addresses. Absent when the laptop has none set, in which case show the address. |
 | `approval` | string | yes | `"auto"` or `"manual"` — see **Admission**. Carried so a phone can say "the instructor will approve this" up front, instead of looking hung once it has connected. Treat an absent value as `"auto"`. |
+| `use_case` | string | yes | `[session] use_case` — what this laptop is set up to run. Unlike `session_name` this is never absent. A client should **check this matches its own use case before offering to connect**, the same reasoning as `protocol_version`: "this laptop is running welding, not fitness" is a better thing to learn during setup than as a `hello` rejection after the phone is already on the rack. |
 
 Rules a client must follow:
 
@@ -109,6 +111,7 @@ The **first message** on every connection must be `hello`:
 | `exercise_plan` | string | no | Free-form, informational only; not used in scoring today. |
 | `display_name` | string | no | What to call this station on the instructor's approval prompt (e.g. `"Alex — rack 3"`). At most 64 characters. Display-only, never scored, never logged. Only reaches a human when the session requires approval, but harmless to always send. |
 | `session_name` | string | no | The session this phone believes it is joining, if it learned one from a beacon (see **Discovery**). The server **rejects a mismatch**: on a floor with two laptops, silently joining the wrong one means a trainee is monitored by an instructor who is not watching them. Omit it if the address was typed by hand — a phone that never heard a beacon cannot know the name, and must still be able to connect. |
+| `use_case` | string | no (default `"fitness"`) | What the phone is running. The server **rejects a mismatch** against its own `[session] use_case`, strictly — unlike `session_name`, this check applies even when the phone sends nothing, because omitting it still means `"fitness"`, and a laptop configured for another use case must refuse that default rather than silently accept it. Every `observation` on the same connection must keep naming this same use case (see below); switching mid-stream is rejected the same way a mismatched `form_reason_codes` entry is. |
 
 The server replies with exactly one of:
 
@@ -121,7 +124,8 @@ The server replies with exactly one of:
   server closing the connection (WebSocket close code `1008`). Causes:
   wrong `protocol_version`, a missing/empty required field, a `trainee_id`
   that is already connected elsewhere, a `session_name` naming a different
-  session, or a join request that was declined or went unanswered.
+  session, a `use_case` not matching `[session] use_case`, or a join
+  request that was declined or went unanswered.
 
 ---
 
@@ -188,6 +192,7 @@ fast any individual phone sends):
 {
   "type": "observation",
   "ts": 1730649600.125,
+  "use_case": "fitness",
   "bbox_xyxy": [0.12, 0.08, 0.61, 0.97],
   "keypoints_xy": [[0.34, 0.10], [0.36, 0.09], "... 17 pairs total"],
   "keypoints_conf": [0.91, 0.87, "... 17 values total"],
@@ -201,6 +206,7 @@ fast any individual phone sends):
 | Field | Type | Required | Meaning |
 |---|---|---|---|
 | `type` | `"observation"` | yes | |
+| `use_case` | string | no (default `"fitness"`) | **Selects which parser and scorer read the rest of this message** — see "`use_case` selects the payload" below. Every field documented in this table below `use_case` belongs to fitness; a different use case is not a variation on this shape, it is a different message body entirely. |
 | `ts` | float | yes | Unix epoch seconds, from the **phone's own clock**. No cross-phone clock synchronization is assumed or enforced — see `docs/VALIDATION.md`. |
 | `bbox_xyxy` | `[x0, y0, x1, y1]` | yes | The trainee's bounding box, **normalized to [0, 1]** of the phone's own camera frame — resolution-independent, so a 1080p and a 4K phone report the same numbers for the same framing. |
 | `keypoints_xy` | 17 × `[x, y]` | yes | COCO-17 keypoints, normalized to [0, 1] the same way. See "Keypoint layout" below. |
@@ -276,6 +282,55 @@ backwards makes every attentive trainee score a full off-task deviation. If
 the phone's own pose model (e.g. MediaPipe Pose, on-device) emits a different
 landmark layout or count, the phone is responsible for remapping to COCO-17
 before sending — the server does no remapping of its own.
+
+### `use_case` selects the payload
+
+Every phone in the field today predates this field, and every one of them is
+running fitness, so omitting it means `"fitness"` — no existing client needs
+to change. It exists for the mobile app's other, not-yet-built stations
+(welding, nursing, ...): each gets its own message body and its own scorer,
+selected by this one field, rather than a growing set of optional fields
+bolted onto the fitness shape above. Concretely, `argus.ingest.protocol`
+looks `use_case` up in a small registry of parsers and `argus.triage` looks
+it up in a registry of scorers; adding a use case means adding one parser and
+one scorer, not touching fitness's.
+
+Sending a `use_case` this server has no parser for is rejected the same way
+an unrecognised `form_reason_codes` entry is: an `error` message, then the
+connection closes. Nothing tries to read `bbox_xyxy` out of a nursing
+message and fail confusingly three fields in — the rejection happens before
+any use-case-specific field is even looked at.
+
+**A connection is one use case, agreed at `hello`.** `[session] use_case` is
+what a laptop is set up to run this session — one floor, one use case, the
+same way it is one session name. Every phone's `hello` must declare the same
+use case (see **Handshake** above); a matching one is not optional plumbing,
+it is the check that stops a fitness phone from being admitted, silently
+scored by nothing, onto a welding floor. Once admitted, every `observation`
+on that connection is checked against the same value — a message trying to
+switch use case mid-stream is refused exactly like a malformed message,
+because the whole rest of this section's per-message dispatch exists to
+serve *which use case this connection already is*, not to let one connection
+be several.
+
+**`"welding"` is registered, and is a placeholder.** There is no welding
+classifier and no welding data, so `argus.ingest.protocol` validates only the
+shared envelope (`type`, `ts`) plus one opaque `payload` object whose
+contents are carried through uninterpreted:
+
+```json
+{ "type": "observation", "use_case": "welding", "ts": 1730649600.125,
+  "payload": { "anything": "a future classifier defines" } }
+```
+
+`argus.triage.compute_triage_welding`, the scorer this feeds, always returns
+a score of `0.0` with no reason codes — it does not read `payload` at all.
+This exists to prove a welding station can connect, stream, appear on the
+console, and be evicted like any other station (the whole non-scoring
+lifecycle), without asserting anything about a trainee's technique that
+nothing has validated. A real welding use case replaces `_parse_welding_
+observation` and `compute_triage_welding` with functions that name actual
+fields — it does not extend `payload` indefinitely.
 
 ### The `exercise` field is load-bearing
 

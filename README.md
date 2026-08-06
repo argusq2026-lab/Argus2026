@@ -135,7 +135,9 @@ for the full device build/stage/connect workflow.
 | `argus demo` | Generate a canned multi-station observation fixture |
 
 Useful `run` flags: `--ws-host`, `--ws-port`, `--json-log`, `--http-port`,
-`--max-ticks` (bound the run — mainly for tests/CI), `--quiet`.
+`--max-ticks` (bound the run — mainly for tests/CI), `--quiet`, `--use-case`
+(what this floor is running; a phone whose app disagrees is rejected at
+handshake — see `docs/PROTOCOL.md`).
 
 Flags override config; config never overrides flags. `argus config` shows
 what a run is actually tuned with.

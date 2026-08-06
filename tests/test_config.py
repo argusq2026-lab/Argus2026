@@ -119,6 +119,32 @@ def test_scoring_config_is_frozen(scoring):
         scoring.alert_threshold = 0.9  # type: ignore[misc]
 
 
+def test_session_use_case_defaults_to_fitness(tmp_path):
+    cfg = load_config(_write(tmp_path, MINIMAL))
+    assert cfg.session.use_case == "fitness"
+
+
+def test_session_use_case_accepts_a_known_use_case(tmp_path):
+    body = MINIMAL + '\n[session]\nuse_case = "welding"\n'
+    cfg = load_config(_write(tmp_path, body))
+    assert cfg.session.use_case == "welding"
+
+
+def test_session_use_case_rejects_one_no_scorer_implements(tmp_path):
+    """A typo, or a use case that sounds plausible but was never wired up,
+    fails at startup rather than accepting every phone's hello and never
+    scoring any of them."""
+    body = MINIMAL + '\n[session]\nuse_case = "nursing"\n'
+    with pytest.raises(ConfigError, match="not implemented"):
+        load_config(_write(tmp_path, body))
+
+
+def test_session_use_case_rejects_empty_string(tmp_path):
+    body = MINIMAL + '\n[session]\nuse_case = ""\n'
+    with pytest.raises(ConfigError, match="use_case"):
+        load_config(_write(tmp_path, body))
+
+
 def test_history_len_floor():
     with pytest.raises(ConfigError, match="history_len"):
         ScoringConfig(

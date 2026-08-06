@@ -46,7 +46,11 @@ def _apply_overrides(cfg: ArgusConfig, args: argparse.Namespace) -> ArgusConfig:
     if args.quiet:
         outputs = dataclasses.replace(outputs, console=False)
 
-    return dataclasses.replace(cfg, ingest=ingest, outputs=outputs)
+    session = cfg.session
+    if args.use_case is not None:
+        session = dataclasses.replace(session, use_case=args.use_case)
+
+    return dataclasses.replace(cfg, ingest=ingest, outputs=outputs, session=session)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -199,6 +203,11 @@ def _add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json-log", help="Override outputs.json_log")
     parser.add_argument("--http-port", type=int, help="Override outputs.http_port")
     parser.add_argument("--quiet", action="store_true", help="Suppress console alerts")
+    parser.add_argument(
+        "--use-case",
+        help="Override session.use_case (what this floor is running; phones "
+        "must declare the same use case at hello or are rejected)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

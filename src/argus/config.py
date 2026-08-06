@@ -218,9 +218,19 @@ class SessionConfig:
     #: stop waiting. A prompt nobody is going to answer should end, and end
     #: with a reason, rather than leave a phone hanging indefinitely.
     join_timeout_s: float = 120.0
+    #: What this floor is running. Every phone's `hello` must declare the
+    #: same use case (`argus.ingest.protocol.parse_hello` rejects a
+    #: mismatch the same way it rejects a `protocol_version` or
+    #: `session_name` mismatch) — a fitness phone connecting to a laptop an
+    #: instructor set up for welding is exactly the "monitored by the wrong
+    #: thing" failure `session_name` already exists to catch, one level up.
+    #: Defaults to `"fitness"` because every session before this field
+    #: existed was one.
+    use_case: str = "fitness"
 
     APPROVAL_MODES = ("auto", "manual")
     MAX_NAME_LEN = 64
+    MAX_USE_CASE_LEN = 32
 
     def __post_init__(self) -> None:
         if self.approval not in self.APPROVAL_MODES:
@@ -234,6 +244,23 @@ class SessionConfig:
             )
         if self.join_timeout_s <= 0:
             raise ConfigError("[session] join_timeout_s must be > 0")
+        if not self.use_case or len(self.use_case) > self.MAX_USE_CASE_LEN:
+            raise ConfigError(
+                f"[session] use_case must be a non-empty string of at most "
+                f"{self.MAX_USE_CASE_LEN} characters"
+            )
+        # Deferred import: `argus.triage` imports `ScoringConfig` from this
+        # module, so importing it back at module scope would be circular.
+        # By the time a `SessionConfig` is actually constructed, both
+        # modules are fully loaded.
+        from argus.triage import known_use_cases
+
+        known = known_use_cases()
+        if self.use_case not in known:
+            raise ConfigError(
+                f"[session] use_case {self.use_case!r} is not implemented by this "
+                f"build of Argus; known use cases are {sorted(known)}"
+            )
 
 
 @dataclass(frozen=True)

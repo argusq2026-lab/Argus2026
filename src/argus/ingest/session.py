@@ -76,9 +76,22 @@ class SessionRegistry:
         return session is not None and session.connected
 
     def register(
-        self, station_id: str, trainee_id: str, now: float, display_name: str = ""
+        self,
+        station_id: str,
+        trainee_id: str,
+        now: float,
+        display_name: str = "",
+        use_case: str = "fitness",
     ) -> StationSession:
-        """Start a new session, or resume one within its disconnect grace window."""
+        """Start a new session, or resume one within its disconnect grace window.
+
+        `use_case` is set on the track immediately, at handshake, rather than
+        waiting for the first `observation` to set it (`TrackState.push`
+        already does that, latest-wins) — the same reasoning as showing the
+        station on the console at handshake: a welding station that connects
+        and sends nothing should read as "waiting", not be mislabelled
+        `"fitness"` — `TrackState`'s own default — until a frame arrives.
+        """
         existing = self._sessions.get(trainee_id)
         if existing is not None:
             if existing.connected:
@@ -87,12 +100,15 @@ class SessionRegistry:
             existing.connected = True
             existing.last_seen_ts = now
             existing.display_name = display_name
+            existing.track.use_case = use_case
             return existing
 
+        track = TrackState(history_len=self._scoring.history_len)
+        track.use_case = use_case
         session = StationSession(
             station_id=station_id,
             trainee_id=trainee_id,
-            track=TrackState(history_len=self._scoring.history_len),
+            track=track,
             last_seen_ts=now,
             display_name=display_name,
         )
@@ -176,11 +192,17 @@ class SessionRegistry:
                     last_seen_ts=session.last_seen_ts,
                     observations=len(history),
                     subject_present=session.track.subject_present,
+                    use_case=session.track.use_case,
                     bbox_xyxy=latest.bbox_xyxy if latest else None,
-                    keypoints_xy=tuple(latest.keypoints_xy) if latest else None,
-                    keypoints_conf=tuple(latest.keypoints_conf) if latest else None,
+                    keypoints_xy=tuple(latest.keypoints_xy) if latest and latest.keypoints_xy is not None else None,
+                    keypoints_conf=tuple(latest.keypoints_conf) if latest and latest.keypoints_conf is not None else None,
                     form_reason_codes=latest.form_reason_codes if latest else (),
-                    exercise=latest.exercise if latest else "",
+                    # `latest.exercise` is fitness's own field and is `None`
+                    # (not `""`) for a use case that never sets it, e.g.
+                    # welding — `StationView.exercise` is a bare `str`, so
+                    # that `None` is normalized here rather than reaching a
+                    # field whose contract says "empty string means unset".
+                    exercise=(latest.exercise or "") if latest else "",
                     rep_count=latest.rep_count if latest else None,
                     form_ok=latest.form_ok if latest else None,
                     session=self._summarise(session.track) if latest else None,

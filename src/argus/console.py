@@ -70,6 +70,12 @@ CONSOLE_HTML = """<!doctype html>
   header h1 span { color: var(--muted); font-weight: 500; letter-spacing: 0.02em; }
   #link { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
   #counts { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+  #useCaseSelect {
+    background: var(--bg); color: var(--text); border: 1px solid var(--line);
+    border-radius: 4px; font: inherit; font-size: 0.8rem; padding: 0.15rem 0.4rem;
+  }
+  #useCaseSelect:disabled { opacity: 0.6; }
+  #useCaseError { color: var(--down); font-size: 0.78rem; }
 
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); flex: none; }
   .dot.warn { background: var(--stale); }
@@ -247,6 +253,8 @@ CONSOLE_HTML = """<!doctype html>
 <body>
 <header>
   <h1>ARGUS <span id="session">trainer console</span></h1>
+  <select id="useCaseSelect" title="What this floor is running"></select>
+  <span id="useCaseError"></span>
   <div id="counts"></div>
   <div id="link"><span class="dot" id="linkdot"></span><span id="linktext">connecting…</span></div>
 </header>
@@ -416,9 +424,70 @@ function el(tag, cls, text) {
   return node;
 }
 
-// -- drawing ---------------------------------------------------------------
+// -- use case ----------------------------------------------------------------
+//
+// The dropdown that changes `[session] use_case` at runtime. Options come
+// from `cfg.known_use_cases` -- exactly what `POST /session/use_case` will
+// accept -- rather than a list hardcoded here that could drift from the
+// server's actual scorer registry.
 
-function draw(canvas, station, faded) {
+let useCasePending = false;
+
+function syncUseCaseSelect(cfg) {
+  const select = document.getElementById("useCaseSelect");
+  const options = cfg.known_use_cases || [];
+  const optionsKey = options.join(",");
+  if (select.dataset.optionsKey !== optionsKey) {
+    while (select.firstChild) select.removeChild(select.firstChild);
+    for (const useCase of options) {
+      const option = el("option", null, useCase);
+      option.value = useCase;
+      select.appendChild(option);
+    }
+    select.dataset.optionsKey = optionsKey;
+    select.addEventListener("change", onUseCaseChange);
+  }
+  if (!useCasePending) select.value = cfg.use_case;
+  select.disabled = useCasePending;
+}
+
+async function onUseCaseChange(event) {
+  const select = event.target;
+  const chosen = select.value;
+  const previous = state.cfg.use_case;
+  const errorNode = document.getElementById("useCaseError");
+  useCasePending = true;
+  select.disabled = true;
+  errorNode.textContent = "";
+  try {
+    const res = await fetch("/session/use_case", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ use_case: chosen }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.ok) {
+      select.value = previous;
+      errorNode.textContent = body.error || ("could not change use case (" + res.status + ")");
+    }
+  } catch (err) {
+    select.value = previous;
+    errorNode.textContent = "could not reach the server";
+  } finally {
+    useCasePending = false;
+    select.disabled = false;
+  }
+}
+
+// -- drawing ---------------------------------------------------------------
+//
+// `RENDERERS` is where a future use case's own visualization plugs in --
+// `station.use_case` selects it, so drawing a torch angle or a checklist step
+// is a new entry here, not a branch inside `renderFitness`. Today "fitness"
+// is the only entry; anything else falls back to it, which is safe because
+// `renderFitness` already draws nothing for a station with no `keypoints_xy`.
+
+function renderFitness(canvas, station, faded) {
   const box = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   const w = Math.max(1, Math.round(box.width * dpr));
@@ -467,6 +536,26 @@ function draw(canvas, station, faded) {
     g.fill();
   }
   g.globalAlpha = 1;
+}
+
+// Welding has no classifier and nothing to draw yet (see
+// `argus.triage.compute_triage_welding`) -- this clears the canvas rather
+// than drawing a skeleton that would only ever be blank, so a welding
+// station's card reads as "nothing to show" instead of "broken".
+function renderPlaceholder(canvas) {
+  const box = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(box.width * dpr));
+  const h = Math.max(1, Math.round(box.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  canvas.getContext("2d").clearRect(0, 0, w, h);
+}
+
+const RENDERERS = { fitness: renderFitness, welding: renderPlaceholder };
+
+function draw(canvas, station, faded) {
+  const renderer = (station && RENDERERS[station.use_case]) || renderFitness;
+  renderer(canvas, station, faded);
 }
 
 // -- one station card ------------------------------------------------------
@@ -953,6 +1042,7 @@ function render(payload, wall) {
 
   document.getElementById("session").textContent =
     state.cfg.session_name || "trainer console";
+  syncUseCaseSelect(state.cfg);
 
   const live = order.filter((t) => {
     const st = statusOf(state.known.get(t), payload.ts);

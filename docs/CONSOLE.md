@@ -119,6 +119,17 @@ vector, not to nothing — and it reads the weights from the snapshot rather
 than knowing any of them, so a retuned profile changes the sentence without a
 code change.
 
+**Drawing is dispatched on `station.use_case`.** Every `StationView` carries
+which use case its station is running (see `docs/PROTOCOL.md`), and
+`console.py`'s `RENDERERS` map picks that use case's drawing function —
+`renderFitness` is the skeleton-and-bbox drawing described above. `welding`
+is also registered, against `renderPlaceholder`, which just clears the
+canvas: welding has no classifier and nothing numeric to draw yet (see
+`argus.triage.compute_triage_welding`), so its card shows an empty frame
+rather than a skeleton drawn from fields that were never sent. A future use
+case with something to draw adds its own renderer here rather than teaching
+`renderFitness` a second shape.
+
 ---
 
 ## Silence is the point
@@ -220,12 +231,45 @@ allow_remote_join_control = false
 name = "Coach Riley — 6pm HIIT" # shown in the beacon and in the header
 approval = "auto"               # "manual" puts joins on this page first
 join_timeout_s = 120.0
+use_case = "fitness"            # what this floor is running; see docs/PROTOCOL.md
 ```
 
 Note that `approval = "manual"` is a commitment to watch this screen: nobody
 watching means phones queue, time out, and end up unmonitored while the system
 itself reports no problem at all. `argus doctor` says so rather than leaving
 it to be discovered.
+
+**What this floor is running is a dropdown in the header**, next to the
+session name — not just text, because it is also the control for changing
+it. Its options come from the snapshot's `config.known_use_cases`, exactly
+what `POST /session/use_case` will accept, rather than a list hardcoded into
+the page that could drift from what the server can actually score. Choosing
+a different one calls that route; on success every *future* `hello` is
+checked against the new value (see `docs/PROTOCOL.md`), and on failure
+(a use case this build has no scorer for, or a network hiccup) the select
+snaps back to what it was and the reason is printed beside it — the same
+inline-error pattern the join-request rows use, not a popup.
+
+**This does not touch a phone already connected.** A trainee mid-session is
+not retroactively reclassified because someone changed the dropdown — the
+same reasoning that keeps `ingest.protocol_version` fixed at hello for an
+already-open connection. Switching a floor from fitness to welding between
+classes is the intended use; switching it under trainees who are still
+streaming is not something this control tries to make safe, and every card
+on screen at the moment of the change keeps scoring on the use case its own
+phone agreed to.
+
+This is a **`POST` route, guarded the same way `/join/decide` is**: accepted
+only from this machine unless `outputs.allow_remote_join_control` is set,
+because it decides who this floor will admit from now on — exactly the kind
+of decision that flag already exists to keep off the rest of the LAN.
+
+Every phone connected here has already passed `argus.ingest.protocol`'s
+hello-time check against whatever `use_case` was in effect when it
+connected (see `docs/PROTOCOL.md`); the header names the *current* setting
+once rather than repeating it per card, and a phone connected before the
+dropdown was last changed may be running a use case the header no longer
+shows.
 
 `argus doctor` warns if `console_stale_after_s` is not shorter than
 `ingest.track_ttl_s` — set the other way round, a silent station is evicted

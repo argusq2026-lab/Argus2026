@@ -20,6 +20,8 @@ from argus.triage import (
     KP_RIGHT_WRIST,
     TrackState,
     compute_triage,
+    compute_triage_fitness,
+    known_use_cases,
     needs_instructor,
     rank_trainees,
     score_fall,
@@ -212,6 +214,64 @@ def test_score_is_bounded_by_the_weight_sum(scoring, track_state):
         track_state.push(make_observation(ts=float(i)), scoring)
     record = compute_triage("t0", track_state, 1.0, scoring)
     assert 0.0 <= record.score <= 1.0
+
+
+# -- use_case dispatch -------------------------------------------------------
+#
+# `compute_triage` is a thin dispatcher over `track.use_case` (see
+# `docs/PROTOCOL.md`); "fitness" is the only scorer registered today.
+
+
+def test_known_use_cases_matches_the_scorer_registry(scoring):
+    """`argus.config.SessionConfig` validates `[session] use_case` against
+    this; it must name exactly what `compute_triage` can actually dispatch
+    to, not a hand-maintained list that could drift from it."""
+    known = known_use_cases()
+    assert known == {"fitness", "welding"}
+    for use_case in known:
+        track = TrackState(history_len=scoring.history_len)
+        track.use_case = use_case
+        compute_triage("t0", track, 1.0, scoring)  # must not raise KeyError
+
+
+def test_compute_triage_dispatches_to_the_fitness_scorer(scoring, track_state):
+    for i in range(scoring.history_len):
+        track_state.push(make_observation(ts=float(i)), scoring)
+    assert track_state.use_case == "fitness"
+    assert compute_triage("t0", track_state, 1.0, scoring) == compute_triage_fitness(
+        "t0", track_state, 1.0, scoring
+    )
+
+
+def test_compute_triage_dispatches_to_the_welding_scorer(scoring):
+    from argus.triage import FrameObservation, compute_triage_welding
+
+    track = TrackState(history_len=scoring.history_len)
+    track.push(FrameObservation(ts=1.0, use_case="welding", payload={"torch_angle_deg": 40.0}), scoring)
+    assert track.use_case == "welding"
+    assert compute_triage("t0", track, 1.0, scoring) == compute_triage_welding(
+        "t0", track, 1.0, scoring
+    )
+
+
+def test_welding_scorer_is_always_neutral_regardless_of_payload(scoring):
+    """No welding classifier exists to define what a bad weld looks like, so
+    this scorer must not invent a threshold — it always reports 0.0 with no
+    reason codes, whatever the payload says."""
+    from argus.triage import FrameObservation, compute_triage_welding
+
+    track = TrackState(history_len=scoring.history_len)
+    for angle in (0.0, 45.0, 179.0):
+        track.push(FrameObservation(ts=angle, use_case="welding", payload={"torch_angle_deg": angle}), scoring)
+    record = compute_triage_welding("t0", track, 1.0, scoring)
+    assert record.score == 0.0
+    assert record.reason_codes == ()
+
+
+def test_compute_triage_rejects_a_track_with_no_registered_scorer(scoring, track_state):
+    track_state.use_case = "nursing"
+    with pytest.raises(KeyError):
+        compute_triage("t0", track_state, 1.0, scoring)
 
 
 def test_rank_is_descending_with_id_tiebreak(scoring):

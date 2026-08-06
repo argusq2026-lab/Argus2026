@@ -72,6 +72,13 @@ def test_the_approval_mode_is_advertised():
     assert beacon_payload("192.168.1.20", 8765, 1, approval="manual")["approval"] == "manual"
 
 
+def test_the_use_case_is_always_advertised():
+    """Unlike `session_name`, never blank -- a phone should see "this laptop
+    is running welding" before connecting, not after a hello rejection."""
+    assert beacon_payload("192.168.1.20", 8765, 1)["use_case"] == "fitness"
+    assert beacon_payload("192.168.1.20", 8765, 1, use_case="welding")["use_case"] == "welding"
+
+
 def test_local_lan_ip_is_never_loopback():
     addr = local_lan_ip()
     assert addr is None or not addr.startswith("127.")
@@ -166,6 +173,31 @@ def test_stop_is_idempotent():
     beacon = DiscoveryBeacon({"type": BEACON_TYPE}, port=_free_udp_port())
     beacon.stop()
     beacon.stop()
+
+
+def test_update_payload_changes_what_the_next_send_broadcasts():
+    """An instructor changing `[session] use_case` from the console mid-run
+    (see `IngestServer.set_use_case`) must not leave the beacon advertising
+    the old one until the process restarts."""
+    port = _free_udp_port()
+    listener = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    listener.bind(("127.0.0.1", port))
+    listener.settimeout(2.0)
+
+    beacon = DiscoveryBeacon(
+        {"type": BEACON_TYPE, "use_case": "fitness"}, port=port, broadcast="127.0.0.1"
+    )
+    beacon.update_payload({"type": BEACON_TYPE, "use_case": "welding"})
+
+    sender = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sender.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    try:
+        beacon.send_once(sender)
+        received, _ = listener.recvfrom(2048)
+        assert json.loads(received)["use_case"] == "welding"
+    finally:
+        sender.close()
+        listener.close()
 
 
 # -- the server's wiring ------------------------------------------------------

@@ -235,6 +235,8 @@ broadcast = ""                # blank = 255.255.255.255; set e.g. "192.168.1.255
 name = ""
 approval = "auto"             # "auto" or "manual"
 join_timeout_s = 120.0        # how long an unanswered join request waits
+use_case = "fitness"          # what this floor is running; a phone's hello
+                               # must declare the same use case or is rejected
 
 
 # ---------------------------------------------------------------------------

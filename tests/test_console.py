@@ -87,6 +87,39 @@ def test_station_view_before_the_first_observation_has_no_pose(scoring):
     assert view.form_ok is None
 
 
+def test_station_view_carries_use_case_before_the_first_observation(scoring):
+    """A welding station that has connected but sent nothing yet must not be
+    mislabelled `"fitness"` -- `TrackState`'s own default -- until a frame
+    happens to arrive; `register()` sets it at handshake."""
+    registry = SessionRegistry(scoring, track_ttl_s=10.0)
+    registry.register("s0", "t0", now=0.0, use_case="welding")
+
+    [view] = registry.station_views()
+    assert view.use_case == "welding"
+    assert view.observations == 0
+
+
+def test_station_view_for_a_welding_station_has_no_pose(scoring):
+    """A welding observation has no `bbox_xyxy`/`keypoints_xy` at all (see
+    `argus.triage.FrameObservation`) — building its `StationView` must not
+    crash trying to `tuple()` a `None`, and `exercise` must still read as the
+    empty string its type promises, not `None`."""
+    from argus.triage import FrameObservation
+
+    registry = SessionRegistry(scoring, track_ttl_s=10.0)
+    registry.register("s0", "t0", now=0.0)
+    registry.push_observation(
+        "t0", FrameObservation(ts=1.0, use_case="welding", payload={"torch_angle_deg": 12.0}), now=1.0
+    )
+
+    [view] = registry.station_views()
+    assert view.use_case == "welding"
+    assert view.bbox_xyxy is None
+    assert view.keypoints_xy is None
+    assert view.keypoints_conf is None
+    assert view.exercise == ""
+
+
 def test_station_view_carries_the_phone_informational_fields(scoring):
     registry = SessionRegistry(scoring, track_ttl_s=10.0)
     registry.register("s0", "t0", now=0.0)
@@ -383,6 +416,68 @@ def test_a_malformed_decision_is_rejected_rather_than_guessed(approving_server, 
 def test_no_other_post_route_exists(approving_server):
     status, _ = _post(approving_server.port, "/frames", {})
     assert status == 404
+
+
+# -- POST /session/use_case ---------------------------------------------------
+
+
+@pytest.fixture
+def use_case_server():
+    """A server with a use-case-change callback attached, recording calls."""
+    changes = []
+
+    def change(use_case: str):
+        changes.append(use_case)
+        if use_case == "welding":
+            return True, ""
+        return False, f"use_case {use_case!r} is not implemented"
+
+    srv = TriageHTTPServer(
+        0,
+        console=ConsoleSettings(use_case="fitness", known_use_cases=("fitness", "welding")),
+        on_use_case_change=change,
+    )
+    srv.start()
+    srv.changes = changes
+    yield srv
+    srv.stop()
+
+
+def test_the_console_can_change_the_use_case(use_case_server):
+    status, body = _post(use_case_server.port, "/session/use_case", {"use_case": "welding"})
+    assert status == 200
+    assert body == {"ok": True, "use_case": "welding"}
+    assert use_case_server.changes == ["welding"]
+
+
+def test_changing_to_an_unimplemented_use_case_is_rejected(use_case_server):
+    status, body = _post(use_case_server.port, "/session/use_case", {"use_case": "nursing"})
+    assert status == 400
+    assert body["ok"] is False
+    assert "nursing" in body["error"]
+
+
+@pytest.mark.parametrize(
+    "body", [{}, {"use_case": 7}], ids=["empty", "use_case-not-a-string"]
+)
+def test_a_malformed_use_case_request_is_rejected(use_case_server, body):
+    status, _ = _post(use_case_server.port, "/session/use_case", body)
+    assert status == 400
+    assert use_case_server.changes == []
+
+
+def test_a_server_without_a_use_case_callback_refuses_changes(server):
+    status, body = _post(server.port, "/session/use_case", {"use_case": "welding"})
+    assert status == 503
+    assert "error" in body
+
+
+def test_set_use_case_updates_what_the_console_reports(use_case_server):
+    """The dropdown's own effect: `GET /console`'s `config.use_case` reflects
+    the change immediately, not just the callback's side effect."""
+    use_case_server.set_use_case("welding")
+    payload = _get(use_case_server.port, "/console")
+    assert payload["config"]["use_case"] == "welding"
 
 
 def test_a_server_without_an_admission_queue_refuses_decisions(server):

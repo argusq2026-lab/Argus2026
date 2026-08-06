@@ -73,6 +73,7 @@ def beacon_payload(
     protocol_version: int,
     session_name: str = "",
     approval: str = "auto",
+    use_case: str = "fitness",
 ) -> dict | None:
     """The datagram a phone parses, or `None` if there is nothing to advertise.
 
@@ -101,6 +102,13 @@ def beacon_payload(
         # So a phone can say "the instructor will approve this" instead of
         # looking like it hung while a join request sits on someone's screen.
         "approval": approval,
+        # So a phone can check it matches *before* connecting, and show
+        # someone "this laptop is running welding, not fitness" during setup
+        # rather than as a `hello` rejection after the phone is placed.
+        # Unlike `session_name` this is never blank -- every session has run
+        # some use case since before this field existed -- so it is always
+        # included.
+        "use_case": use_case,
     }
     if session_name:
         # Optional and empty by default. A named session is what lets someone
@@ -163,6 +171,15 @@ class DiscoveryBeacon:
     @property
     def sent(self) -> int:
         return self._sent
+
+    def update_payload(self, payload: dict) -> None:
+        """Change what the next broadcast sends — e.g. after an instructor
+        changes `[session] use_case` from the console mid-run. A single
+        attribute reassignment of an immutable `bytes` object, read by
+        `_loop`'s own thread, so this needs no lock: the loop either sends
+        the old datagram or the new one, never a partial one.
+        """
+        self._datagram = json.dumps(payload).encode("utf-8")
 
     def send_once(self, sock: socket.socket) -> None:
         sock.sendto(self._datagram, (self._broadcast, self._port))

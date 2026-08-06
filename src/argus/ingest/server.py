@@ -21,7 +21,7 @@ import contextlib
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import websockets
@@ -42,7 +42,7 @@ from argus.ingest.protocol import (
 )
 from argus.ingest.session import DuplicateTraineeError, SessionRegistry
 from argus.outputs import ConsoleSettings, JsonLogSink, TriageHTTPServer
-from argus.triage import TriageRecord, needs_instructor, rank_trainees
+from argus.triage import TriageRecord, known_use_cases, needs_instructor, rank_trainees
 
 logger = logging.getLogger(__name__)
 
@@ -119,6 +119,8 @@ class IngestServer:
                     track_ttl_s=cfg.ingest.track_ttl_s,
                     session_name=cfg.session.name,
                     approval=cfg.session.approval,
+                    use_case=cfg.session.use_case,
+                    known_use_cases=tuple(sorted(known_use_cases())),
                     default_weights=dict(cfg.scoring.weights),
                     exercise_weights={
                         name: dict(profile)
@@ -126,12 +128,23 @@ class IngestServer:
                     },
                 ),
                 on_join_decision=self._admission.decide,
+                on_use_case_change=self.set_use_case,
                 allow_remote_control=cfg.outputs.allow_remote_join_control,
             )
         self.ticks = 0
         self._ws_server: websockets.Server | None = None
         self._rank_task: asyncio.Task | None = None
         self._beacon: DiscoveryBeacon | None = None
+
+    def _beacon_payload(self) -> dict | None:
+        return beacon_payload(
+            self.cfg.ingest.ws_host,
+            self.ws_port,
+            self.cfg.ingest.protocol_version,
+            self.cfg.session.name,
+            self.cfg.session.approval,
+            self.cfg.session.use_case,
+        )
 
     def _build_beacon(self) -> DiscoveryBeacon | None:
         """The LAN beacon, or `None` when there is nothing worth advertising.
@@ -142,13 +155,7 @@ class IngestServer:
         """
         if not self.cfg.discovery.enabled:
             return None
-        payload = beacon_payload(
-            self.cfg.ingest.ws_host,
-            self.ws_port,
-            self.cfg.ingest.protocol_version,
-            self.cfg.session.name,
-            self.cfg.session.approval,
-        )
+        payload = self._beacon_payload()
         if payload is None:
             logger.info(
                 "discovery beacon not started: nothing phone-reachable to advertise "
@@ -163,6 +170,47 @@ class IngestServer:
             interval_s=self.cfg.discovery.interval_s,
             broadcast=self.cfg.discovery.broadcast,
         )
+
+    def set_use_case(self, use_case: str) -> tuple[bool, str]:
+        """Change `[session] use_case` while the server is running.
+
+        The console's dropdown and `POST /session/use_case` both end up
+        here (via `TriageHTTPServer`'s `on_use_case_change`), which makes
+        this the one place the check "is this a use case Argus can score"
+        lives, whether the change came from a browser, `--use-case` at
+        startup, or a future third caller.
+
+        Only affects *future* connections: a phone already admitted agreed
+        to a use case at its own `hello` (`argus.ingest.protocol.parse_
+        hello`), and changing the session's setting does not retroactively
+        reclassify a track someone is already relying on mid-session — the
+        same reasoning `ingest.protocol_version` or `session.approval` would
+        get if either were made runtime-mutable. An instructor switching
+        floors from fitness to welding is expected to do it between
+        sessions, not while trainees are connected.
+
+        Returns `(True, "")` on success, or `(False, reason)` — reassigning
+        `self.cfg` is a single reference swap, safe under the GIL against
+        `_handle`'s coroutine reading it concurrently on the asyncio loop,
+        even though this is called from the HTTP server's own thread.
+        """
+        known = known_use_cases()
+        if use_case not in known:
+            return False, (
+                f"use_case {use_case!r} is not implemented by this build of Argus; "
+                f"known use cases are {sorted(known)}"
+            )
+
+        self.cfg = replace(self.cfg, session=replace(self.cfg.session, use_case=use_case))
+        logger.info("session use_case changed to %r", use_case)
+
+        if self._http is not None:
+            self._http.set_use_case(use_case)
+        if self._beacon is not None:
+            payload = self._beacon_payload()
+            if payload is not None:
+                self._beacon.update_payload(payload)
+        return True, ""
 
     @property
     def http_port(self) -> int | None:
@@ -306,7 +354,10 @@ class IngestServer:
 
         try:
             hello = parse_hello(
-                json.loads(raw), self.cfg.ingest.protocol_version, self.cfg.session.name
+                json.loads(raw),
+                self.cfg.ingest.protocol_version,
+                self.cfg.session.name,
+                self.cfg.session.use_case,
             )
         except (ProtocolError, json.JSONDecodeError) as exc:
             await ws.send(json.dumps(error_message(str(exc))))
@@ -327,7 +378,7 @@ class IngestServer:
 
         try:
             self._registry.register(
-                hello.station_id, hello.trainee_id, self._now(), hello.display_name
+                hello.station_id, hello.trainee_id, self._now(), hello.display_name, hello.use_case
             )
         except DuplicateTraineeError as exc:
             # Two phones can be approved for one trainee_id in the window
@@ -359,7 +410,9 @@ class IngestServer:
                         self._registry.note_idle(hello.trainee_id, self._now())
                         self._publish_stations()
                         continue
-                    obs = parse_observation(payload, self.cfg.scoring.form_error_vocab)
+                    obs = parse_observation(
+                        payload, self.cfg.scoring.form_error_vocab, hello.use_case
+                    )
                 except (ProtocolError, json.JSONDecodeError) as exc:
                     await ws.send(json.dumps(error_message(str(exc))))
                     await ws.close(_POLICY_VIOLATION, _close_reason(str(exc)))

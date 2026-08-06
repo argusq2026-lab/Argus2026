@@ -10,9 +10,19 @@ by ignoring the field that doesn't parse.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from argus.triage import NUM_KEYPOINTS, FrameObservation
+
+#: Longest a `use_case` may claim to be. Same reasoning as `_MAX_EXERCISE_LEN`
+#: below: it selects a parser/scorer by dict lookup, never grows into
+#: anything else, so an oversized value is a malformed message.
+_MAX_USE_CASE_LEN = 32
+
+#: `use_case` a phone omits is `"fitness"` — every phone in the field today
+#: predates this field, and treating its absence as anything other than the
+#: one use case that has ever existed would refuse every one of them.
+_DEFAULT_USE_CASE = "fitness"
 
 
 #: `exercise` is the one field on the wire whose value a phone chooses freely
@@ -53,6 +63,12 @@ class HelloMessage:
     #: anyway: on a floor with two laptops, silently joining the wrong one is
     #: a trainee monitored by an instructor who is not watching them.
     session_name: str = ""
+    #: What the phone believes it is running. The server rejects a mismatch
+    #: against `[session] use_case` for the same reason it rejects a
+    #: `session_name` mismatch: a fitness phone admitted onto a floor an
+    #: instructor set up for welding is monitored by a scorer that will
+    #: never fire, which is a quieter failure than a rejected connection.
+    use_case: str = "fitness"
 
 
 def _require(raw: Mapping[str, Any], key: str, kind: type) -> Any:
@@ -66,16 +82,42 @@ def _require(raw: Mapping[str, Any], key: str, kind: type) -> Any:
     return value
 
 
+def _parse_use_case(raw: Mapping[str, Any]) -> str:
+    """`use_case`, shared by `hello` and `observation`: bounded, non-empty,
+    defaulting to `"fitness"` for a message that omits it or sends `null`.
+    Only the type and length are enforced here — whether a use case with
+    that name is one this server actually runs is a different question,
+    answered by whoever calls this (a hello-vs-session-config check, an
+    observation-vs-`_OBSERVATION_PARSERS` lookup), not by this helper.
+    """
+    value = raw.get("use_case", _DEFAULT_USE_CASE)
+    if value is None:
+        value = _DEFAULT_USE_CASE
+    if not isinstance(value, str) or not value:
+        raise ProtocolError(f"use_case must be a non-empty string, got {value!r}")
+    if len(value) > _MAX_USE_CASE_LEN:
+        raise ProtocolError(f"use_case must be at most {_MAX_USE_CASE_LEN} characters")
+    return value
+
+
 def parse_hello(
     raw: Mapping[str, Any],
     expected_protocol_version: int,
     session_name: str = "",
+    session_use_case: str = "fitness",
 ) -> HelloMessage:
     """Validate a `hello` message. Raises `ProtocolError` on any mismatch.
 
     `session_name` is this server's own. A phone that names a *different*
     session is rejected: it found some other laptop's beacon and is about to
     put a trainee on a console nobody is watching.
+
+    `session_use_case` is `[session] use_case` — what this floor is running.
+    Unlike `session_name`, this check is strict even when the phone said
+    nothing: a phone that omits `use_case` defaults to `"fitness"` the same
+    as an observation does, and a laptop configured for anything else must
+    still refuse it rather than silently admitting a fitness phone onto a
+    non-fitness floor.
     """
     if raw.get("type") != "hello":
         raise ProtocolError(f"expected the first message to be type 'hello', got {raw.get('type')!r}")
@@ -117,26 +159,78 @@ def parse_hello(
             f"{claimed_session!r}; the phone found a different laptop's beacon"
         )
 
+    use_case = _parse_use_case(raw)
+    if use_case != session_use_case:
+        raise ProtocolError(
+            f"this server is running a {session_use_case!r} session, but the "
+            f"phone is configured for {use_case!r} — check the app's use case "
+            "matches this laptop's [session] use_case"
+        )
+
     return HelloMessage(
         station_id=station_id,
         trainee_id=trainee_id,
         exercise_plan=exercise_plan,
         display_name=display_name,
         session_name=claimed_session,
+        use_case=use_case,
     )
 
 
-def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, float]) -> FrameObservation:
+def parse_observation(
+    raw: Mapping[str, Any],
+    form_error_vocab: Mapping[str, float],
+    expected_use_case: str | None = None,
+) -> FrameObservation:
     """Validate an `observation` message and translate it into a `FrameObservation`.
+
+    `type` and `use_case` are the only fields every use case shares; the rest
+    of the message belongs to whichever use case's parser is registered in
+    `_OBSERVATION_PARSERS` below, so a station running a use case this server
+    does not implement is rejected here rather than failing deeper inside a
+    parser expecting fields (`bbox_xyxy`, `keypoints_xy`, ...) that only
+    fitness's phones ever send. See `docs/PROTOCOL.md` for the extension
+    point this is: a new use case adds one parser and one registry entry, it
+    does not touch the fields another use case already validates.
+
+    `expected_use_case` is the use case this *connection* already agreed to
+    at `hello` (`argus.ingest.server` passes `hello.use_case`). A message
+    naming a different one is rejected here rather than silently switching
+    the trainee's track to a scorer nobody validated the handshake against —
+    the same "one connection, one use case" guarantee `hello` establishes,
+    enforced on every message rather than trusted once. `None` skips the
+    check, which is what every existing call in the test suite does; it is
+    not a way for a real connection to opt out.
+    """
+    if raw.get("type") != "observation":
+        raise ProtocolError(f"expected type 'observation', got {raw.get('type')!r}")
+
+    use_case = _parse_use_case(raw)
+    if expected_use_case is not None and use_case != expected_use_case:
+        raise ProtocolError(
+            f"this connection agreed to use_case {expected_use_case!r} at hello, "
+            f"but this observation names {use_case!r}"
+        )
+
+    parser = _OBSERVATION_PARSERS.get(use_case)
+    if parser is None:
+        raise ProtocolError(
+            f"unsupported use_case {use_case!r}; this server only implements "
+            f"{sorted(_OBSERVATION_PARSERS)}"
+        )
+    return parser(raw, use_case, form_error_vocab)
+
+
+def _parse_fitness_observation(
+    raw: Mapping[str, Any], use_case: str, form_error_vocab: Mapping[str, float]
+) -> FrameObservation:
+    """Fitness's `observation` payload: pose, exercise, rep/form fields.
 
     `form_reason_codes` must be drawn from `form_error_vocab` (the config's
     `[scoring.form_error_vocab]`) — a code outside that set is a
     protocol/version mismatch between the phone and the laptop, so it is
     rejected here rather than silently scored as zero.
     """
-    if raw.get("type") != "observation":
-        raise ProtocolError(f"expected type 'observation', got {raw.get('type')!r}")
-
     ts = _require(raw, "ts", float)
 
     bbox = _require(raw, "bbox_xyxy", list)
@@ -170,6 +264,7 @@ def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, flo
 
     return FrameObservation(
         ts=ts,
+        use_case=use_case,
         bbox_xyxy=bbox_xyxy,
         keypoints_xy=keypoints_xy,
         keypoints_conf=keypoints_conf,
@@ -178,6 +273,45 @@ def parse_observation(raw: Mapping[str, Any], form_error_vocab: Mapping[str, flo
         rep_count=_parse_rep_count(raw),
         form_ok=_parse_form_ok(raw),
     )
+
+
+def _parse_welding_observation(
+    raw: Mapping[str, Any], use_case: str, form_error_vocab: Mapping[str, float]
+) -> FrameObservation:
+    """Welding's `observation` payload: a placeholder, deliberately.
+
+    There is no welding classifier yet and no welding data to define real
+    fields around — see `argus.triage.compute_triage_welding`, the scorer
+    this feeds, for the same point made about scoring. So this validates
+    only the envelope every use case shares (`ts`) plus one opaque `payload`
+    object whose contents are carried through uninterpreted rather than
+    validated field-by-field, because there is nothing yet to validate them
+    against. When a real welding classifier exists, this function is where
+    its actual fields (torch angle, travel speed, whatever it turns out to
+    be) get named and checked — not bolted onto `payload` forever.
+    """
+    ts = _require(raw, "ts", float)
+
+    payload = raw.get("payload", {})
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, dict):
+        raise ProtocolError(f"payload must be an object, got {type(payload).__name__}")
+
+    return FrameObservation(ts=ts, use_case=use_case, payload=payload)
+
+
+#: Every use case this server can parse an `observation` for. A new use case
+#: (welding, nursing, ...) is added here with its own parser reading its own
+#: payload shape — it does not extend or branch inside `_parse_fitness_
+#: observation`, whose fields (`bbox_xyxy`, `exercise`, `rep_count`, ...)
+#: are fitness's own and mean nothing to another use case.
+_OBSERVATION_PARSERS: dict[
+    str, Callable[[Mapping[str, Any], str, Mapping[str, float]], FrameObservation]
+] = {
+    "fitness": _parse_fitness_observation,
+    "welding": _parse_welding_observation,
+}
 
 
 def _parse_exercise(raw: Mapping[str, Any]) -> str:
