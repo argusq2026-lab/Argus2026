@@ -2,6 +2,7 @@ package com.argus.edge
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.util.Log
 import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -35,6 +36,8 @@ import java.net.SocketTimeoutException
 object Discovery {
 
     /** Marks a datagram as ours. Anything else on this port is noise. */
+    private const val TAG = "ArgusDiscovery"
+
     const val BEACON_TYPE = "argus_beacon"
 
     /** Matches `discovery.port` in the laptop's `configs/argus.default.toml`. */
@@ -98,19 +101,54 @@ object Discovery {
      * the socket is correct and simply never receives anything — the most
      * confusing possible failure, because nothing reports an error.
      */
+    /**
+     * What a search actually did, not just what it found.
+     *
+     * The first version returned a bare list, so every failure looked the
+     * same to whoever was setting up a station: "no server found". Three very
+     * different things produce an empty list, and they need different actions
+     * from a human:
+     *
+     * - **Could not listen at all** ([error] set). A bug or a busy port on
+     *   this phone. Nothing to do with the network, and telling someone to
+     *   check their Wi-Fi sends them the wrong way entirely.
+     * - **Listened, heard nothing** ([datagrams] == 0). The network is
+     *   dropping broadcast, or no laptop is running. This is the common one
+     *   on guest and conference Wi-Fi with client isolation.
+     * - **Heard traffic, none of it ours** ([datagrams] > 0, [servers] empty).
+     *   Something else is on the port, or a server is running a different
+     *   `protocol_version` — which is a real mismatch worth naming, and used
+     *   to be silently invisible.
+     */
+    data class Result(
+        val servers: List<Server>,
+        val datagrams: Int = 0,
+        val error: String? = null,
+    )
+
     fun listen(
         context: Context,
         port: Int = DEFAULT_PORT,
         timeoutMs: Long = 3_000,
         expectedProtocolVersion: Int? = PROTOCOL_VERSION,
-    ): List<Server> {
+    ): Result {
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
-        val lock = wifi?.createMulticastLock("argus-discovery")?.apply {
-            setReferenceCounted(true)
-            acquire()
+        val lock = try {
+            wifi?.createMulticastLock("argus-discovery")?.apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+        } catch (e: Exception) {
+            // Wi-Fi firmware filters broadcast to save power unless this is
+            // held. Losing it is not fatal — plenty of devices deliver anyway
+            // — but it is worth knowing about when nothing arrives.
+            Log.w(TAG, "no multicast lock: ${e.message}")
+            null
         }
 
         val found = LinkedHashMap<String, Server>()
+        var datagrams = 0
+        var error: String? = null
         var socket: DatagramSocket? = null
         try {
             socket = DatagramSocket(null).apply {
@@ -119,6 +157,7 @@ object Discovery {
                 bind(java.net.InetSocketAddress(port))
                 soTimeout = 500
             }
+            Log.i(TAG, "listening on udp/$port for ${timeoutMs}ms")
             val buffer = ByteArray(2048)
             val deadline = System.currentTimeMillis() + timeoutMs
             while (System.currentTimeMillis() < deadline) {
@@ -128,13 +167,21 @@ object Discovery {
                 } catch (_: SocketTimeoutException) {
                     continue
                 }
+                datagrams += 1
                 val server = parse(packet.data, packet.length, expectedProtocolVersion)
+                Log.i(
+                    TAG,
+                    "datagram ${packet.length}B from ${packet.address?.hostAddress} -> " +
+                        (server?.wsUrl ?: "not an argus beacon"),
+                )
                 if (server != null) found.putIfAbsent(server.wsUrl, server)
             }
-        } catch (_: Exception) {
-            // A port already in use, or no network at all. The caller's
-            // fallback is the address field, so this is not worth surfacing
-            // as anything louder than "no server found".
+        } catch (e: Exception) {
+            // Distinguished from "heard nothing" on purpose: a port this phone
+            // cannot bind is a different problem from a network that drops
+            // broadcast, and the old code reported both as "no server found".
+            error = e.message ?: e.javaClass.simpleName
+            Log.w(TAG, "could not listen on udp/$port: $error")
         } finally {
             socket?.close()
             try {
@@ -143,6 +190,7 @@ object Discovery {
                 // Already released; nothing to do.
             }
         }
-        return found.values.toList()
+        Log.i(TAG, "search done: ${found.size} server(s) from $datagrams datagram(s), error=$error")
+        return Result(found.values.toList(), datagrams, error)
     }
 }

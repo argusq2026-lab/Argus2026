@@ -8,7 +8,9 @@
     <string name="find_server">Find server on this network</string>
     <string name="find_server_searching">Searching…</string>
     <string name="find_server_found">Found — check the address, then Connect</string>
-    <string name="find_server_none">No server found — type the address</string>
+    <string name="find_server_none">Nothing heard — this Wi-Fi may block broadcast; type the address</string>
+    <string name="find_server_wrong_traffic">Heard traffic but no Argus server — check protocol_version</string>
+    <string name="find_server_broken">Could not listen: %1$s</string>
     <string name="find_server_choose">Which session?</string>
 
     <!-- Joining a named session. The manual variant is said up front so the

@@ -706,10 +706,17 @@ class MainActivity : AppCompatActivity() {
                 isEnabled = false
                 text = getString(R.string.find_server_searching)
                 Executors.newSingleThreadExecutor().execute {
-                    val servers = Discovery.listen(this@MainActivity)
+                    val result = Discovery.listen(this@MainActivity)
+                    val servers = result.servers
                     runOnUiThread {
                         isEnabled = true
                         when {
+                            // Three different failures, three different things
+                            // for a human to do. They used to share one message.
+                            result.error != null ->
+                                text = getString(R.string.find_server_broken, result.error)
+                            servers.isEmpty() && result.datagrams > 0 ->
+                                text = getString(R.string.find_server_wrong_traffic)
                             servers.isEmpty() ->
                                 text = getString(R.string.find_server_none)
                             servers.size == 1 -> {
