@@ -1,6 +1,6 @@
-# The trainer console
+# The console
 
-The page at `GET /`. It is the trainer's live view of the floor: who needs
+The page at `GET /`. It is the supervisor's live view of the floor: who needs
 attention now, what every station is doing, and — the part no other surface
 in the system can show — which stations have stopped saying anything.
 
@@ -9,6 +9,14 @@ Everything it draws comes from one endpoint, `GET /console`, polled at
 [`src/argus/console.py`](../src/argus/console.py): a single static HTML string
 with no build step, no framework, and no network origin other than the server
 that served it.
+
+**One page, whatever the floor is running.** Everything below is use-case
+neutral except where marked: the queue, the tiers, the silence states, and the
+join requests are the same for a gym, a ward, and a welding bay. What differs
+is the station card's drawing (`RENDERERS`, below) and, for fitness, the
+per-exercise weight profile it explains. Fitness supplies most of the worked
+examples here because it is the use case built out furthest — see
+[`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md).
 
 ---
 
@@ -47,7 +55,7 @@ Two things deliberately did **not** become rolling:
 - **The peak.** A rolling mean is supposed to forget, and "this trainee was
   briefly in real trouble" should survive being forgotten.
 
-**Work is counted in the unit the exercise actually has.** Reps for a curl or
+**Work is counted in the unit the exercise actually has** *(fitness)*. Reps for a curl or
 a squat; seconds for a plank, which has no reps and whose entire quality is
 how long it was held well. One `fault_rate` then means the same thing for
 both — "3 of 14 reps flagged", "18s of 2m10s flagged". Below
@@ -55,7 +63,7 @@ both — "3 of 14 reps flagged", "18s of 2m10s flagged". Below
 withheld and the card says so: one bad rep out of one is not a 100% fault
 rate, and should not put anyone at the top of a queue.
 
-**A trainee who cannot hold the movement is marked for help.** This is the
+**A trainee who cannot hold the movement is marked for help** *(fitness)*. This is the
 one case the weighted sum could not express. With `form_error` at 0.15 in the
 default vector, a trainee getting *every single squat rep wrong* scored
 0.15 x 0.8 = 0.12 against a 0.5 threshold: no matter how badly or how long
@@ -90,17 +98,19 @@ cleanly:
 | Flagged, below threshold | a reason code fired but the score did not cross | Worth a glance, not an alarm. Styling a 0.20 like a 0.80 teaches a trainer to discount the colour, and then the colour stops working when it matters. |
 | Not reporting | stale, disconnected, or evicted | Ranked *alongside* danger rather than below it — see below. |
 
-**Station cards**, one per trainee, ordered by `trainee_id` and never by
+**Station cards**, one per station, ordered by `trainee_id` and never by
 score: a grid that reordered as scores moved would be unreadable, because a
-trainer watching one station would lose it mid-glance.
+supervisor watching one station would lose it mid-glance.
 
-Each card carries a live COCO-17 skeleton drawn from `keypoints_xy`, the
-bounding box, the score and its reason codes in prose, the phone's own
-`exercise` / `rep_count` / `form_ok`, a warm-up indicator while the rolling
-history is still filling — and **which scoring profile is running, and what it
-is not watching for**.
+Each card carries whatever its use case has to draw (see **Drawing is
+dispatched on `station.use_case`** below), the score and its reason codes in
+prose, and a warm-up indicator while the rolling history is still filling. For
+a pose use case that is a live COCO-17 skeleton drawn from `keypoints_xy` plus
+the bounding box; for fitness it also carries the phone's own `exercise` /
+`rep_count` / `form_ok` and **which scoring profile is running, and what it is
+not watching for**.
 
-That last one exists because of a trade the scorer makes deliberately. A
+That last one exists because of a trade fitness's scorer makes deliberately. A
 correct plank is horizontal and motionless, which `fall` and `stillness` are
 built to read as an emergency, so `[scoring.exercise_weights.plank]` weights
 both at zero. A zero weight suppresses the feature's contribution *and* its
@@ -121,14 +131,27 @@ code change.
 
 **Drawing is dispatched on `station.use_case`.** Every `StationView` carries
 which use case its station is running (see `docs/PROTOCOL.md`), and
-`console.py`'s `RENDERERS` map picks that use case's drawing function —
-`renderFitness` is the skeleton-and-bbox drawing described above. `welding`
-is also registered, against `renderPlaceholder`, which just clears the
-canvas: welding has no classifier and nothing numeric to draw yet (see
-`argus.triage.compute_triage_welding`), so its card shows an empty frame
-rather than a skeleton drawn from fields that were never sent. A future use
-case with something to draw adds its own renderer here rather than teaching
-`renderFitness` a second shape.
+`console.py`'s `RENDERERS` map picks that use case's drawing function:
+
+| Use case | Renderer | Why |
+|---|---|---|
+| `fitness` | `renderFitness` | The skeleton-and-bbox drawing described above |
+| `nursing` | `renderFitness` | Shared because a nursing station streams the *same* COCO-17 pose — genuinely the same measurement, not one shape bent to fit the other. What differs is the labels around the canvas: a `procedure` where fitness shows an `exercise` |
+| `welding` | `renderPlaceholder` | Clears the canvas. Welding has no classifier and nothing numeric to draw yet (see `argus.triage.compute_triage_welding`), so its card shows an empty frame rather than a skeleton drawn from fields that were never sent |
+
+A new use case with something else to draw adds its own renderer here rather
+than teaching `renderFitness` a second shape — and one with nothing to draw
+yet points at `renderPlaceholder`, which is honest and takes no work. An
+unregistered use case falls back to `renderFitness`, which is safe because it
+draws nothing for a station with no `keypoints_xy`.
+
+**Reason-code prose is a lookup with a fallback.** `PROSE` maps a code to a
+sentence a human standing on a floor would understand; anything absent is
+prettified mechanically (`cpr_rate_slow` renders as "Cpr rate slow"). That
+fallback is adequate for a code that already reads as English and inadequate
+for jargon, so a new use case should add its codes to `PROSE` — nursing's
+`cpr_*` codes do not have entries yet and read as the mechanical fallback
+today.
 
 ---
 
@@ -176,9 +199,10 @@ What that is **not**:
   pipeline, so there is nothing here to redact. `argus.outputs` still imports
   no image library, and `tests/test_privacy.py` still asserts it by AST.
 - **Not free text.** `form_reason_codes` is closed-vocabulary before
-  `argus.ingest.protocol` accepts it. `exercise` is the single field a phone
-  fills freely; it is length-bounded on the wire, never scored, never logged,
-  and rendered as text and never as markup — `tests/test_console.py` asserts
+  `argus.ingest.protocol` accepts it. The phone-filled labels — `exercise` for
+  fitness, `procedure` for nursing, plus the optional `display_name` — are the
+  only free fields; each is length-bounded on the wire, never logged, and
+  rendered as text and never as markup — `tests/test_console.py` asserts
   the page contains no markup-writing call at all.
 - **Not a widening of the alert boundary.** `emit_alert`, `JsonLogSink`, and
   `GET /triage` carry the same four fields they always did. A `StationView`
@@ -221,17 +245,17 @@ publishes a live pose stream on the LAN, not just a ranked list of names.
 
 ```toml
 [outputs]
-http_port = 8080                # 0 disables the console entirely
-http_host = "127.0.0.1"         # see the operational note above
+http_port = 8080                 # 0 disables the console entirely
+http_host = "127.0.0.1"          # see the operational note above
 console_poll_interval_ms = 200
-console_stale_after_s = 2.0     # keep well under ingest.track_ttl_s
+console_stale_after_s = 2.0      # keep well under ingest.track_ttl_s
 allow_remote_join_control = false
 
 [session]
-name = "Coach Riley — 6pm HIIT" # shown in the beacon and in the header
-approval = "auto"               # "manual" puts joins on this page first
+name = "Coach Riley — 6pm class" # shown in the beacon and in the header
+approval = "auto"                # "manual" puts joins on this page first
 join_timeout_s = 120.0
-use_case = "fitness"            # what this floor is running; see docs/PROTOCOL.md
+use_case = "fitness"             # what this floor is running; see docs/PROTOCOL.md
 ```
 
 Note that `approval = "manual"` is a commitment to watch this screen: nobody
@@ -290,9 +314,11 @@ argus replay --fixture fixture.json --speed 1.0
 
 `--speed 1.0` streams at the fixture's own pace, which is what makes the
 console behave like a real floor rather than filling instantly. The synthetic
-scene includes one trainee reporting a form-error code (see
-`argus.synthetic`), so the `form_error` path stays exercised in this fixture
-without needing a phone physically present to develop the console against.
+scene is a **fitness** floor (see `argus.synthetic`) and includes one station
+reporting a form-error code, so the `form_error` path stays exercised in this
+fixture without needing a phone physically present to develop the console
+against. A nursing or welding card is driven by a phone or a hand-written
+client today — there is no synthetic fixture for either.
 
 To see the silent and dropped states, stop the replay part-way: the stations
 stay in `ingest.track_ttl_s`'s grace window before being evicted.
