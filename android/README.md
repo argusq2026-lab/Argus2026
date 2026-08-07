@@ -71,6 +71,52 @@ The measured NPU↔CPU divergence (11 LSB ≈ 0.042 in score units) is stated, n
 hidden: a borderline detection near the 0.35 threshold can legitimately differ
 between the phone and a CPU replay of the same frame.
 
+## Building an installable APK
+
+`./gradlew assembleDebug` is fine for a phone on this machine's cable. It is
+signed with this machine's debug keystore, which is the catch: a debug APK
+built on a different machine has a different key, and Android refuses the
+update until the app is uninstalled — taking its staged models with it.
+
+For an APK that installs the same everywhere, build a signed release:
+
+```bash
+# once: create the identity this app will keep
+keytool -genkeypair -keystore android/keystore/argus-release.jks -alias argus \
+  -keyalg RSA -keysize 2048 -validity 10000
+cat > android/keystore.properties <<EOF
+storeFile=keystore/argus-release.jks
+storePassword=<yours>
+keyAlias=argus
+keyPassword=<yours>
+EOF
+
+cd android && ./gradlew assembleRelease
+# -> app/build/outputs/apk/release/app-release.apk (~80 MB, arm64-v8a only)
+```
+
+Both files are gitignored because the keystore *is* the app's identity —
+anyone holding it can publish updates installed phones will accept. **Keep it
+and its passwords somewhere durable**: losing it means every phone must
+uninstall (wiping staged models) before it can take an update, and there is no
+way back to the old identity. Without `keystore.properties` the same command
+still builds `app-release-unsigned.apk`, so CI and fresh clones need no secret.
+
+What a distributed APK does and does not contain:
+
+- **In it**: the app, the QNN/onnxruntime runtime, and the per-exercise form
+  classifiers (small JSON assets). Sideloading needs "install unknown apps"
+  confirmed once on the phone.
+- **Not in it**: the pose/detector models. They are gitignored artifacts
+  staged per device (Model button or `stage.sh`; reproduce them with
+  `scripts/fetch_edge_models.py`). A fresh install detects nothing until a
+  model is staged — the status strip says so rather than pretending.
+- **Deliberately not in it, and read before changing that**: bundling
+  `yolo26_pose_fp32.onnx` into a *distributed* APK is the AGPL-3.0 decision
+  [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md) flags. Staging it by
+  hand on your own demo devices triggers nothing; shipping it inside an
+  artifact you hand to others is the line.
+
 ## Staging a model
 
 Models are gitignored artifacts. Generate the sidecar and fixture once:

@@ -1,6 +1,24 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+}
+
+// Release signing, read from android/keystore.properties -- which is
+// gitignored along with the keystore itself, because a signing key IS the
+// app's identity: anyone holding it can publish updates that installed phones
+// will accept. Generate one with `keytool -genkeypair` (see android/README.md,
+// "Building an installable APK").
+//
+// Deliberately optional: with no keystore.properties, `assembleRelease` still
+// builds and produces app-release-unsigned.apk, so CI and a fresh clone are
+// not broken by the absence of a secret. What must NOT happen is a release
+// quietly signed with a debug key -- that is why this reads a dedicated file
+// rather than falling back to the debug keystore.
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -25,9 +43,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            // Minification stays off on purpose, not as an oversight. R8 has
+            // two failure modes here that both degrade silently -- stripping
+            // JNI entry points onnxruntime reaches by reflection, and renaming
+            // classes OkHttp touches the same way -- and neither shows up at
+            // build time; the minified APK compiles fine and fails on a
+            // device. The bulk of the APK is onnxruntime-qnn native libraries
+            // R8 cannot touch: measured on this tree, minification saves
+            // 6.8 MB of 80 (80.0 -> 73.2), and nobody has run the minified
+            // build on hardware. Turn it on only with a device test behind it.
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

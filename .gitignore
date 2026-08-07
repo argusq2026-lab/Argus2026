@@ -48,3 +48,9 @@ android/local.properties
 *.pth
 *.tflite
 yolo*.onnx
+
+# Release signing. The keystore IS the app's identity -- anyone holding it can
+# publish updates installed phones will accept -- so it and its passwords stay
+# out of git. See android/README.md, "Building an installable APK".
+android/keystore/
+android/keystore.properties
