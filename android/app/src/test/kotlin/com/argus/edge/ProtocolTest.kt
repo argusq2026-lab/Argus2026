@@ -38,6 +38,7 @@ class ProtocolTest {
                     stationId = canonical.getString("station_id"),
                     traineeId = canonical.getString("trainee_id"),
                     exercisePlan = canonical.optString("exercise_plan", ""),
+                    useCase = canonical.optString("use_case", USE_CASE_FITNESS),
                 )
             )
             assertJsonEquals(canonical, mine)
@@ -54,6 +55,8 @@ class ProtocolTest {
                     List(arr.length()) { arr.getJSONArray(it).toDoubleList() }
                 },
                 keypointsConf = canonical.getJSONArray("keypoints_conf").toDoubleList(),
+                useCase = canonical.optString("use_case", USE_CASE_FITNESS),
+                procedure = if (canonical.has("procedure")) canonical.getString("procedure") else null,
                 exercise = if (canonical.has("exercise")) canonical.getString("exercise") else null,
                 repCount = if (canonical.has("rep_count")) canonical.getInt("rep_count") else null,
                 formOk = if (canonical.has("form_ok")) canonical.getBoolean("form_ok") else null,
@@ -72,6 +75,52 @@ class ProtocolTest {
                 mine.put("form_reason_codes", JSONArray())
             }
             assertJsonEquals(canonical, mine)
+        }
+    }
+
+    @Test
+    fun `a fitness message is byte-identical to what shipped before use_case existed`() {
+        // The field is omitted, not sent as "fitness": a server predating it
+        // defaults an absent use_case to fitness anyway, so leaving it out means
+        // no phone in the field has to change for nursing to exist.
+        val hello = JSONObject(encodeHello("s", "t"))
+        assertTrue("fitness hello must not carry use_case", !hello.has("use_case"))
+        val obs = JSONObject(encodeObservation(Observation(1.0, listOf(0.1, 0.1, 0.9, 0.9))))
+        assertTrue("fitness observation must not carry use_case", !obs.has("use_case"))
+    }
+
+    @Test
+    fun `fitness fields cannot be smuggled into a nursing observation`() {
+        // The laptop's nursing parser does not read them, so a phone sending
+        // them would be quietly ignored. Refused here, where it is visible.
+        for (bad in listOf<Observation.() -> Observation>(
+            { copy(repCount = 3) },
+            { copy(exercise = "squat") },
+            { copy(formOk = true) },
+            { copy(formReasonCodes = listOf("knee_valgus")) },
+        )) {
+            try {
+                Observation(
+                    ts = 1.0, bboxNorm = listOf(0.1, 0.1, 0.9, 0.9),
+                    useCase = USE_CASE_NURSING, procedure = PROCEDURE_CPR,
+                ).bad()
+                fail("a nursing observation carrying a fitness field must be refused")
+            } catch (expected: ProtocolException) {
+                // exactly so
+            }
+        }
+    }
+
+    @Test
+    fun `procedure belongs to nursing alone`() {
+        try {
+            Observation(
+                ts = 1.0, bboxNorm = listOf(0.1, 0.1, 0.9, 0.9),
+                procedure = PROCEDURE_CPR,
+            )
+            fail("a fitness observation with a procedure must be refused")
+        } catch (expected: ProtocolException) {
+            // exactly so
         }
     }
 

@@ -451,10 +451,10 @@ def test_the_console_can_change_the_use_case(use_case_server):
 
 
 def test_changing_to_an_unimplemented_use_case_is_rejected(use_case_server):
-    status, body = _post(use_case_server.port, "/session/use_case", {"use_case": "nursing"})
+    status, body = _post(use_case_server.port, "/session/use_case", {"use_case": "lab"})
     assert status == 400
     assert body["ok"] is False
-    assert "nursing" in body["error"]
+    assert "lab" in body["error"]
 
 
 @pytest.mark.parametrize(

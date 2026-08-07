@@ -15,7 +15,7 @@ from dataclasses import dataclass
 
 from argus.config import ScoringConfig
 from argus.outputs import SessionSummary, StationView
-from argus.triage import FrameObservation, TrackState
+from argus.triage import FrameObservation, TrackState, history_len_for
 
 
 @dataclass
@@ -103,7 +103,7 @@ class SessionRegistry:
             existing.track.use_case = use_case
             return existing
 
-        track = TrackState(history_len=self._scoring.history_len)
+        track = TrackState(history_len=history_len_for(use_case, self._scoring))
         track.use_case = use_case
         session = StationSession(
             station_id=station_id,
@@ -203,6 +203,10 @@ class SessionRegistry:
                     # that `None` is normalized here rather than reaching a
                     # field whose contract says "empty string means unset".
                     exercise=(latest.exercise or "") if latest else "",
+                    # Same `None`-to-`""` normalization as `exercise` above,
+                    # and for the same reason: `procedure` is nursing's own
+                    # field and is `None` for every other use case.
+                    procedure=(latest.procedure or "") if latest else "",
                     rep_count=latest.rep_count if latest else None,
                     form_ok=latest.form_ok if latest else None,
                     session=self._summarise(session.track) if latest else None,

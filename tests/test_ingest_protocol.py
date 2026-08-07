@@ -252,7 +252,7 @@ def test_observation_accepts_an_explicit_fitness_use_case():
 
 def test_observation_rejects_an_unimplemented_use_case():
     with pytest.raises(ProtocolError, match="use_case"):
-        parse_observation(_obs(use_case="nursing"), VOCAB)
+        parse_observation(_obs(use_case="lab"), VOCAB)
 
 
 def test_observation_rejects_a_non_string_use_case():
@@ -367,3 +367,74 @@ def test_an_explicit_null_form_ok_is_still_unknown():
 
 def test_an_explicit_null_exercise_scores_on_the_defaults():
     assert parse_observation(_obs(exercise=None), VOCAB).exercise == ""
+
+
+# -- nursing ------------------------------------------------------------
+#
+# Nursing shares fitness's pose fields and none of the rest. The tests below
+# are as much about what it *does not* accept: a nursing station's faults are
+# derived on the laptop from the movement, so there is no phone-classified
+# form vocabulary to carry, and admitting one would invite a second source of
+# truth about whether a compression was good.
+
+
+def _nursing_obs(**overrides) -> dict:
+    base = {
+        "type": "observation",
+        "use_case": "nursing",
+        "ts": 1.0,
+        "procedure": "cpr",
+        "bbox_xyxy": [0.1, 0.1, 0.5, 0.9],
+        "keypoints_xy": [[0.3, 0.2]] * 17,
+        "keypoints_conf": [0.9] * 17,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_a_nursing_observation_carries_pose_and_procedure():
+    obs = parse_observation(_nursing_obs(), VOCAB)
+    assert obs.use_case == "nursing"
+    assert obs.procedure == "cpr"
+    assert len(obs.keypoints_xy) == 17
+    assert obs.bbox_xyxy == (0.1, 0.1, 0.5, 0.9)
+
+
+def test_a_nursing_observation_needs_a_pose():
+    """Unlike welding's opaque payload, nursing's scorer reads keypoints, so a
+    missing pose is a malformed message rather than a station with nothing to
+    say."""
+    incomplete = _nursing_obs()
+    del incomplete["keypoints_xy"]
+    with pytest.raises(ProtocolError, match="keypoints_xy"):
+        parse_observation(incomplete, VOCAB)
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_a_nursing_station_may_decline_to_name_a_procedure(value):
+    """Scored as a flat 0.0 by `compute_triage_nursing` rather than refused —
+    a ward running something this build cannot score should still appear."""
+    assert parse_observation(_nursing_obs(procedure=value), VOCAB).procedure is None
+
+
+def test_a_nursing_observation_rejects_a_non_string_procedure():
+    with pytest.raises(ProtocolError, match="procedure"):
+        parse_observation(_nursing_obs(procedure=7), VOCAB)
+
+
+def test_a_nursing_observation_bounds_the_procedure_label():
+    with pytest.raises(ProtocolError, match="procedure"):
+        parse_observation(_nursing_obs(procedure="c" * 65), VOCAB)
+
+
+def test_fitness_fields_are_not_read_from_a_nursing_observation():
+    """A nursing station that sent a rep count or a form code would be sending
+    fitness's vocabulary; those fields are simply not part of its payload, and
+    must not leak into the observation the scorer sees."""
+    obs = parse_observation(
+        _nursing_obs(rep_count=12, exercise="squat", form_reason_codes=["knee_valgus"]),
+        VOCAB,
+    )
+    assert obs.rep_count is None
+    assert obs.exercise is None
+    assert obs.form_reason_codes == ()

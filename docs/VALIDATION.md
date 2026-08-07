@@ -281,6 +281,59 @@ definition is the experiment, and it cannot be inferred from the code.
 
 ---
 
+## 2b. Nursing/CPR: the target band has a source, the measurement does not yet
+
+**Status:** the scoring *criteria* are externally sourced — unusual in this
+file. What is unvalidated is whether a phone recovers them faithfully.
+
+Worth separating carefully, because these are not equally weak:
+
+**What has an external source.** `cpr_rate_min_bpm = 100` / `cpr_rate_max_bpm
+= 120` is the American Heart Association's published adult figure, not a prior
+fitted here. Unlike the five fitness weights above, nobody on this project
+chose those numbers. Locked elbows are likewise standard AHA guidance.
+
+**What is a local choice.** `cpr_rate_full_deviation_bpm = 40` (how far
+outside the band scores 1.0), `cpr_min_elbow_angle_deg = 150`,
+`cpr_cadence_cv_threshold = 0.25`, and `cpr_window_s = 8` are all this
+project's arithmetic — the same class of unfitted choice as §2's weights, and
+they should be read that way. 40 was chosen so 80/min reaches
+`alert_threshold` and 90/min does not; that is a judgement about when to pull
+an instructor away from someone else, and no observation supports it.
+
+**What is deliberately not measured at all.** Compression **depth** (the AHA
+wants 5–6 cm) and **hand placement on the sternum** are out of scope, not
+merely unvalidated. Depth from an uncalibrated monocular camera requires a
+scale reference the frame does not contain; hand placement requires detecting
+the patient, not just the rescuer. A 2024 feasibility study using MediaPipe
+Pose against an instrumented Laerdal QCPR manikin found compression
+*frequency* agreed closely while depth showed "major inaccuracies and was
+overall not accurate" (PMID 39559731) — which is the same split this scorer
+implements, arrived at independently and then confirmed. Reporting a depth
+number anyway is the one failure this feature cannot afford, so
+`compute_triage_cpr` has no depth term to accidentally surface.
+
+**What is validated.** Rate *recovery* is tested against synthetic waveforms
+at known rates (`tests/test_triage.py`, the nursing section): 80–140/min
+recover to within 3/min, a motionless subject yields no rate rather than an
+invented one, and an undersampled stream refuses rather than reporting the
+octave-halved value. That is a test of the arithmetic, not of a camera.
+
+**What is not validated.** No real CPR has been measured. A 4-second capture
+from a Galaxy S25 Ultra confirmed the pipeline delivers 28 Hz with the
+side-facing wrist, elbow and shoulder tracked in >90% of frames — enough to
+establish the *signal exists*, and nothing about whether the recovered rate
+matches a metronome or a manikin.
+
+**To close:** capture sustained compressions at metronome-known rates (80,
+100, 110, 120), plus a deliberately-bent-elbow run, a run with pauses, and a
+run with no compressions at all. Those clips become both the validation
+evidence and the golden-vector fixtures, replacing the synthetic waveforms.
+An instrumented manikin would be better than a metronome and is not required
+to close this.
+
+---
+
 ## 3. The WebSocket ingest server has no authentication or transport security
 
 **Status:** open risk for any deployment beyond a trusted private LAN.

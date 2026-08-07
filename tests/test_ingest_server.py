@@ -210,9 +210,9 @@ def test_set_use_case_rejects_one_this_build_cannot_score(default_config, tmp_pa
         server = IngestServer(_cfg(default_config, tmp_path))
         await server.start()
         try:
-            ok, message = server.set_use_case("nursing")
+            ok, message = server.set_use_case("lab")
             assert ok is False
-            assert "nursing" in message
+            assert "lab" in message
             # Unchanged: a rejected change must not partially apply.
             assert server.cfg.session.use_case == "fitness"
         finally:

@@ -26,6 +26,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, field
+from statistics import median, pstdev
 from typing import Callable, Iterable
 
 from argus.config import ScoringConfig
@@ -37,12 +38,22 @@ from argus.config import ScoringConfig
 KP_NOSE = 0
 KP_LEFT_SHOULDER = 5
 KP_RIGHT_SHOULDER = 6
+KP_LEFT_ELBOW = 7
+KP_RIGHT_ELBOW = 8
 KP_LEFT_WRIST = 9
 KP_RIGHT_WRIST = 10
 KP_LEFT_HIP = 11
 KP_RIGHT_HIP = 12
 HAND_KEYPOINTS = (KP_LEFT_WRIST, KP_RIGHT_WRIST)
 NUM_KEYPOINTS = 17
+
+#: One arm, shoulder -> elbow -> wrist. Nursing's CPR scorer reads the angle at
+#: the elbow off these; a side-on camera sees one arm and not the other, so
+#: they are tried in turn rather than averaged.
+ARM_CHAINS = (
+    (KP_LEFT_SHOULDER, KP_LEFT_ELBOW, KP_LEFT_WRIST),
+    (KP_RIGHT_SHOULDER, KP_RIGHT_ELBOW, KP_RIGHT_WRIST),
+)
 
 REASON_FALL = "possible_fall"
 REASON_STILLNESS = "prolonged_stillness"
@@ -53,6 +64,20 @@ REASON_FORM_ERROR = "form_error"
 #: `form_error` because they call for different things from an instructor:
 #: one is a cue, the other is stop-and-reset.
 REASON_PERSISTENT_FORM = "persistent_form_fault"
+
+# -- nursing / CPR ------------------------------------------------------------
+#
+# Unlike fitness's thresholds, which `docs/VALIDATION.md` records as an
+# unfitted hypothesis, the compression-rate band below is *external*: the AHA
+# publishes 100-120/min for adult CPR, so this scorer is measuring against
+# somebody else's number rather than one invented here. What remains
+# unvalidated is whether a phone camera recovers that rate faithfully, which
+# is a measurement question and is recorded as such.
+
+REASON_CPR_RATE_SLOW = "cpr_rate_slow"
+REASON_CPR_RATE_FAST = "cpr_rate_fast"
+REASON_CPR_ARMS_BENT = "cpr_arms_bent"
+REASON_CPR_ERRATIC = "cpr_cadence_erratic"
 
 
 @dataclass
@@ -108,6 +133,13 @@ class FrameObservation:
     #: shape; a non-fitness use case is expected to define its own
     #: observation type rather than force its data through these fields.
     use_case: str = "fitness"
+    #: Which procedure a nursing station is performing — `"cpr"` today.
+    #: Selects the entry in `_NURSING_PROCEDURES` exactly as `exercise`
+    #: selects a fitness weight profile: nursing is the *use case*, CPR is one
+    #: skill inside it, and collapsing the two would mean a new use case for
+    #: every procedure a ward ever trains. `None` for any other use case, and
+    #: for a nursing station that has not said which procedure it is running.
+    procedure: str | None = None
     #: Opaque, use-case-owned data that isn't one of the fitness fields
     #: above. Fitness observations never set this (it is `{}`); it exists so
     #: a use case with no typed fields of its own yet — welding today — has
@@ -321,6 +353,11 @@ class TrackState:
     #: dispatches to. A track that has never seen an observation defaults to
     #: `"fitness"`, matching `FrameObservation.use_case`'s default.
     use_case: str = "fitness"
+    #: The procedure most recently reported, latest-wins like `last_exercise`
+    #: and for the same reason: a nursing station that switches from bagging
+    #: to compressions should be scored as compressing from the next frame,
+    #: not once a window has refilled.
+    last_procedure: str | None = None
 
     def __post_init__(self) -> None:
         # deque(maxlen=...) cannot be expressed as a field default that depends
@@ -333,6 +370,7 @@ class TrackState:
         self.last_form_error_score = score_form_codes(obs.form_reason_codes, cfg)
         self.last_exercise = obs.exercise
         self.use_case = obs.use_case
+        self.last_procedure = obs.procedure
         self.subject_present = True
         self.session.observe(obs, cfg)
 
@@ -600,6 +638,392 @@ def compute_triage_welding(
     return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
 
 
+# -- nursing: CPR compression quality ----------------------------------------
+#
+# The constants below are properties of the *measurement*, not knobs an
+# instructor tunes -- the same distinction `_HELLO_TIMEOUT_S` draws in
+# `argus.ingest.server`. What a ward might legitimately change (the target
+# band, the window, how bent an elbow is too bent) lives in `ScoringConfig`.
+
+#: Rates we will look for at all. Wider than the AHA target band on purpose:
+#: a trainee compressing at 70/min must be told "70, too slow", not "no signal"
+#: -- those are very different things for an instructor to act on.
+_CPR_SEARCH_MIN_BPM = 50.0
+_CPR_SEARCH_MAX_BPM = 180.0
+
+#: Drift-removal window. Must span several compression periods, or the moving
+#: average subtracts the compressions along with the drift.
+_CPR_TREND_WINDOW_S = 2.0
+
+#: How periodic the wrist must be before we will name a rate, as normalised
+#: autocorrelation at the winning lag. Noise scores near zero. This is what
+#: stops a rescuer standing still from being assigned a plausible-looking rate.
+_CPR_MIN_PERIODICITY = 0.35
+
+#: Smallest wrist excursion, as a fraction of frame height, that counts as a
+#: compression rather than as camera shake.
+_CPR_MIN_AMPLITUDE = 0.005
+
+#: Samples per compression cycle below which a rate cannot be trusted. Nyquist
+#: says two are enough to know an oscillation exists; *locating* its period is
+#: a stronger demand, and below three the octave wins and the reported rate
+#: silently halves. Consequence: resolving 120/min needs >= 6 Hz, so the 5 Hz
+#: `docs/PROTOCOL.md` permits is not enough for CPR.
+_CPR_MIN_SAMPLES_PER_PERIOD = 3.0
+
+#: How close to the best autocorrelation score a *shorter* lag must come before
+#: we prefer it. A periodic signal correlates with itself at every multiple of
+#: its period, so the highest-scoring lag is often twice the true one -- and
+#: reporting 55/min for a real 110/min does not merely miss, it inverts the
+#: verdict an instructor acts on.
+_CPR_OCTAVE_TOLERANCE = 0.85
+
+
+def _cpr_window(history: Iterable[FrameObservation], cfg: ScoringConfig) -> list[FrameObservation]:
+    """The trailing `cpr_window_s` seconds of pose-bearing history.
+
+    Windowed by *timestamp*, not by frame count. A phone streaming at 28 Hz and
+    one throttled to 10 Hz must be judged over the same amount of wall time, or
+    the same trainee scores differently on different hardware.
+    """
+    posed = [
+        o for o in history
+        if o.keypoints_xy is not None and o.keypoints_conf is not None
+    ]
+    if not posed:
+        return []
+    cutoff = posed[-1].ts - cfg.cpr_window_s
+    return [o for o in posed if o.ts >= cutoff]
+
+
+def _better_wrist(window: list[FrameObservation], cfg: ScoringConfig):
+    """(timestamps, y-values) for whichever wrist the camera actually saw.
+
+    A side-on view -- the one that shows compression travel best -- puts one
+    arm behind the other, so one wrist is typically tracked well and the other
+    barely at all. Averaging a tracked wrist with a guessed one turns a good
+    signal into a mediocre one, so the better-tracked side wins outright.
+    """
+    best_ts: list[float] = []
+    best_ys: list[float] = []
+    for idx in (KP_LEFT_WRIST, KP_RIGHT_WRIST):
+        ts = [o.ts for o in window if o.keypoints_conf[idx] >= cfg.keypoint_conf_threshold]
+        ys = [
+            o.keypoints_xy[idx][1]
+            for o in window
+            if o.keypoints_conf[idx] >= cfg.keypoint_conf_threshold
+        ]
+        if len(ts) > len(best_ts):
+            best_ts, best_ys = ts, ys
+    return best_ts, best_ys
+
+
+def _moving_average(xs: list[float], window: int) -> list[float]:
+    if window <= 1:
+        return list(xs)
+    half = window // 2
+    out = []
+    for i in range(len(xs)):
+        lo = max(0, i - half)
+        hi = min(len(xs), i + half + 1)
+        out.append(sum(xs[lo:hi]) / (hi - lo))
+    return out
+
+
+def _parabolic_offset(y_prev: float, y_mid: float, y_next: float) -> float:
+    """Sub-sample position of a peak straddled by three samples.
+
+    Fitting a parabola through the three and taking its vertex is what lets a
+    discrete sample grid resolve a period that falls between two samples.
+    """
+    denom = y_prev - 2.0 * y_mid + y_next
+    if denom == 0:
+        return 0.0
+    offset = 0.5 * (y_prev - y_next) / denom
+    return offset if -1.0 < offset < 1.0 else 0.0
+
+
+def _resample_uniform(ts: list[float], xs: list[float], dt: float):
+    """Interpolate an irregular series onto a uniform grid, which
+    autocorrelation assumes and a network-delivered stream never provides."""
+    if len(ts) < 2:
+        return []
+    n = int((ts[-1] - ts[0]) / dt) + 1
+    if n < 2:
+        return []
+    out, j = [], 0
+    for i in range(n):
+        t = ts[0] + i * dt
+        while j + 2 < len(ts) and ts[j + 1] < t:
+            j += 1
+        span = ts[j + 1] - ts[j]
+        frac = 0.0 if span <= 0 else (t - ts[j]) / span
+        out.append(xs[j] + frac * (xs[j + 1] - xs[j]))
+    return out
+
+
+def _autocorr_rate(xs: list[float], dt: float) -> tuple[float | None, float]:
+    """Compressions per minute by normalised autocorrelation, and how periodic
+    the signal was. The second value is the guard: it is near zero for noise.
+    """
+    n = len(xs)
+    if n < 16:
+        return None, 0.0
+    mean_x = sum(xs) / n
+    centered = [x - mean_x for x in xs]
+    variance = sum(v * v for v in centered) / n
+    if variance <= 0:
+        return None, 0.0
+
+    # Round the fast end up and the slow end down, so every searched lag stays
+    # inside the plausible band; truncating both lets the shortest lag report a
+    # rate faster than the band allows.
+    lo = max(1, math.ceil((60.0 / _CPR_SEARCH_MAX_BPM) / dt))
+    hi = min(n // 2, int((60.0 / _CPR_SEARCH_MIN_BPM) / dt))
+    if hi <= lo:
+        return None, 0.0
+
+    curve = {
+        lag: (sum(centered[i] * centered[i + lag] for i in range(n - lag)) / (n - lag)) / variance
+        for lag in range(lo, hi + 1)
+    }
+    lags = sorted(curve)
+    peak = max(curve.values())
+    if peak <= 0:
+        return None, 0.0
+
+    # Walk up from the shortest lag and take the first local maximum that comes
+    # close to the best: that picks the fundamental over its octave.
+    best_lag = next(
+        (
+            lag
+            for i, lag in enumerate(lags)
+            if 0 < i < len(lags) - 1
+            and curve[lag] >= curve[lags[i - 1]]
+            and curve[lag] >= curve[lags[i + 1]]
+            and curve[lag] >= _CPR_OCTAVE_TOLERANCE * peak
+        ),
+        max(curve, key=lambda k: curve[k]),
+    )
+    strength = curve[best_lag]
+
+    refined = float(best_lag)
+    if lo < best_lag < hi:
+        refined += _parabolic_offset(curve[best_lag - 1], strength, curve[best_lag + 1])
+    if refined <= 0:
+        return None, strength
+    return 60.0 / (refined * dt), strength
+
+
+def _peak_cadence(ts: list[float], wave: list[float], amplitude: float):
+    """Inter-compression regularity, by counting peaks.
+
+    Autocorrelation answers *what rate*; this answers *how steady*, which it
+    cannot. An average of 110/min made of alternating 80s and 140s is not good
+    CPR, and a scorer reporting only the mean would call it perfect.
+    """
+    min_separation = 60.0 / _CPR_SEARCH_MAX_BPM
+    prominence = amplitude * 0.5
+    peaks: list[float] = []
+    for i in range(1, len(wave) - 1):
+        if wave[i] < prominence or wave[i] < wave[i - 1] or wave[i] < wave[i + 1]:
+            continue
+        local_dt = (ts[i + 1] - ts[i - 1]) / 2.0
+        refined = ts[i] + _parabolic_offset(wave[i - 1], wave[i], wave[i + 1]) * local_dt
+        if peaks and refined - peaks[-1] < min_separation:
+            continue
+        peaks.append(refined)
+    if len(peaks) < 3:
+        return None, None
+    intervals = [b - a for a, b in zip(peaks, peaks[1:])]
+    med = median(intervals)
+    if med <= 0:
+        return None, None
+    return 60.0 / med, pstdev(intervals) / med
+
+
+def estimate_compression_rate(window: list[FrameObservation], cfg: ScoringConfig) -> dict:
+    """Compression rate and cadence from a window of pose history.
+
+    Returns a dict rather than a number because the caller needs the evidence
+    behind the answer: `periodicity`, `undersampled` and `agreement` are what
+    decide whether `bpm` should be believed or discarded. A missing `bpm` is
+    the normal, honest outcome for a station that is set up but idle.
+    """
+    ts, ys = _better_wrist(window, cfg)
+    if len(ts) < 8:
+        return {"bpm": None, "reason": "too few tracked wrist samples"}
+
+    span = ts[-1] - ts[0]
+    if span <= 0:
+        return {"bpm": None, "reason": "no elapsed time"}
+    hz = (len(ts) - 1) / span
+    dt = 1.0 / hz
+
+    # The fastest rate this stream can resolve. Above it, a rate is liable to
+    # come back octave-halved -- and told "60/min, too slow" an instructor
+    # would coach a trainee already at the top of the band to go faster still.
+    resolvable_max_bpm = hz * 60.0 / _CPR_MIN_SAMPLES_PER_PERIOD
+    out = {
+        "hz": hz,
+        "resolvable_max_bpm": resolvable_max_bpm,
+        "undersampled": resolvable_max_bpm < cfg.cpr_rate_max_bpm,
+    }
+    if out["undersampled"]:
+        return {**out, "bpm": None, "reason": f"{hz:.1f} Hz cannot resolve the target band"}
+
+    wave = [y - b for y, b in zip(ys, _moving_average(ys, max(3, int(_CPR_TREND_WINDOW_S * hz))))]
+    amplitude = pstdev(wave) if len(wave) > 1 else 0.0
+    out["amplitude"] = amplitude
+    if amplitude < _CPR_MIN_AMPLITUDE:
+        return {**out, "bpm": None, "reason": "the wrist barely moved"}
+
+    resampled = _resample_uniform(ts, wave, dt)
+    bpm, periodicity = _autocorr_rate(resampled, dt) if resampled else (None, 0.0)
+    out["periodicity"] = periodicity
+    if bpm is None or periodicity < _CPR_MIN_PERIODICITY:
+        return {**out, "bpm": None, "reason": "the motion is not periodic"}
+
+    bpm_peaks, cv = _peak_cadence(ts, wave, amplitude)
+    return {
+        **out,
+        "bpm": bpm,
+        "cv": cv,
+        "agreement": None if bpm_peaks is None else abs(bpm - bpm_peaks) / max(bpm, bpm_peaks),
+        "reason": None,
+    }
+
+
+def score_cpr_arms(window: list[FrameObservation], cfg: ScoringConfig) -> tuple[float, bool]:
+    """How far from locked the rescuer's elbows are. 180 degrees is straight.
+
+    Only ever consulted while compressions are actually being detected: an
+    elbow angle measured on somebody kneeling and talking says nothing about
+    their CPR, and scoring it would flag a pause as a fault.
+    """
+    angles = []
+    for obs in window:
+        for s, e, w in ARM_CHAINS:
+            conf = obs.keypoints_conf
+            if min(conf[s], conf[e], conf[w]) < cfg.keypoint_conf_threshold:
+                continue
+            a, b, c = obs.keypoints_xy[s], obs.keypoints_xy[e], obs.keypoints_xy[w]
+            v1 = (a[0] - b[0], a[1] - b[1])
+            v2 = (c[0] - b[0], c[1] - b[1])
+            n1, n2 = math.hypot(*v1), math.hypot(*v2)
+            if n1 == 0 or n2 == 0:
+                continue
+            cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (n1 * n2)
+            angles.append(math.degrees(math.acos(max(-1.0, min(1.0, cos)))))
+
+    if not angles:
+        return 0.0, False
+    angle = median(angles)
+    deficit = max(0.0, cfg.cpr_min_elbow_angle_deg - angle)
+    headroom = max(1.0, 180.0 - cfg.cpr_min_elbow_angle_deg)
+    return min(1.0, deficit / headroom), deficit > 0.0
+
+
+def compute_triage_cpr(
+    trainee_id: str,
+    track: TrackState,
+    ts: float,
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> TriageRecord:
+    """Score CPR chest compressions against the AHA's published targets.
+
+    Deliberately scores only what a phone camera can honestly measure. **Depth
+    and hand placement are out of scope**: recovering a 5-6 cm chest travel
+    from an uncalibrated monocular camera needs a scale reference the frame
+    does not contain, and a published feasibility study using the same class of
+    pose model found frequency agreed closely with an instrumented manikin
+    while depth was "overall not accurate". Reporting a depth number anyway
+    would be the one failure this scorer cannot afford -- see
+    `docs/VALIDATION.md`.
+
+    The worst single fault sets the score, rather than a weighted sum. Each
+    fault here is independently a reason to send someone: averaging would let a
+    dangerously slow rate be diluted by well-locked elbows, and an instructor
+    reading "0.4" would not know which half of it to act on.
+    """
+    if not track.subject_present:
+        return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+
+    window = _cpr_window(track.history, cfg)
+    rate = estimate_compression_rate(window, cfg)
+    bpm = rate.get("bpm")
+
+    # No compressions detected is not a fault. A station set up before the
+    # trainee starts, or paused between cycles, is the normal case; asserting
+    # about it would put every idle nursing station on the instructor's queue.
+    if bpm is None:
+        return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+
+    reasons: list[str] = []
+    scores = [0.0]
+
+    if bpm < cfg.cpr_rate_min_bpm:
+        reasons.append(REASON_CPR_RATE_SLOW)
+        scores.append(min(1.0, (cfg.cpr_rate_min_bpm - bpm) / cfg.cpr_rate_full_deviation_bpm))
+    elif bpm > cfg.cpr_rate_max_bpm:
+        reasons.append(REASON_CPR_RATE_FAST)
+        scores.append(min(1.0, (bpm - cfg.cpr_rate_max_bpm) / cfg.cpr_rate_full_deviation_bpm))
+
+    cv = rate.get("cv")
+    if cv is not None and cv > cfg.cpr_cadence_cv_threshold:
+        reasons.append(REASON_CPR_ERRATIC)
+        scores.append(min(1.0, cv / cfg.cpr_cadence_cv_threshold - 1.0))
+
+    arms, arms_bent = score_cpr_arms(window, cfg)
+    if arms_bent:
+        reasons.append(REASON_CPR_ARMS_BENT)
+        scores.append(arms)
+
+    return TriageRecord(
+        trainee_id=trainee_id,
+        score=round(max(scores), 4),
+        reason_codes=tuple(reasons),
+        ts=ts,
+    )
+
+
+#: Procedures a nursing station can be scored for. CPR is the one that is
+#: built; a ward's other trained skills (bagging, recovery position, transfers)
+#: each add an entry here rather than a whole use case of their own.
+_NURSING_PROCEDURES: dict[
+    str, Callable[[str, TrackState, float, ScoringConfig, float | None], TriageRecord]
+] = {
+    "cpr": compute_triage_cpr,
+}
+
+
+def known_procedures() -> frozenset[str]:
+    """Every nursing procedure this build can score."""
+    return frozenset(_NURSING_PROCEDURES)
+
+
+def compute_triage_nursing(
+    trainee_id: str,
+    track: TrackState,
+    ts: float,
+    cfg: ScoringConfig,
+    reference_angle_deg: float | None = None,
+) -> TriageRecord:
+    """Dispatch to the scorer for whichever procedure this station is running.
+
+    A nursing station that has not named a procedure, or names one this build
+    does not implement, scores a flat 0.0 rather than being forced through
+    CPR's scorer -- the same posture as `compute_triage_welding`. Watching a
+    trainee do one thing and grading them at another is worse than not grading
+    them, because it looks like a measurement.
+    """
+    scorer = _NURSING_PROCEDURES.get(track.last_procedure or "")
+    if scorer is None:
+        return TriageRecord(trainee_id=trainee_id, score=0.0, reason_codes=(), ts=ts)
+    return scorer(trainee_id, track, ts, cfg, reference_angle_deg)
+
+
 #: Every use case this server can score a `TrackState` for. A new use case's
 #: scorer is added here rather than by branching inside `compute_triage_
 #: fitness`, whose five features (`fall`, `stillness`, `occlusion`,
@@ -609,8 +1033,32 @@ _SCORERS: dict[
     str, Callable[[str, TrackState, float, ScoringConfig, float | None], TriageRecord]
 ] = {
     "fitness": compute_triage_fitness,
+    "nursing": compute_triage_nursing,
     "welding": compute_triage_welding,
 }
+
+
+#: History a nursing track keeps, in frames. Far longer than fitness's ~2s
+#: window, because a compression rate cannot be read off one second of wrist —
+#: at 100/min that is a single cycle, and at the 28 Hz a phone actually
+#: delivers, `[scoring] history_len`'s 30 frames *is* one second. Sized
+#: generously in frames and then windowed by timestamp in `_cpr_window`, so the
+#: buffer holds enough at any plausible frame rate (512 frames is ~17s at
+#: 30 Hz) while the scorer still judges a fixed amount of wall time. The cost
+#: is 512 small dataclasses per station, which is nothing against the cost of
+#: measuring a rhythm through a window shorter than the rhythm.
+NURSING_HISTORY_LEN = 512
+
+
+def history_len_for(use_case: str, cfg: ScoringConfig) -> int:
+    """How many frames of history a track for `use_case` should keep.
+
+    `[scoring] history_len` is tuned for fitness's five features, which read a
+    posture over ~2 seconds. A use case whose evidence is a *rhythm* needs
+    materially more history, and scoring CPR on a 30-frame buffer would look
+    like it was working while measuring nothing at all.
+    """
+    return NURSING_HISTORY_LEN if use_case == "nursing" else cfg.history_len
 
 
 def known_use_cases() -> frozenset[str]:

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The nursing station's screen.
+
+  Deliberately narrower than activity_main.xml: there is no exercise picker, no
+  rep counter and no detector-threshold slider, because a nursing station is
+  scored on the laptop from the movement itself rather than on anything the
+  phone classifies. What it adds is the compression readout, which is the one
+  number a rescuer can act on while their hands are busy.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface">
+
+    <androidx.camera.view.PreviewView
+        android:id="@+id/preview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <com.argus.edge.DetectionOverlayView
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <LinearLayout
+        android:id="@+id/statusChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_chip"
+        android:paddingStart="14dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="9dp"
+        android:paddingBottom="9dp">
+
+        <View
+            android:id="@+id/stateDot"
+            android:layout_width="10dp"
+            android:layout_height="10dp"
+            android:layout_marginEnd="9dp"/>
+
+        <TextView
+            android:id="@+id/stateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/on_surface"
+            android:textSize="14sp"/>
+    </LinearLayout>
+
+    <!--
+      The rate the phone believes it is seeing. Shown here as well as on the
+      instructor's console because a rescuer cannot read a laptop across the
+      room, and rate is the one CPR metric that is actionable in the moment.
+      It is advisory: the laptop's scorer is the authority, and this is a
+      local echo of the same measurement.
+    -->
+    <TextView
+        android:id="@+id/rateReadout"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="12dp"
+        android:layout_marginEnd="12dp"
+        android:background="@drawable/bg_panel"
+        android:paddingStart="18dp"
+        android:paddingEnd="18dp"
+        android:paddingTop="10dp"
+        android:paddingBottom="10dp"
+        android:textColor="@color/on_surface"
+        android:textSize="26sp"
+        android:fontFamily="monospace"/>
+
+    <TextView
+        android:id="@+id/debugPanel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|start"
+        android:background="@drawable/bg_panel"
+        android:padding="12dp"
+        android:textColor="@color/on_surface_dim"
+        android:fontFamily="monospace"
+        android:textSize="11sp"
+        android:lineSpacingExtra="2dp"
+        android:visibility="gone"/>
+
+    <LinearLayout
+        android:id="@+id/bottomBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:text="@string/nursing_start"/>
+
+        <Button
+            android:id="@+id/connect"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="10dp"
+            android:text="@string/nursing_connect"/>
+
+        <Button
+            android:id="@+id/debug"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/nursing_debug"/>
+    </LinearLayout>
+</FrameLayout>

@@ -124,17 +124,22 @@ def test_session_use_case_defaults_to_fitness(tmp_path):
     assert cfg.session.use_case == "fitness"
 
 
-def test_session_use_case_accepts_a_known_use_case(tmp_path):
-    body = MINIMAL + '\n[session]\nuse_case = "welding"\n'
+@pytest.mark.parametrize("use_case", ["welding", "nursing"])
+def test_session_use_case_accepts_a_known_use_case(tmp_path, use_case):
+    body = MINIMAL + f'\n[session]\nuse_case = "{use_case}"\n'
     cfg = load_config(_write(tmp_path, body))
-    assert cfg.session.use_case == "welding"
+    assert cfg.session.use_case == use_case
 
 
 def test_session_use_case_rejects_one_no_scorer_implements(tmp_path):
     """A typo, or a use case that sounds plausible but was never wired up,
     fails at startup rather than accepting every phone's hello and never
-    scoring any of them."""
-    body = MINIMAL + '\n[session]\nuse_case = "nursing"\n'
+    scoring any of them.
+
+    `"lab"` is deliberate: the phone's dashboard already offers it as a tile,
+    so it is exactly the kind of plausible-but-unwired name an operator would
+    reach for."""
+    body = MINIMAL + '\n[session]\nuse_case = "lab"\n'
     with pytest.raises(ConfigError, match="not implemented"):
         load_config(_write(tmp_path, body))
 

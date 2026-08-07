@@ -106,13 +106,41 @@ def main() -> int:
                 "form_reason_codes": ["hips_sagging"],
             },
         },
+        {
+            "name": "hello_nursing",
+            "why": "a nursing station must declare its use case, because the "
+                   "laptop refuses a hello that does not match [session] "
+                   "use_case — the check that stops a phone streaming to a "
+                   "scorer that will never fire",
+            "session_use_case": "nursing",
+            "message": {
+                "type": "hello", "protocol_version": version,
+                "station_id": "bay-2", "trainee_id": "phoneC3D4",
+                "use_case": "nursing",
+            },
+        },
+        {
+            "name": "observation_nursing_cpr",
+            "why": "nursing carries pose plus a procedure, and none of "
+                   "fitness's exercise/rep/form fields: its faults are derived "
+                   "on the laptop from the movement, not classified on the phone",
+            "message": {
+                "type": "observation", "use_case": "nursing",
+                "procedure": "cpr", "ts": 1730649602.5,
+                "bbox_xyxy": [0.35, 0.25, 0.70, 0.95],
+                "keypoints_xy": [[0.5, 0.3 + 0.02 * i] for i in range(17)],
+                "keypoints_conf": [0.9] * 17,
+            },
+        },
     ]
 
-    # Prove every valid message parses, right here at generation time.
+    # Prove every valid message parses, right here at generation time. A vector
+    # may name the session use case its message expects to be admitted to;
+    # absent, it is fitness, which is what every vector predating the field is.
     for case in valid:
         msg = case["message"]
         if msg["type"] == "hello":
-            parse_hello(msg, version)
+            parse_hello(msg, version, session_use_case=case.get("session_use_case", "fitness"))
         else:
             parse_observation(msg, vocab)
 

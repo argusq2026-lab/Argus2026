@@ -29,6 +29,17 @@ const val NUM_KEYPOINTS = 17
 class ProtocolException(message: String) : IllegalArgumentException(message)
 
 /**
+ * The use cases this app can stream. A laptop refuses a `hello` whose use case
+ * is not the one its session is set to, so this is not a cosmetic label — it
+ * decides whether the station is admitted at all. See docs/PROTOCOL.md.
+ */
+const val USE_CASE_FITNESS = "fitness"
+const val USE_CASE_NURSING = "nursing"
+
+/** The one nursing procedure the laptop can score today. */
+const val PROCEDURE_CPR = "cpr"
+
+/**
  * One observation, in the protocol's normalized coordinate space.
  *
  * `bboxNorm` and every keypoint are fractions of the phone's own frame in
@@ -45,6 +56,13 @@ data class Observation(
     val bboxNorm: List<Double>,          // [x0, y0, x1, y1]
     val keypointsXy: List<List<Double>> = List(NUM_KEYPOINTS) { listOf(0.0, 0.0) },
     val keypointsConf: List<Double> = List(NUM_KEYPOINTS) { 0.0 },
+    /**
+     * Which use case this station is running. Selects the parser *and* the
+     * scorer on the laptop, so it decides what the rest of this object means.
+     */
+    val useCase: String = USE_CASE_FITNESS,
+    /** Nursing's counterpart to [exercise] — "cpr". Null for other use cases. */
+    val procedure: String? = null,
     val exercise: String? = null,
     val repCount: Int? = null,
     val formOk: Boolean? = null,
@@ -52,6 +70,21 @@ data class Observation(
 ) {
     init {
         if (!ts.isFinite()) throw ProtocolException("ts must be finite")
+        // Fitness's fields are fitness's. A nursing observation carrying a rep
+        // count or a form code would be sending a vocabulary its own parser
+        // does not read, and the laptop would silently drop it -- so it is
+        // refused here, where the mistake is visible, rather than on the wire.
+        if (useCase != USE_CASE_FITNESS) {
+            if (exercise != null || repCount != null || formOk != null || formReasonCodes.isNotEmpty()) {
+                throw ProtocolException(
+                    "exercise/rep_count/form_ok/form_reason_codes belong to fitness; " +
+                        "use_case '$useCase' must not set them"
+                )
+            }
+        }
+        if (procedure != null && useCase != USE_CASE_NURSING) {
+            throw ProtocolException("procedure is nursing's field, not '$useCase'")
+        }
         if (bboxNorm.size != 4 || bboxNorm.any { !it.isFinite() || it < 0.0 || it > 1.0 }) {
             throw ProtocolException("bbox_xyxy must be 4 normalized values in [0, 1], got $bboxNorm")
         }
@@ -75,6 +108,8 @@ data class Observation(
         fun fromDetection(
             ts: Double, det: Detection, pose: PoseResult?,
             frameWidth: Int, frameHeight: Int,
+            useCase: String = USE_CASE_FITNESS,
+            procedure: String? = null,
         ): Observation {
             val w = frameWidth.toDouble()
             val h = frameHeight.toDouble()
@@ -98,6 +133,8 @@ data class Observation(
                 ),
                 keypointsXy = keypointsXy,
                 keypointsConf = keypointsConf,
+                useCase = useCase,
+                procedure = procedure,
             )
         }
     }
@@ -116,6 +153,16 @@ fun encodeHello(
      * instructor who is not watching them.
      */
     sessionName: String = "",
+    /**
+     * What this station is running. The laptop rejects a `hello` that does not
+     * match its own `[session] use_case`, which is the check that stops a
+     * fitness phone being admitted onto a nursing floor and scored by nothing.
+     *
+     * Omitted from the message when it is fitness: a server that predates the
+     * field defaults an absent `use_case` to fitness anyway, so leaving it out
+     * keeps the fitness handshake byte-identical to what shipped.
+     */
+    useCase: String = USE_CASE_FITNESS,
 ): String {
     if (stationId.isEmpty()) throw ProtocolException("station_id must not be empty")
     if (traineeId.isEmpty()) throw ProtocolException("trainee_id must not be empty")
@@ -127,6 +174,7 @@ fun encodeHello(
     if (exercisePlan.isNotEmpty()) obj.put("exercise_plan", exercisePlan)
     if (displayName.isNotEmpty()) obj.put("display_name", displayName)
     if (sessionName.isNotEmpty()) obj.put("session_name", sessionName)
+    if (useCase != USE_CASE_FITNESS) obj.put("use_case", useCase)
     return obj.toString()
 }
 
@@ -147,6 +195,10 @@ fun encodeObservation(obs: Observation): String {
         .put("bbox_xyxy", JSONArray(obs.bboxNorm))
         .put("keypoints_xy", JSONArray(obs.keypointsXy.map { JSONArray(it) }))
         .put("keypoints_conf", JSONArray(obs.keypointsConf))
+    // Same reasoning as `encodeHello`: omitted when fitness, so the shape that
+    // shipped stays exactly as it was.
+    if (obs.useCase != USE_CASE_FITNESS) obj.put("use_case", obs.useCase)
+    obs.procedure?.let { obj.put("procedure", it) }
     obs.exercise?.let { obj.put("exercise", it) }
     obs.repCount?.let { obj.put("rep_count", it) }
     obs.formOk?.let { obj.put("form_ok", it) }

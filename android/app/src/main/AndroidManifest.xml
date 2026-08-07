@@ -40,6 +40,14 @@
           configChanges keeps the process alive and routes rotation to
           onConfigurationChanged, which only has to retarget the camera.
         -->
+        <!-- The nursing station. A separate Activity rather than a mode inside
+             MainActivity: that screen is fitness's, and the two share classes
+             rather than a file. Same configChanges for the same reason. -->
+        <activity
+            android:name=".NursingActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="false"
