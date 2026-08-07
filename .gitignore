@@ -47,7 +47,15 @@ android/local.properties
 *.pt
 *.pth
 *.tflite
-yolo*.onnx
+*.onnx
+
+# `argus fetch-models` writes here by default ([models] dir in the config), so
+# on a checkout the exports land in the repo root -- along with the multi-GB
+# toolchain venv it builds under .toolchain/. Naming the directory, and not
+# just the file patterns, is the belt to that braces: a weight whose name the
+# patterns above do not anticipate is still not one `git add -A` from being
+# published.
+argus-models/
 
 # Release signing. The keystore IS the app's identity -- anyone holding it can
 # publish updates installed phones will accept -- so it and its passwords stay

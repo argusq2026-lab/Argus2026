@@ -136,8 +136,16 @@ def print_recipe(manifest: dict) -> None:
 
 
 def find_python() -> str | None:
-    """A real Python on this machine — the frozen binary is not one."""
-    for candidate in ("python3", "python"):
+    """A real Python on this machine — the frozen binary is not one.
+
+    Versioned names are tried before the bare ones, newest first, because
+    the bare name is the one most likely to be an OS-vendored antique: on
+    macOS `python3` is 3.9 while a perfectly good `python3.12` sits beside
+    it, and a search that only asked for `python3` would report "no Python"
+    on a machine that has one. Found on exactly such a machine.
+    """
+    for candidate in ("python3.13", "python3.12", "python3.11", "python3.10",
+                      "python3", "python"):
         found = shutil.which(candidate)
         if not found:
             continue
