@@ -118,7 +118,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l assets/
+          # Release notes = the checked-in first-time install guide, then the
+          # auto-generated changelog. Concatenated by hand because gh cannot
+          # combine --generate-notes with custom text in one call.
+          cp .github/release-notes-header.md notes.md
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq .body >> notes.md || true
+          # Upsert: re-pushing a tag (e.g. to fix these very notes) must
+          # replace the release rather than fail on "already exists".
+          gh release delete "$GITHUB_REF_NAME" --yes || true
           gh release create "$GITHUB_REF_NAME" \
             --title "Argus $GITHUB_REF_NAME" \
-            --generate-notes \
+            --notes-file notes.md \
             assets/*
