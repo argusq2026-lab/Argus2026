@@ -8,6 +8,15 @@ server's code either way. `demo/replay_client.py` is a small reference
 implementation of the client side of exactly this protocol, in Python; read
 it alongside this document.
 
+**One protocol, several use cases.** The handshake, discovery, admission,
+idle, reconnection and versioning rules below are shared by every station
+whatever it is watching. The *body* of an `observation` is not: `use_case`
+selects which parser reads it, so fitness, nursing and welding each have their
+own message shape rather than one shape with most fields null. See
+[`use_case` selects the payload](#use_case-selects-the-payload) for the three
+that exist today, and
+[`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md) for adding a fourth.
+
 Everything here is enforced by `argus.ingest.protocol` and covered by
 `tests/test_ingest_protocol.py` and `tests/test_ingest_server.py` — if this
 document and that code ever disagree, the code is what actually runs, and
@@ -44,7 +53,7 @@ The server broadcasts one UDP datagram to port `discovery.port` (default
   "type": "argus_beacon",
   "protocol_version": 1,
   "ws_url": "ws://10.73.51.76:8765",
-  "session_name": "Coach Riley — 6pm HIIT",
+  "session_name": "Bay 2 — Tuesday cert",
   "approval": "manual",
   "use_case": "welding"
 }
@@ -143,7 +152,7 @@ before admission existed.
 ```json
 {
   "type": "join_pending",
-  "session_name": "Coach Riley — 6pm HIIT",
+  "session_name": "Coach Riley — 6pm class",
   "request_id": "join-1",
   "timeout_s": 120.0
 }
@@ -154,7 +163,7 @@ console. Exactly one of these follows, and one always does:
 
 | Then | Meaning |
 |---|---|
-| `hello_ack` | Approved. Stream observations as normal. |
+| `hello_ack` | Approved. Stream observations as normal — in your own use case's shape. |
 | `error` — "the instructor declined this join request" | Refused by a human. |
 | `error` — "no instructor answered…" | `timeout_s` elapsed with nobody deciding. |
 | `error` — "a newer join request… replaced this one" | The same `trainee_id` asked again, almost always this phone reconnecting. The newer request is the live one. |
@@ -285,15 +294,20 @@ before sending — the server does no remapping of its own.
 
 ### `use_case` selects the payload
 
-Every phone in the field today predates this field, and every one of them is
-running fitness, so omitting it means `"fitness"` — no existing client needs
-to change. It exists for the mobile app's other, not-yet-built stations
-(welding, nursing, ...): each gets its own message body and its own scorer,
+Every phone in the field when this field was introduced was running fitness,
+so omitting it means `"fitness"` — no existing client needed to change. It
+exists so that each domain gets **its own message body and its own scorer**,
 selected by this one field, rather than a growing set of optional fields
 bolted onto the fitness shape above. Concretely, `argus.ingest.protocol`
 looks `use_case` up in a small registry of parsers and `argus.triage` looks
 it up in a registry of scorers; adding a use case means adding one parser and
-one scorer, not touching fitness's.
+one scorer, not touching fitness's. The full runbook is
+[`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md).
+
+Fitness is the use case built out furthest — five scoring features, per-exercise
+weight profiles, three on-device form classifiers — and everything above this
+section that is not marked otherwise describes it. That is a matter of how much
+work has gone into it, not of it being the protocol's real subject.
 
 Sending a `use_case` this server has no parser for is rejected the same way
 an unrecognised `form_reason_codes` entry is: an `error` message, then the

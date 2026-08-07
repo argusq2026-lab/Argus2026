@@ -481,11 +481,12 @@ async function onUseCaseChange(event) {
 
 // -- drawing ---------------------------------------------------------------
 //
-// `RENDERERS` is where a future use case's own visualization plugs in --
+// `RENDERERS` is where a use case's own visualization plugs in --
 // `station.use_case` selects it, so drawing a torch angle or a checklist step
-// is a new entry here, not a branch inside `renderFitness`. Today "fitness"
-// is the only entry; anything else falls back to it, which is safe because
-// `renderFitness` already draws nothing for a station with no `keypoints_xy`.
+// is a new entry here, not a branch inside `renderFitness`. See the map below
+// for the three registered today. An *unregistered* use case falls back to
+// `renderFitness`, which is safe because it already draws nothing for a
+// station with no `keypoints_xy`.
 
 function renderFitness(canvas, station, faded) {
   const box = canvas.getBoundingClientRect();
