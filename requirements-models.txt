@@ -1,0 +1,33 @@
+# Model-export dependencies. NOT needed to run the laptop server, and NOT
+# needed to build the Android app -- only to reproduce the ONNX artifacts the
+# phone's perception stack runs.
+#
+#   pip install -r requirements-models.txt
+#   python scripts/fetch_edge_models.py --out models/edge
+#   cd android && ./stage.sh --models ../models/edge      # see SETUP.md 2.4
+#
+# The models are not committed: each carries its own licence, one of them is
+# AGPL-3.0, and this repository is public and MIT. The recipe is committed
+# instead, and it is a complete one -- these exports are byte-identical across
+# runs at the versions below, which `fetch_edge_models.py` verifies against the
+# sha256s recorded in android/models.json. Those pins and these must agree; the
+# fetch script warns loudly when the installed versions have drifted.
+#
+# NOTE: `ultralytics` is AGPL-3.0, and so are the YOLO26 pose weights it
+# fetches. Exporting and demoing triggers nothing; distributing an application
+# built on them is a licensing decision -- read THIRD-PARTY-NOTICES.md first.
+#
+# No Qualcomm AI Hub account is required for any of this. `qai-hub` is listed
+# only because `qai_hub_models` imports it; the optional
+# `fetch_edge_models.py --aihub-job` path is the sole thing an account buys,
+# and AI Hub jobs are scoped to the account that created them anyway.
+#
+# Install size is large (torch alone is over a gigabyte). This file exists so
+# that weight stays out of requirements.txt, where it would also defeat the CI
+# job asserting the scorer imports no ML runtime.
+
+torch==2.11.0
+onnx==1.18.0
+qai-hub==0.54.0
+qai-hub-models==0.59.0
+ultralytics==8.4.115

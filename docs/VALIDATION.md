@@ -6,9 +6,23 @@ why it matters, and what closing it would take. Nothing here is a known bug
 
 Ordered by how much a wrong assumption would cost.
 
+Some gaps belong to a use case and some to the engine underneath it, which is
+worth keeping straight when reading — a fitness classifier's weakness says
+nothing about the ingest path, and vice versa:
+
+| | Sections |
+|---|---|
+| **Fitness** — on-device form classifiers and the five scoring weights | §1b, §1c, §1d, §2, §6 |
+| **Nursing** — the CPR criteria and whether a phone recovers them | §2b |
+| **Welding** | none — it scores nothing and claims nothing (`docs/ADDING_A_USE_CASE.md` §4) |
+| **The engine** — phone app, transport, clocks, capacity | §1, §3, §4, §5 |
+
+A new use case is expected to add its own section here before it is demoed;
+see [`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md) step 10.
+
 ---
 
-## 1. The phone app exists and runs, but has never seen a real trainee
+## 1. The phone app exists and runs, but has never seen a real subject
 
 **Status:** blocking for any claim about a real floor; no longer blocking for
 "does the wire contract work at all", which is now closed.
@@ -19,8 +33,12 @@ detection + COCO-17 pose) on the Hexagon NPU, three form classifiers
 (`FormClassifier.kt`: plank, bicep, lunge), two geometric fault checks
 (`GeometricFormChecks.kt`: `loose_upper_arm`, `knee_angle_out_of_range`), and
 rep counting (`RepCounter.kt`: bicep, lunge). `DashboardActivity` is the
-launcher; Fitness opens the camera/triage screen the rest of this list
-describes. All of it has been built, installed, and run on a real device
+launcher; Fitness opens `MainActivity`, the camera/triage screen the rest of
+this section describes, and Nursing opens `NursingActivity` — the same
+detection and pose with no phone-side classifier, covered separately in §2b.
+Lab and Welding are placeholders and claim nothing.
+
+Everything named above has been built, installed, and run on a real device
 (Galaxy S25 Ultra) against a real running laptop server, both over USB
 (`adb reverse`) and over LAN Wi-Fi, streaming real camera frames through
 detection, pose, classification, and the WebSocket ingest protocol into a

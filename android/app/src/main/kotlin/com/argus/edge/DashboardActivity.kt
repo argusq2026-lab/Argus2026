@@ -10,11 +10,11 @@ import androidx.core.content.ContextCompat
 
 /**
  * The app's launcher screen: one tile per domain this triage engine could
- * watch. Fitness is the one that is actually built -- it opens [MainActivity]
- * unchanged. The others exist to say where this is headed, honestly, rather
- * than to pretend they already work: tapping one explains exactly what it
- * would take (see `coming_soon_body`), the same gap `docs/ADDING_AN_EXERCISE.md`
- * already documents for fitness's own exercises.
+ * watch. Two are built -- Fitness opens [MainActivity] and Nursing opens
+ * [NursingActivity], each the station screen for its own `use_case` on the
+ * wire. The rest exist to say where this is headed, honestly, rather than to
+ * pretend they already work: tapping one explains exactly what it would take
+ * (see `coming_soon_body`), which `docs/ADDING_A_USE_CASE.md` sets out in full.
  *
  * Deliberately a second plain Activity, not a Fragment or a Navigation-Component
  * destination: the app had zero navigation infrastructure before this, and a
