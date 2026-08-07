@@ -1,0 +1,124 @@
+# Build and publish a GitHub Release when a version tag is pushed.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# This exists in CI rather than as a local script for two reasons that cannot
+# be worked around on a laptop. The instructor-side binary is PyInstaller,
+# which does not cross-compile — a Windows or Linux binary can only come from
+# a Windows or Linux machine, which the runner matrix below is. And creating
+# the Release itself needs repository credentials, which the workflow's own
+# GITHUB_TOKEN provides without anyone's personal token entering the repo.
+#
+# APK signing is optional and off by default. If the four ANDROID_SIGNING_*
+# secrets are set (Settings -> Secrets and variables -> Actions), the APK is
+# signed with the real release identity; if they are absent the build still
+# succeeds and ships app-release-unsigned.apk, clearly named as such. That
+# mirrors the local build: a missing keystore degrades to unsigned, never to
+# a quietly wrong key. To set the secrets from the keystore the repo's owner
+# generated locally:
+#
+#   base64 -i android/keystore/argus-release.jks | pbcopy
+#     -> ANDROID_SIGNING_KEYSTORE_BASE64
+#   plus ANDROID_SIGNING_STORE_PASSWORD / _KEY_ALIAS / _KEY_PASSWORD
+#     from android/keystore.properties
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # the release job creates the Release and uploads assets
+
+jobs:
+  apk:
+    name: android apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Restore the signing identity, when the secrets exist
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_SIGNING_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_SIGNING_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_SIGNING_KEY_ALIAS }}
+          KEY_PW: ${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            mkdir -p android/keystore
+            echo "$KEYSTORE_B64" | base64 -d > android/keystore/argus-release.jks
+            {
+              echo "storeFile=keystore/argus-release.jks"
+              echo "storePassword=$STORE_PW"
+              echo "keyAlias=$KEY_ALIAS"
+              echo "keyPassword=$KEY_PW"
+            } > android/keystore.properties
+            echo "signing: release keystore restored from secrets"
+          else
+            echo "signing: no secrets — building unsigned (see workflow header)"
+          fi
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Collect the APK under its honest name
+        run: |
+          mkdir -p out
+          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk out/argus-edge.apk
+          else
+            cp android/app/build/outputs/apk/release/app-release-unsigned.apk out/argus-edge-unsigned.apk
+          fi
+      - uses: actions/upload-artifact@v4
+        with: { name: apk, path: out/ }
+
+  binaries:
+    name: instructor binary (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,  label: linux-x64,   built: dist/argus,     asset: argus-linux-x64 }
+          - { os: windows-latest, label: windows-x64, built: dist/argus.exe, asset: argus-windows-x64.exe }
+          - { os: macos-latest,   label: macos-arm64, built: dist/argus,     asset: argus-macos-arm64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: Build the standalone binary (self-check included)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[build]"
+          python scripts/build_binary.py
+        shell: bash
+      - name: Rename per platform
+        run: |
+          mkdir -p out
+          cp "${{ matrix.built }}" "out/${{ matrix.asset }}"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with: { name: "binary-${{ matrix.label }}", path: out/ }
+
+  release:
+    name: publish release
+    needs: [apk, binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4   # gh needs a repo context
+      - uses: actions/download-artifact@v4
+        with: { path: assets, merge-multiple: true }
+      - name: Create the Release with every artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l assets/
+          gh release create "$GITHUB_REF_NAME" \
+            --title "Argus $GITHUB_REF_NAME" \
+            --generate-notes \
+            assets/*

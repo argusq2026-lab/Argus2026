@@ -15,6 +15,6 @@ phone's own camera pipeline in the first place.
 from argus.config import ArgusConfig, ConfigError, load_config
 from argus.triage import TriageRecord
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = ["ArgusConfig", "ConfigError", "load_config", "TriageRecord", "__version__"]

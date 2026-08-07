@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import tempfile
 import subprocess
 import sys
 from pathlib import Path
@@ -89,7 +90,10 @@ def check(binary: Path) -> None:
     and running from the repo root would hide it, because the config and the
     fixtures would be found on disk regardless of what got bundled.
     """
-    elsewhere = Path(os.environ.get("TMPDIR", "/tmp"))
+    # tempfile, not a hardcoded /tmp: this also runs on the Windows CI runner,
+    # where /tmp does not exist and a nonexistent cwd fails the subprocess
+    # before the binary gets a chance to prove anything.
+    elsewhere = Path(tempfile.gettempdir())
     env = {k: v for k, v in os.environ.items() if k not in ("PYTHONPATH", "PYTHONHOME")}
 
     for args, must_contain in (
