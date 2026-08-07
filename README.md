@@ -1,13 +1,25 @@
 # Argus — many eyes, one mind
 
-Argus watches a HIIT floor through one phone per trainee and produces a
-**deterministic, explainable triage rank** of who needs a human instructor
-right now.
+One instructor cannot watch twelve people at once. That is the whole problem:
+wherever trainees outnumber the person responsible for them — a gym floor, a
+nursing skills lab, a welding shop — the instructor's attention is the scarce
+resource, and whoever is quietly struggling in the corner is exactly who does
+not get it.
 
-Each phone runs its own on-device pose model and form/exercise classifier and
-streams the numeric result to a laptop over WebSocket — no video ever leaves
-the phone. The laptop ranks every connected trainee with a pure, auditable
-scorer and gives the trainer a live view.
+Argus is a triage system for that attention. One phone watches each trainee,
+runs perception on its own NPU, and streams a numeric observation to a
+laptop; the laptop scores every station with a **deterministic, explainable
+scorer** and answers one question on the instructor's console: **who needs a
+human right now, and why.** No video ever leaves any phone.
+
+What "needs a human" means is per use case, not hardcoded: the same
+pipeline dispatches on what a floor is running. Fitness is the first fully
+built instance — pose triage plus on-device form classifiers for plank,
+bicep curl, and lunge. Nursing is the second: a CPR station scored against
+the published 100–120/min compression band, that refuses to report a rate
+its camera cannot resolve. Welding is a wired-through placeholder that
+connects, streams, and deliberately asserts nothing until it has a
+classifier — a station that claims nothing beats one that guesses.
 
 > **Scope: this is a hackathon build.** It is a working system, not a shipped
 > product — the engineering is real and the measurements are real, but three
@@ -29,10 +41,11 @@ checked by [`tests/test_privacy.py`](tests/test_privacy.py), not by a runtime
 redaction filter the next contributor could forget.
 
 The Android phone app lives in [`android/`](android/) in this same
-repository — a dashboard front door (Fitness is real; Nursing/Lab/Welding are
-named placeholders for the same engine applied elsewhere) opens a screen that
-runs detection, pose, and form classification on the phone's own NPU, and
-streams the result to this server. See [`android/README.md`](android/README.md)
+repository — a dashboard front door opens the station for a floor's use case
+(Fitness and Nursing are real screens; Lab and Welding are named
+placeholders), which runs detection, pose, and — per use case — form
+classification or CPR cadence on the phone's own NPU, and streams the
+numeric result to this server. See [`android/README.md`](android/README.md)
 for what it runs and [`docs/PROTOCOL.md`](docs/PROTOCOL.md) for the exact wire
 contract it implements. [`demo/replay_client.py`](demo/replay_client.py) is a
 reference client that stands in for a real phone when developing the laptop
@@ -141,6 +154,29 @@ handshake — see `docs/PROTOCOL.md`).
 
 Flags override config; config never overrides flags. `argus config` shows
 what a run is actually tuned with.
+
+---
+
+## One problem, many floors
+
+The engine is use-case-agnostic on purpose: `[session] use_case` names what a
+floor is running, the beacon advertises it, a phone whose `hello` disagrees is
+refused at the handshake (not admitted and scored by nothing), and the scorer
+dispatches to that use case's own definition of "needs a human". Adding a
+floor type is a scorer and a config section, not a fork.
+
+| Use case | Station watches for | Status |
+|---|---|---|
+| **Fitness** | falls, prolonged stillness, occlusion, turned-away trainees, and per-exercise form faults (plank / bicep curl / lunge, classified on-device) | Built end to end; weights unfitted to real incidents ([VALIDATION.md](docs/VALIDATION.md)) |
+| **Nursing** | CPR compression cadence against the published 100–120/min band, with locked-elbow and rhythm-consistency checks; `procedure` selects the skill the way `exercise` selects a fitness profile | Built; thresholds beyond the published band are unfitted priors. Depth is deliberately **not** measured — a monocular uncalibrated camera cannot resolve it, and the scorer refuses rates the frame cadence cannot support |
+| **Welding** | nothing yet, and says so | Placeholder: connects and streams end to end to prove the dispatch, asserts nothing until a classifier exists |
+
+The parts that carry over unchanged between floors are the point: the privacy
+boundary, discovery and admission, the rolling session score, and staleness on
+the console all work the same whether the person at the station is squatting
+or compressing a manikin. What does *not* carry over is each use case's own
+judgement — the fitness-side "cannot hold the movement" escalation, for
+instance, is deliberately part of the fitness scorer, not the shared engine.
 
 ---
 
@@ -261,8 +297,9 @@ the trainer dashboard and JSON/HTTP sinks; the CLI.
 
 **The phone app is built and runs — see [`android/`](android/).** Plank,
 bicep, and lunge all have working on-device form classifiers, plus geometric
-fault checks and rep counting for bicep/lunge, and a dashboard front door
-naming where this is headed next (Nursing, Lab, Welding). What is still
+fault checks and rep counting for bicep/lunge; the Nursing station and its
+CPR cadence path are real, and the dashboard front door names what is next
+(Lab, Welding). What is still
 missing is validation against a real trainee: every accuracy figure any
 classifier reports is a held-out-frame number from its training dataset's own
 recordings, not a measurement against anyone this app has watched.
