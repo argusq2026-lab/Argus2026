@@ -453,6 +453,12 @@ rate estimator is tested against synthetic waveforms at known rates, which is a
 test of the arithmetic, not of a camera. [docs/VALIDATION.md](docs/VALIDATION.md)
 is the honest list, with what each gap would take to close.
 
+## Team
+1. Kavinder Roghit Kanthen - kkanthen@qti.qualcomm.com
+2. Penghai Wei - pengwei@qti.qualcomm.com
+3. Viraj Shah - virashah@qti.qualcomm.com
+4. Aakarsh Gupta - aakagupt@qti.qualcomm.com
+
 ---
 
 ## Licence
