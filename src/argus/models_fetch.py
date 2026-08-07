@@ -225,9 +225,21 @@ def fetch(out_dir: Path, manifest: dict, assume_yes: bool = False) -> int:
 
 
 def _print_phone_instructions(out_dir: Path, files: list[str]) -> None:
-    print("\nTo put them on a phone:")
-    print(f"  1. Copy {', '.join(files)} from {out_dir} to the phone's Downloads")
-    print("     (cable, cloud drive, or `adb push <file> /sdcard/Download/`).")
-    print("  2. In the Argus Edge station screen, long-press Debug and")
-    print("     multi-select the files in the picker. The status strip reads")
-    print("     Ready when the model is loaded.")
+    """The two ways onto a phone, cheapest per phone first.
+
+    Printed here because this is the moment the operator has the files and
+    is asking "now what" — and the answer changed: they no longer need to
+    touch each phone, because `argus run` serves this directory to the
+    stations that connect to it.
+    """
+    print("\nTo get them onto the phones — start the server, then on each phone:")
+    print("  Set the server address in the Server dialog, long-press Debug, and")
+    print("  choose 'The connected server'. The phone downloads from this")
+    print("  machine, checks each file against the server's sha256 manifest,")
+    print("  and reads Ready when the model is loaded. No cable, any number of")
+    print("  phones. (Serving happens automatically if [models] dir points at")
+    print(f"  {out_dir}.)")
+    print("\nOr offline, one phone at a time:")
+    print(f"  Copy {', '.join(files)} to the phone's Downloads (cable, cloud")
+    print("  drive, or `adb push <file> /sdcard/Download/`), then long-press")
+    print("  Debug and choose 'Files on this phone'.")
