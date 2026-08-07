@@ -41,6 +41,9 @@ _MAX_EXERCISE_LEN = 64
 #: carrying a paragraph, and rendered as text by the console, never as markup.
 _MAX_DISPLAY_NAME_LEN = 64
 
+#: Same reasoning as `_MAX_EXERCISE_LEN`, for nursing's `procedure` label.
+_MAX_PROCEDURE_LEN = 64
+
 
 class ProtocolError(ValueError):
     """A message is malformed, mis-versioned, or uses an unrecognised code."""
@@ -221,18 +224,15 @@ def parse_observation(
     return parser(raw, use_case, form_error_vocab)
 
 
-def _parse_fitness_observation(
-    raw: Mapping[str, Any], use_case: str, form_error_vocab: Mapping[str, float]
-) -> FrameObservation:
-    """Fitness's `observation` payload: pose, exercise, rep/form fields.
+def _parse_pose_fields(raw: Mapping[str, Any]):
+    """The pose triple — `bbox_xyxy`, `keypoints_xy`, `keypoints_conf`.
 
-    `form_reason_codes` must be drawn from `form_error_vocab` (the config's
-    `[scoring.form_error_vocab]`) — a code outside that set is a
-    protocol/version mismatch between the phone and the laptop, so it is
-    rejected here rather than silently scored as zero.
+    Shared by fitness and nursing because a COCO-17 pose is genuinely the same
+    measurement in both, not because one was made to fit the other: what
+    differs between them is everything *around* the pose (an exercise label and
+    a rep counter, versus a procedure), and those stay in their own parsers.
+    A use case that reads no pose at all — welding today — never calls this.
     """
-    ts = _require(raw, "ts", float)
-
     bbox = _require(raw, "bbox_xyxy", list)
     if len(bbox) != 4 or not all(isinstance(v, (int, float)) for v in bbox):
         raise ProtocolError("bbox_xyxy must be a list of 4 numbers")
@@ -251,6 +251,71 @@ def _parse_fitness_observation(
     if len(kp_conf_raw) != NUM_KEYPOINTS or not all(isinstance(v, (int, float)) for v in kp_conf_raw):
         raise ProtocolError(f"keypoints_conf must be {NUM_KEYPOINTS} numbers, got {len(kp_conf_raw)}")
     keypoints_conf = [float(v) for v in kp_conf_raw]
+
+    return bbox_xyxy, keypoints_xy, keypoints_conf
+
+
+def _parse_procedure(raw: Mapping[str, Any]) -> str | None:
+    """Which procedure a nursing station is performing.
+
+    Bounded and type-checked here but *not* checked against the set of
+    procedures this build can score — that lookup belongs to
+    `argus.triage.compute_triage_nursing`, which answers it by scoring a flat
+    0.0 rather than by refusing the connection. Same reasoning as `exercise`:
+    a ward running a procedure this laptop has no scorer for should still see
+    its station on the console, not be turned away at the door.
+    """
+    value = raw.get("procedure")
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ProtocolError(f"procedure must be a string, got {type(value).__name__}")
+    if not value:
+        return None
+    if len(value) > _MAX_PROCEDURE_LEN:
+        raise ProtocolError(
+            f"procedure must be at most {_MAX_PROCEDURE_LEN} characters "
+            f"(got {len(value)}); it is a label, not free text"
+        )
+    return value
+
+
+def _parse_nursing_observation(
+    raw: Mapping[str, Any], use_case: str, form_error_vocab: Mapping[str, float]
+) -> FrameObservation:
+    """Nursing's `observation` payload: pose plus which procedure is running.
+
+    Shares fitness's pose fields and none of the rest. There is no `exercise`,
+    no `rep_count` and no `form_reason_codes` here: a nursing station's faults
+    are *derived on the laptop* from the movement itself (see
+    `argus.triage.compute_triage_cpr`), not classified on the phone against a
+    vocabulary. That difference is the point — fitness trusts the phone's
+    classifier for form, nursing measures the rhythm itself.
+    """
+    ts = _require(raw, "ts", float)
+    bbox_xyxy, keypoints_xy, keypoints_conf = _parse_pose_fields(raw)
+    return FrameObservation(
+        ts=ts,
+        use_case=use_case,
+        procedure=_parse_procedure(raw),
+        bbox_xyxy=bbox_xyxy,
+        keypoints_xy=keypoints_xy,
+        keypoints_conf=keypoints_conf,
+    )
+
+
+def _parse_fitness_observation(
+    raw: Mapping[str, Any], use_case: str, form_error_vocab: Mapping[str, float]
+) -> FrameObservation:
+    """Fitness's `observation` payload: pose, exercise, rep/form fields.
+
+    `form_reason_codes` must be drawn from `form_error_vocab` (the config's
+    `[scoring.form_error_vocab]`) — a code outside that set is a
+    protocol/version mismatch between the phone and the laptop, so it is
+    rejected here rather than silently scored as zero.
+    """
+    ts = _require(raw, "ts", float)
+    bbox_xyxy, keypoints_xy, keypoints_conf = _parse_pose_fields(raw)
 
     codes_raw = raw.get("form_reason_codes", [])
     if not isinstance(codes_raw, list) or not all(isinstance(c, str) for c in codes_raw):
@@ -310,6 +375,7 @@ _OBSERVATION_PARSERS: dict[
     str, Callable[[Mapping[str, Any], str, Mapping[str, float]], FrameObservation]
 ] = {
     "fitness": _parse_fitness_observation,
+    "nursing": _parse_nursing_observation,
     "welding": _parse_welding_observation,
 }
 

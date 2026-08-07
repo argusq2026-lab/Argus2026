@@ -332,6 +332,53 @@ nothing has validated. A real welding use case replaces `_parse_welding_
 observation` and `compute_triage_welding` with functions that name actual
 fields — it does not extend `payload` indefinitely.
 
+**`"nursing"` is registered, and is real.** A nursing station streams the same
+COCO-17 pose as fitness plus a `procedure` naming what it is performing:
+
+```json
+{ "type": "observation", "use_case": "nursing", "ts": 1730649600.125,
+  "procedure": "cpr",
+  "bbox_xyxy": [0.31, 0.12, 0.68, 0.94],
+  "keypoints_xy": [[0.42, 0.19], "... 17 total"],
+  "keypoints_conf": [0.93, "... 17 total"] }
+```
+
+It shares fitness's pose fields because a pose is genuinely the same
+measurement, and shares none of the rest. There is **no `exercise`, no
+`rep_count`, and no `form_reason_codes`** — a nursing station's faults are
+derived on the laptop from the movement itself, not classified on the phone
+against a vocabulary. That is the substantive difference between the two use
+cases: fitness trusts the phone's classifier for form; nursing measures the
+rhythm.
+
+`procedure` is nursing's counterpart to `exercise` — length-bounded, phone-
+chosen, and *not* a closed vocabulary. A procedure this build has no scorer
+for (or an absent one) scores a flat `0.0` rather than being refused, so a
+ward running something unimplemented still sees its station on the console.
+`"cpr"` is the one procedure implemented today; see **CPR needs a faster
+stream** below, and `docs/VALIDATION.md` for what is and is not claimed.
+
+#### CPR needs a faster stream than the protocol's floor
+
+Observations are documented above as 5–15 Hz. **A nursing station running
+`"cpr"` needs at least 10 Hz**, and this is a hard requirement rather than a
+preference.
+
+Compressions run at roughly 2 Hz. Nyquist says two samples per cycle is enough
+to know an oscillation *exists*, but locating its period is a stronger demand:
+below about three samples per cycle the true period falls between integer
+sample lags while twice that period lands exactly on one, so the octave wins
+and **the reported rate silently halves**. At 5 Hz, a trainee compressing at a
+correct 120/min reads back as 60/min — and an instructor told "too slow" would
+coach them into making it worse. That is the one failure mode this measurement
+cannot tolerate, so `argus.triage.estimate_compression_rate` refuses to report
+a rate it cannot resolve rather than reporting a plausible wrong one.
+
+Resolving the top of the target band (120/min) needs ≥ 6 Hz arithmetically;
+10 Hz is the recommendation because it leaves margin for dropped frames and
+low-confidence keypoints. A phone whose pose stage sustains 15–30 Hz — which
+current hardware comfortably does — needs no special handling.
+
 ### The `exercise` field is load-bearing
 
 `exercise` was informational in earlier revisions of this document. It is not

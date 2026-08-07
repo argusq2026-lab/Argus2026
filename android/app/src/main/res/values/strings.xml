@@ -35,6 +35,13 @@
     <string name="tile_lab_subtitle">Procedure safety, one phone per station</string>
     <string name="tile_welding_title">Welding</string>
     <string name="tile_welding_subtitle">PPE and technique, one phone per station</string>
+    <!-- Nursing station (CPR). -->
+    <string name="nursing_start">Start</string>
+    <string name="nursing_stop">Stop</string>
+    <string name="nursing_connect">Connect</string>
+    <string name="nursing_debug">Debug</string>
+    <string name="nursing_server_hint">ws://laptop-ip:8765</string>
+
     <string name="coming_soon_title">Coming soon</string>
     <string name="coming_soon_body">%1$s will run on the same engine Fitness
         already does: one phone per person, a triage rank surfacing who needs

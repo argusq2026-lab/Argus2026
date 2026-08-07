@@ -95,6 +95,32 @@ class ScoringConfig:
     #: reachable on a few frames.
     form_persistence_min_s: float = 20.0
 
+    # -- nursing: CPR ---------------------------------------------------------
+    # The target band is the American Heart Association's published figure for
+    # adult CPR, not a number fitted here -- which makes it the one threshold
+    # in this file with an external source. It stays configurable because
+    # paediatric and neonatal protocols differ, not because it is a guess.
+    #: Seconds of wrist history the compression-rate estimate reads. Long
+    #: enough for several cycles (~13 at 100/min), short enough that a trainee
+    #: who corrects their rate is credited within a few seconds.
+    cpr_window_s: float = 8.0
+    #: The AHA adult target band, in compressions per minute.
+    cpr_rate_min_bpm: float = 100.0
+    cpr_rate_max_bpm: float = 120.0
+    #: How far outside the band counts as fully wrong. At 40, compressing at
+    #: 80/min (20 below the band) scores 0.5 and reaches `alert_threshold`,
+    #: while 90/min scores 0.25 and does not -- off-guideline but not a
+    #: reason to pull an instructor away from someone else.
+    cpr_rate_full_deviation_bpm: float = 40.0
+    #: Elbows straighter than this are considered locked. 180 is a straight
+    #: arm; the AHA asks for locked elbows so the rescuer's weight, not their
+    #: triceps, drives the compression.
+    cpr_min_elbow_angle_deg: float = 150.0
+    #: Coefficient of variation of inter-compression intervals above which the
+    #: cadence is called erratic. Rate alone cannot catch this: alternating
+    #: 80s and 140s averages to a perfect 110.
+    cpr_cadence_cv_threshold: float = 0.25
+
     REQUIRED_WEIGHTS = ("fall", "stillness", "occlusion", "off_task", "form_error")
 
     def _validate_weights(self, weights: dict[str, float], section: str) -> None:
@@ -155,6 +181,18 @@ class ScoringConfig:
             raise ConfigError("[scoring] min_hold_s_for_fault_rate must be > 0")
         if not 0.0 < self.form_persistence_threshold <= 1.0:
             raise ConfigError("[scoring] form_persistence_threshold must be in (0, 1]")
+        if self.cpr_window_s <= 0:
+            raise ConfigError("[scoring] cpr_window_s must be > 0")
+        if not 0 < self.cpr_rate_min_bpm < self.cpr_rate_max_bpm:
+            raise ConfigError(
+                "[scoring] cpr_rate_min_bpm must be > 0 and below cpr_rate_max_bpm"
+            )
+        if self.cpr_rate_full_deviation_bpm <= 0:
+            raise ConfigError("[scoring] cpr_rate_full_deviation_bpm must be > 0")
+        if not 0.0 < self.cpr_min_elbow_angle_deg <= 180.0:
+            raise ConfigError("[scoring] cpr_min_elbow_angle_deg must be in (0, 180]")
+        if self.cpr_cadence_cv_threshold <= 0:
+            raise ConfigError("[scoring] cpr_cadence_cv_threshold must be > 0")
         if self.form_persistence_half_life_s <= 0:
             raise ConfigError("[scoring] form_persistence_half_life_s must be > 0")
         if self.form_persistence_min_s <= 0:

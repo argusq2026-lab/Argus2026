@@ -132,6 +132,9 @@ def test_station_view_fields_are_the_closed_set():
         "keypoints_conf",
         "form_reason_codes",
         "exercise",
+        # Nursing's counterpart to `exercise`: a short label ("cpr"), length
+        # bounded by `argus.ingest.protocol` and rendered as text, never markup.
+        "procedure",
         "rep_count",
         "form_ok",
         "session",

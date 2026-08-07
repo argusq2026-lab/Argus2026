@@ -551,7 +551,16 @@ function renderPlaceholder(canvas) {
   canvas.getContext("2d").clearRect(0, 0, w, h);
 }
 
-const RENDERERS = { fitness: renderFitness, welding: renderPlaceholder };
+// Nursing draws the same skeleton as fitness because it streams the same
+// COCO-17 pose -- shared because the measurement genuinely is the same, not
+// because one was bent to fit the other. What differs is above the canvas:
+// nursing shows a procedure and a compression rate where fitness shows an
+// exercise and a rep count.
+const RENDERERS = {
+  fitness: renderFitness,
+  nursing: renderFitness,
+  welding: renderPlaceholder,
+};
 
 function draw(canvas, station, faded) {
   const renderer = (station && RENDERERS[station.use_case]) || renderFitness;

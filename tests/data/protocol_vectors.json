@@ -781,6 +781,123 @@
       },
       "name": "observation_plank_sagging",
       "why": "the plank classifier's output: `exercise` selects the scoring weight profile, so it is load-bearing here in a way it is not for exercises with no profile \u2014 a phone that omits it gets a correct plank scored as a fall"
+    },
+    {
+      "message": {
+        "protocol_version": 1,
+        "station_id": "bay-2",
+        "trainee_id": "phoneC3D4",
+        "type": "hello",
+        "use_case": "nursing"
+      },
+      "name": "hello_nursing",
+      "session_use_case": "nursing",
+      "why": "a nursing station must declare its use case, because the laptop refuses a hello that does not match [session] use_case \u2014 the check that stops a phone streaming to a scorer that will never fire"
+    },
+    {
+      "message": {
+        "bbox_xyxy": [
+          0.35,
+          0.25,
+          0.7,
+          0.95
+        ],
+        "keypoints_conf": [
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9,
+          0.9
+        ],
+        "keypoints_xy": [
+          [
+            0.5,
+            0.3
+          ],
+          [
+            0.5,
+            0.32
+          ],
+          [
+            0.5,
+            0.33999999999999997
+          ],
+          [
+            0.5,
+            0.36
+          ],
+          [
+            0.5,
+            0.38
+          ],
+          [
+            0.5,
+            0.4
+          ],
+          [
+            0.5,
+            0.42
+          ],
+          [
+            0.5,
+            0.44
+          ],
+          [
+            0.5,
+            0.45999999999999996
+          ],
+          [
+            0.5,
+            0.48
+          ],
+          [
+            0.5,
+            0.5
+          ],
+          [
+            0.5,
+            0.52
+          ],
+          [
+            0.5,
+            0.54
+          ],
+          [
+            0.5,
+            0.56
+          ],
+          [
+            0.5,
+            0.5800000000000001
+          ],
+          [
+            0.5,
+            0.6
+          ],
+          [
+            0.5,
+            0.62
+          ]
+        ],
+        "procedure": "cpr",
+        "ts": 1730649602.5,
+        "type": "observation",
+        "use_case": "nursing"
+      },
+      "name": "observation_nursing_cpr",
+      "why": "nursing carries pose plus a procedure, and none of fitness's exercise/rep/form fields: its faults are derived on the laptop from the movement, not classified on the phone"
     }
   ],
   "vectors_version": 1

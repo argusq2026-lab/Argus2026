@@ -43,7 +43,7 @@ class DashboardActivity : AppCompatActivity() {
             Tile(
                 R.id.tileNursingBadge, R.id.tileNursing, ContextCompat.getColor(this, R.color.tile_nursing),
                 R.string.tile_nursing_title,
-            ) { showComingSoon(R.string.tile_nursing_title) },
+            ) { startActivity(Intent(this, NursingActivity::class.java)) },
             Tile(
                 R.id.tileLabBadge, R.id.tileLab, ContextCompat.getColor(this, R.color.tile_lab),
                 R.string.tile_lab_title,

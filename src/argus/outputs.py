@@ -129,6 +129,11 @@ class StationView:
     #: Selects the scoring weight profile, and is displayed. `""` means the
     #: phone reported none, which scores on the default weights.
     exercise: str = ""
+    #: Which procedure a nursing station is running ("cpr"). The nursing
+    #: counterpart of `exercise`, and displayed the same way: `""` means the
+    #: station named none, which `compute_triage_nursing` scores as a flat 0.0
+    #: rather than guessing.
+    procedure: str = ""
     #: Display-only: nothing scores these two.
     rep_count: int | None = None
     form_ok: bool | None = None

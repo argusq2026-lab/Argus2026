@@ -48,15 +48,24 @@ def test_the_fixture_vocab_matches_the_live_config(document, vocab):
 def test_every_valid_message_parses(case, vocab, default_config):
     msg = case["message"]
     if msg["type"] == "hello":
-        hello = parse_hello(msg, default_config.ingest.protocol_version)
+        hello = parse_hello(
+            msg,
+            default_config.ingest.protocol_version,
+            # A vector may name the session use case it expects to join; absent,
+            # it is fitness, as every vector predating the field is.
+            session_use_case=case.get("session_use_case", "fitness"),
+        )
         assert hello.station_id == msg["station_id"]
         assert hello.trainee_id == msg["trainee_id"]
+        assert hello.use_case == msg.get("use_case", "fitness")
     else:
         obs = parse_observation(msg, vocab)
         assert obs.ts == msg["ts"]
         assert list(obs.bbox_xyxy) == msg["bbox_xyxy"]
         assert len(obs.keypoints_xy) == 17
         assert list(obs.form_reason_codes) == msg.get("form_reason_codes", [])
+        assert obs.use_case == msg.get("use_case", "fitness")
+        assert obs.procedure == msg.get("procedure")
 
 
 @pytest.mark.parametrize("case", _document()["invalid"], ids=lambda c: c["name"])

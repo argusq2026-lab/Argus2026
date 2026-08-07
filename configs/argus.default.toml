@@ -69,6 +69,26 @@ form_persistence_threshold = 0.5      # "the majority of the time"
 form_persistence_half_life_s = 45.0   # so corrected form clears in a minute or two
 form_persistence_min_s = 20.0         # never fires on a handful of frames
 
+# -- nursing: CPR -------------------------------------------------------------
+# The one band in this file with an external source: 100-120/min is the
+# American Heart Association's published adult figure, not a prior fitted here.
+# It stays configurable because paediatric and neonatal protocols differ.
+#
+# Depth and hand placement are deliberately NOT scored. Recovering a 5-6 cm
+# chest travel from an uncalibrated monocular camera needs a scale reference
+# the frame does not contain, and a published study using the same class of
+# pose model found frequency agreed closely with an instrumented manikin while
+# depth was "overall not accurate". See docs/VALIDATION.md.
+#
+# A nursing station needs >= 10 Hz observations -- below ~6 Hz a fast
+# compression rate reads back halved. See docs/PROTOCOL.md.
+cpr_window_s = 8.0                    # ~13 compressions at 100/min
+cpr_rate_min_bpm = 100.0              # AHA adult target band
+cpr_rate_max_bpm = 120.0
+cpr_rate_full_deviation_bpm = 40.0    # 80/min scores 0.5 and alerts; 90/min does not
+cpr_min_elbow_angle_deg = 150.0       # 180 is a straight, locked arm
+cpr_cadence_cv_threshold = 0.25       # alternating 80s and 140s average to a perfect 110
+
 [scoring.weights]
 fall = 0.40
 stillness = 0.20

@@ -39,6 +39,13 @@ class IngestClient(
     private val displayName: String = "",
     /** The session this phone means to join, if a beacon named one. */
     private val sessionName: String = "",
+    /**
+     * What this station is running. Unlike [exercisePlan] this is *not*
+     * informational: a laptop set to one use case refuses a `hello` declaring
+     * another, so getting it wrong shows up as a rejected connection rather
+     * than as a station nobody scores.
+     */
+    private val useCase: String = USE_CASE_FITNESS,
     private val onStateChange: (String) -> Unit,
 ) {
     enum class State {
@@ -88,6 +95,7 @@ class IngestClient(
                         exercisePlan = exercisePlan,
                         displayName = displayName,
                         sessionName = sessionName,
+                        useCase = useCase,
                     )
                 )
                 transition(State.AWAITING_ACK)

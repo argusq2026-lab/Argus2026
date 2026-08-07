@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections import deque
 
 import pytest
 
 from argus.triage import (
+    NURSING_HISTORY_LEN,
+    REASON_CPR_ARMS_BENT,
+    REASON_CPR_RATE_FAST,
+    REASON_CPR_RATE_SLOW,
     REASON_FALL,
     REASON_FORM_ERROR,
     REASON_OCCLUSION,
@@ -18,9 +23,13 @@ from argus.triage import (
     KP_NOSE,
     KP_RIGHT_SHOULDER,
     KP_RIGHT_WRIST,
+    FrameObservation,
     TrackState,
+    _cpr_window,
     compute_triage,
     compute_triage_fitness,
+    estimate_compression_rate,
+    history_len_for,
     known_use_cases,
     needs_instructor,
     rank_trainees,
@@ -227,7 +236,7 @@ def test_known_use_cases_matches_the_scorer_registry(scoring):
     this; it must name exactly what `compute_triage` can actually dispatch
     to, not a hand-maintained list that could drift from it."""
     known = known_use_cases()
-    assert known == {"fitness", "welding"}
+    assert known == {"fitness", "nursing", "welding"}
     for use_case in known:
         track = TrackState(history_len=scoring.history_len)
         track.use_case = use_case
@@ -269,7 +278,7 @@ def test_welding_scorer_is_always_neutral_regardless_of_payload(scoring):
 
 
 def test_compute_triage_rejects_a_track_with_no_registered_scorer(scoring, track_state):
-    track_state.use_case = "nursing"
+    track_state.use_case = "lab"
     with pytest.raises(KeyError):
         compute_triage("t0", track_state, 1.0, scoring)
 
@@ -317,3 +326,162 @@ def test_retuning_weights_changes_the_score_without_touching_code(scoring, track
                  "off_task": 0.0, "form_error": 0.0},
     )
     assert compute_triage("t0", track_state, 1.0, retuned).score != baseline
+
+
+# -- nursing: CPR -------------------------------------------------------------
+#
+# Unlike the fitness features above, these have a ground truth: the waveform is
+# generated at a known compression rate and the scorer has to recover it. That
+# is worth more than any threshold assertion, because the failure this scorer
+# must never have is a *confidently wrong* rate -- telling an instructor
+# "60/min, too slow" about a trainee compressing at 120 would coach them into
+# making it worse.
+
+
+def _cpr_pose(wrist_y: float, elbow_angle_deg: float = 178.0) -> list[tuple[float, float]]:
+    """A rescuer's arm seen side-on, in normalised coordinates.
+
+    Shoulder above elbow above wrist, vertically in line, so the elbow reads
+    straight; bending it displaces the elbow sideways by exactly the amount
+    that produces `elbow_angle_deg`, derived rather than eyeballed so the test
+    asserts against the angle it meant.
+    """
+    forearm = 0.15
+    cos = math.cos(math.radians(elbow_angle_deg))
+    offset = forearm * math.sqrt((1.0 + cos) / (1.0 - cos)) if elbow_angle_deg < 180 else 0.0
+
+    kp = [(0.5, 0.3)] * 17
+    for shoulder, elbow, wrist in ((5, 7, 9), (6, 8, 10)):
+        kp[shoulder] = (0.50, wrist_y - 2 * forearm)
+        kp[elbow] = (0.50 + offset, wrist_y - forearm)
+        kp[wrist] = (0.50, wrist_y)
+    return kp
+
+
+def _cpr_track(
+    scoring,
+    bpm: float = 110.0,
+    hz: float = 30.0,
+    seconds: float = 10.0,
+    amplitude: float = 0.03,
+    elbow_angle_deg: float = 178.0,
+    conf: float = 0.9,
+    procedure: str | None = "cpr",
+) -> TrackState:
+    """A nursing track carrying a synthetic compression sequence."""
+    track = TrackState(history_len=NURSING_HISTORY_LEN)
+    track.use_case = "nursing"
+    for i in range(int(seconds * hz)):
+        t = i / hz
+        wrist_y = 0.62 + amplitude * math.sin(2 * math.pi * (bpm / 60.0) * t)
+        track.push(
+            FrameObservation(
+                ts=t,
+                use_case="nursing",
+                procedure=procedure,
+                bbox_xyxy=(0.35, 0.25, 0.70, 0.95),
+                keypoints_xy=_cpr_pose(wrist_y, elbow_angle_deg),
+                keypoints_conf=[conf] * 17,
+            ),
+            scoring,
+        )
+    return track
+
+
+@pytest.mark.parametrize("bpm", [80.0, 100.0, 110.0, 120.0, 140.0])
+def test_compression_rate_is_recovered_from_a_known_waveform(scoring, bpm):
+    """The measurement, not the threshold. Everything else here rests on this."""
+    track = _cpr_track(scoring, bpm=bpm)
+    estimate = estimate_compression_rate(_cpr_window(track.history, scoring), scoring)
+    assert estimate["bpm"] == pytest.approx(bpm, abs=3.0)
+
+
+def test_a_rate_inside_the_aha_band_raises_nothing(scoring):
+    record = compute_triage("t0", _cpr_track(scoring, bpm=110.0), 1.0, scoring)
+    assert record.reason_codes == ()
+    assert record.score == 0.0
+
+
+def test_compressing_too_slowly_is_flagged_and_escalates(scoring):
+    record = compute_triage("t0", _cpr_track(scoring, bpm=70.0), 1.0, scoring)
+    assert REASON_CPR_RATE_SLOW in record.reason_codes
+    # 30 below a 100 floor, over a 40 full-deviation span.
+    assert record.score == pytest.approx(0.75, abs=0.1)
+    assert record.score >= scoring.alert_threshold
+
+
+def test_compressing_too_fast_is_flagged(scoring):
+    record = compute_triage("t0", _cpr_track(scoring, bpm=160.0), 1.0, scoring)
+    assert REASON_CPR_RATE_FAST in record.reason_codes
+    assert record.score > 0.0
+
+
+def test_a_still_rescuer_is_not_assigned_a_rate(scoring):
+    """The false-positive that matters most. Camera noise on somebody kneeling
+    motionless must not become a compression rate, because a scorer that
+    invents one would flag every station between cycles."""
+    record = compute_triage("t0", _cpr_track(scoring, amplitude=0.0), 1.0, scoring)
+    assert record.reason_codes == ()
+    assert record.score == 0.0
+
+
+def test_bent_elbows_are_flagged_while_compressing(scoring):
+    record = compute_triage(
+        "t0", _cpr_track(scoring, bpm=110.0, elbow_angle_deg=130.0), 1.0, scoring
+    )
+    assert REASON_CPR_ARMS_BENT in record.reason_codes
+    assert record.score > 0.0
+
+
+def test_bent_elbows_alone_are_not_judged_without_compressions(scoring):
+    """An elbow angle measured on somebody kneeling and talking says nothing
+    about their CPR; flagging it would turn every pause into a fault."""
+    record = compute_triage(
+        "t0", _cpr_track(scoring, amplitude=0.0, elbow_angle_deg=110.0), 1.0, scoring
+    )
+    assert record.reason_codes == ()
+
+
+def test_an_undersampled_stream_reports_no_rate_rather_than_a_halved_one(scoring):
+    """At 5 Hz a 120/min compression is 2.5 samples per cycle, and the octave
+    wins -- the estimator would return ~60/min, which reads as "too slow" for a
+    trainee at the top of the band. Refusing is the only safe answer."""
+    track = _cpr_track(scoring, bpm=120.0, hz=5.0)
+    estimate = estimate_compression_rate(_cpr_window(track.history, scoring), scoring)
+    assert estimate["bpm"] is None
+    assert estimate["undersampled"] is True
+    assert compute_triage("t0", track, 1.0, scoring).score == 0.0
+
+
+def test_an_absent_subject_is_not_scored(scoring):
+    track = _cpr_track(scoring, bpm=70.0)
+    track.note_idle()
+    assert compute_triage("t0", track, 1.0, scoring).score == 0.0
+
+
+@pytest.mark.parametrize("procedure", [None, "phlebotomy"])
+def test_a_procedure_with_no_scorer_asserts_nothing(scoring, procedure):
+    """Grading a trainee at a procedure they are not performing is worse than
+    not grading them, because it looks like a measurement."""
+    record = compute_triage(
+        "t0", _cpr_track(scoring, bpm=70.0, procedure=procedure), 1.0, scoring
+    )
+    assert record.score == 0.0
+    assert record.reason_codes == ()
+
+
+def test_nursing_tracks_keep_more_history_than_fitness(scoring):
+    """A compression rate cannot be read off fitness's ~2s window -- at 100/min
+    and the 28 Hz a phone actually delivers, 30 frames is a single cycle."""
+    assert history_len_for("nursing", scoring) > history_len_for("fitness", scoring)
+    assert history_len_for("fitness", scoring) == scoring.history_len
+
+
+def test_the_rate_band_is_config_not_code(scoring):
+    """Paediatric and neonatal protocols use different bands, so the AHA adult
+    figures must be movable without editing the scorer."""
+    track = _cpr_track(scoring, bpm=140.0)
+    assert REASON_CPR_RATE_FAST in compute_triage("t0", track, 1.0, scoring).reason_codes
+
+    widened = dataclasses.replace(scoring, cpr_rate_max_bpm=150.0)
+    assert compute_triage("t0", track, 1.0, widened).reason_codes == ()
