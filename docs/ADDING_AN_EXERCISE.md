@@ -1,4 +1,11 @@
-# Adding an exercise
+# Adding an exercise *(inside the fitness use case)*
+
+> **Scope.** This is a runbook for adding a movement to the **fitness** use
+> case — a new form classifier on the phone and a weight profile on the
+> laptop. Watching a whole new *domain* (a ward, a bay, a bench) is a
+> different and larger job with its own extension points; see
+> [`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md). Several traps below (§4) do
+> generalize, and that document points back here for them.
 
 How the plank form classifier was built, end to end, written so the next one
 did not have to rediscover it. Bicep and lunge have since been added on top of
@@ -18,12 +25,14 @@ Reference implementation: commits `5fd7525` (server) and `01ce651` (phone) on
 
 ## 1. The shape of the thing
 
-Form judgement happens **on the phone**. The laptop never sees a pose well
-enough to judge form — it scores fall, stillness, occlusion and orientation
-from keypoint *history*, and takes form as a closed-vocabulary verdict the
-phone hands it. So an exercise needs work in two places, and they are joined
-only by two strings: the `exercise` label and the `form_reason_codes`
-vocabulary.
+Form judgement happens **on the phone** — this is fitness's answer to the
+"where does the judgement live" question every use case has to settle, and it
+is the reason a private, proprietary form model is practical to bring: the
+laptop loads none of it. The laptop scores fall, stillness, occlusion and
+orientation from keypoint *history*, and takes form as a closed-vocabulary
+verdict the phone hands it. So an exercise needs work in two places, and they
+are joined only by two strings: the `exercise` label and the
+`form_reason_codes` vocabulary.
 
 ```
   labelled CSV (upstream)                       [offline, once]
@@ -281,10 +290,14 @@ genuinely needs help.
 
 ### Trap 3 — The triage features may be wrong for your exercise
 
-**This is not a model problem and it will bite you separately.**
+**This is not a model problem and it will bite you separately.** It is also the
+trap that generalizes furthest: one level up, it is the entire reason a *use
+case* gets its own scorer rather than a tuned set of fitness's weights
+([`ADDING_A_USE_CASE.md`](ADDING_A_USE_CASE.md) §5).
 
-The five scoring features were written for standing HIIT, where "horizontal"
-and "not moving" are good evidence of trouble. A correct plank is horizontal
+Fitness's five scoring features were written for standing, high-intensity
+movements, where "horizontal" and "not moving" are good evidence of trouble. A
+correct plank is horizontal
 *and* motionless *and* oriented away from the station-facing reference — so
 `fall` (bbox wider than tall), `stillness` (centroid not moving), and
 `off_task` (shoulder line off the reference angle) all read a textbook rep as

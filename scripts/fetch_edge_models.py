@@ -7,8 +7,14 @@ instead is the recipe, which is enough: the exports below are **byte-identical**
 across runs given the pinned versions in `android/models.json`, verified by
 sha256 here.
 
+    pip install -r requirements-models.txt
     python scripts/fetch_edge_models.py --out models/edge
     cd android && ./stage.sh --models ../models/edge
+
+The exporters (`torch`, `qai_hub_models`) live in `requirements-models.txt`
+rather than `requirements.txt`: neither the laptop server nor the Android
+build needs them, and keeping them out is what lets the import-hygiene CI job
+assert the scorer pulls in no ML runtime. SETUP.md §2.4 is the full runbook.
 
 No Qualcomm AI Hub account is needed for any of this. An account only buys the
 optional device-optimised variant (see `--aihub-job`), and AI Hub job IDs are

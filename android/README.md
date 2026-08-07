@@ -1,16 +1,32 @@
 # Argus Edge — Android station
 
 The phone half of the system described in `docs/PROTOCOL.md`: one phone watches
-one trainee, runs perception on its own NPU, and streams structured numeric
+one person, runs perception on its own NPU, and streams structured numeric
 observations to the laptop's WebSocket ingest server. The laptop scores and
 ranks; no frame, and nothing derived from a frame except the observation
 fields, ever leaves the device.
 
+> **Installing this from scratch — device requirements, JDK, the Android SDK,
+> the phone's own developer settings, and staging the models — is
+> [SETUP.md, Part 2](../SETUP.md#part-2--the-phone).** Running it is
+> [USAGE.md](../USAGE.md). This document is what the app *is*: the perception
+> stack, the classifiers, and the decisions behind them.
+
+**One app, one station screen per use case.** `DashboardActivity` is the
+launcher and picks which one: `MainActivity` is the fitness station and
+`NursingActivity` is the CPR station. They are separate Activities on purpose
+(see [The dashboard shell](#the-dashboard-shell)) and share everything that was
+already its own class — the model store, the detectors, the subject tracker,
+the overlay, discovery, and the ingest client. Most of this document describes
+the perception stack both of them run, and the form classifiers, which are
+fitness's alone.
+
 > **Scope: hackathon build.** Everything documented here was measured on a real
 > Galaxy S25 Ultra and the tests are honest about what they do and do not cover
-> — but no accuracy claim is supported, because no real trainee footage exists.
-> Demoing and developing against the AGPL-3.0 pose model triggers nothing;
-> distributing an application built on it is the decision to revisit.
+> — but no accuracy claim is supported, because no real footage of anyone doing
+> any of this exists. Demoing and developing against the AGPL-3.0 pose model
+> triggers nothing; distributing an application built on it is the decision to
+> revisit.
 
 ## Status
 
@@ -31,11 +47,12 @@ fields, ever leaves the device.
 | BlazePose landmarks | fallback path — fp16, upper-body only (no knees/ankles), ROI-cropped per person |
 | Subject selection | `SubjectTracker` — largest box with hysteresis, switches counted on screen |
 | End-to-end to the laptop | **working** — station appears in `GET /triage` over `adb reverse` or LAN |
-| **Form classifiers** | **working** — `FormClassifier.kt`, a logistic regression evaluated in Kotlin arithmetic, one instance per exercise (plank 3x26, bicep 2x16, lunge 2x18). No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
+| **Form classifiers** *(fitness)* | **working** — `FormClassifier.kt`, a logistic regression evaluated in Kotlin arithmetic, one instance per exercise (plank 3x26, bicep 2x16, lunge 2x18). No ML runtime, no ONNX, no second NPU dispatch. Refit from an MIT dataset; see below |
 | Geometric form checks | **working** — `GeometricFormChecks.kt`, a second fault per exercise upstream never collected ML labels for: `loose_upper_arm` (bicep, elbow-shoulder angle vs. vertical) and `knee_angle_out_of_range` (lunge, hip-knee-ankle angle, gated behind the same `depth_gate` as `knee_over_toe`). Both thresholds are upstream's own stated cutoffs, unvalidated here — see `docs/VALIDATION.md` §1c/§1d |
 | Rep counting | **working, bicep and lunge only** — `RepCounter.kt`, a debounced peak/valley crossing on the same joint angle the geometric checks use (elbow flex for bicep, knee angle for lunge). Counts a rep regardless of form quality — a flagged rep still counts — and is display-only on the wire (`rep_count`, `docs/PROTOCOL.md`), never scored. Plank has no counter: it is a hold, not a rep. The hysteresis thresholds are a hand-picked heuristic, not fit or measured against real reps — see the class docstring |
 | Other exercises | not started (`form_reason_codes` empty for any exercise without a shipped `<exercise>_lr.json`; see `docs/ADDING_AN_EXERCISE.md`) |
-| **Dashboard shell + launcher icon** | **working** — `DashboardActivity`, the app's launcher, replaces the old direct-to-camera start. One tile per domain: Fitness opens `MainActivity` unchanged; Nursing/Lab/Welding are named placeholders that explain what shipping them would take rather than pretending they exist. First launcher icon the app has ever had (an adaptive icon, Argus-Panoptes eye motif). See below |
+| **Nursing station (`NursingActivity`)** | **working** — a second station screen for `use_case = "nursing"`, `procedure = "cpr"`. Same detection, pose, subject tracking and ingest client; **no phone-side classifier at all** — it streams pose and the laptop derives the fault (`argus.triage.compute_triage_cpr`). Carries an on-screen rate echo that is advisory only: it is the simpler of the two estimators and the laptop is the authority where they disagree |
+| **Dashboard shell + launcher icon** | **working** — `DashboardActivity`, the app's launcher, replaces the old direct-to-camera start. One tile per domain: Fitness opens `MainActivity`, Nursing opens `NursingActivity`; Lab and Welding are named placeholders that explain what shipping them would take rather than pretending they exist. First launcher icon the app has ever had (an adaptive icon, Argus-Panoptes eye motif). See below |
 
 ## How detection stays honest
 
@@ -166,7 +183,7 @@ torch.onnx.export(m, torch.zeros(1,3,640,640), "yolo26_pose_fp32.onnx",
 
 Note the input is float32 in [0, 1], not the w8a8 detector's raw uint8.
 
-## The form classifiers
+## The form classifiers *(fitness only)*
 
 Three exercises ship a classifier today: plank, bicep, lunge. Each is
 `assets/<exercise>_lr.json`, a multinomial logistic regression (26/16/18
@@ -250,23 +267,41 @@ is what `test_artifact_and_fixture_agree_on_encoding_and_threshold` notices.
 
 ## The dashboard shell
 
-`DashboardActivity` is the app's launcher now — `MainActivity` lost its
-`LAUNCHER` intent-filter and is reached only via `Intent` from a tile. This
-is a plain second Activity, not Fragments or Navigation-Component: the app
+`DashboardActivity` is the app's launcher — `MainActivity` lost its
+`LAUNCHER` intent-filter and is reached only via `Intent` from a tile. These
+are plain Activities, not Fragments or Navigation-Component: the app
 had zero navigation infrastructure before, and a second Activity is the
 smallest addition consistent with the single-Activity, single-layout style
-`MainActivity` already used. Nothing in `MainActivity`'s own logic changed —
-same models, same classifiers, same protocol client.
+`MainActivity` already used. Nothing in `MainActivity`'s own logic changed when
+the dashboard arrived — same models, same classifiers, same protocol client.
 
 Four tiles, one per domain this triage engine could watch:
 
 - **Fitness** — real, opens `MainActivity`.
-- **Nursing**, **Lab**, **Welding** — named placeholders. Tapping one shows
-  what it would actually take to ship: the same phone-per-subject,
-  triage-rank engine Fitness already runs, needing a domain-specific
-  on-device classifier and real data to fit it on, the same gap
-  `docs/ADDING_AN_EXERCISE.md` documents for a new exercise. No stub
-  Activities, no fake data behind them.
+- **Nursing** — real, opens `NursingActivity`.
+- **Lab**, **Welding** — named placeholders. Tapping one shows what it would
+  actually take to ship: the same phone-per-subject, triage-rank engine the
+  other two already run, needing a domain-specific on-device classifier (or a
+  laptop-side scorer, as nursing chose) and real data behind it. No stub
+  Activities, no fake data behind them. The runbook is
+  `docs/ADDING_A_USE_CASE.md`.
+
+**Why a second Activity per use case rather than a mode inside one.**
+`MainActivity` *is* the fitness screen: it is welded to an exercise picker, a
+rep counter, and a form classifier that mean nothing to a nursing station, and
+threading a use case through all of that would make one long file answer two
+questions. `NursingActivity` re-uses every piece that was already a class of
+its own — `ModelStore`, `QnnDetector` / `Yolo26PoseEstimator` /
+`PoseEstimator`, `SubjectTracker`, `DetectionOverlayView`, `Discovery`,
+`IngestClient` — and writes again only the camera bind and the frame loop, both
+materially smaller than fitness's: one subject, no second classifier pass, no
+rep counting. The privacy property is unchanged and is the same wiring in both:
+the frame is a local, and only the normalized box and keypoints reach the
+network.
+
+`Protocol.kt` holds the line between them on the wire — a nursing observation
+carrying a `rep_count`, or a fitness one carrying a `procedure`, throws rather
+than being sent for the server to reject. `ProtocolTest` (host) covers it.
 
 The launcher icon (`res/mipmap-anydpi-v26/ic_launcher.xml` +
 `drawable/ic_launcher_{background,foreground}.xml`) is the first this app has
@@ -318,6 +353,10 @@ plain `VectorDrawable`s, no external image asset.
 
 ## Build & test
 
+Prerequisites — JDK 17, Android SDK 35, platform-tools, and a phone with USB
+debugging on — are installed in [SETUP.md §2.1–§2.2](../SETUP.md#21-prepare-the-phone).
+Everything below assumes they are in place.
+
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@17
 export ANDROID_HOME=~/Library/Android/sdk
@@ -362,9 +401,10 @@ foreach ($f in @("yolox.onnx","yolox.data","yolox.json","yolo26_pose_fp32.onnx")
 `yolox.json` is generated once from the model with
 `python scripts/gen_yolox_fixture.py <dir>/yolox.onnx` (see "Staging a model"
 above); `yolo26_pose_fp32.onnx` comes from
-`python scripts/fetch_edge_models.py --out models/edge` (see
-`scripts/fetch_edge_models.py`'s own docstring — it needs `torch` and
-`qai_hub_models`, not part of the normal runtime install).
+`pip install -r requirements-models.txt` followed by
+`python scripts/fetch_edge_models.py --out models/edge` — those exporters
+(`torch`, `qai_hub_models`) are deliberately not part of the runtime install.
+See [SETUP.md §2.4](../SETUP.md#24-stage-the-perception-models--required).
 
 **Connecting a phone over USB** instead of Wi-Fi, for development — no
 network needed:

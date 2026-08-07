@@ -101,10 +101,11 @@ class StationView:
     #: Server-clock time of the most recent observation, or of registration
     #: for a station that has not sent one yet.
     last_seen_ts: float
-    #: How many observations are in the rolling history, against
-    #: `scoring.history_len`. Several triage features cannot fire until the
-    #: window is full, so a console that showed a half-warm station as simply
-    #: "nothing wrong" would be overstating what the scorer had looked at.
+    #: How many observations are in the rolling history, against whatever
+    #: `argus.triage.history_len_for` gives this station's use case. Several
+    #: triage features cannot fire until the window is full, so a console that
+    #: showed a half-warm station as simply "nothing wrong" would be
+    #: overstating what the scorer had looked at.
     observations: int
     #: What the trainee is called, if the phone offered a name at handshake.
     #: `trainee_id` is a device identifier and is the key an alert is
@@ -117,9 +118,11 @@ class StationView:
     #: that has gone silent — the two used to be indistinguishable.
     subject_present: bool = True
     #: Which use case this station is running (see `docs/PROTOCOL.md`). The
-    #: console dispatches its per-station rendering on this field; today it
-    #: is always `"fitness"`, since that is the only use case a phone can
-    #: complete a handshake for.
+    #: console dispatches its per-station rendering on this field
+    #: (`RENDERERS` in `argus.console`), so a use case with a different thing
+    #: to draw — or nothing to draw yet — needs no change here. Defaults to
+    #: `"fitness"`, matching the wire protocol's own default for a phone that
+    #: omits the field.
     use_case: str = "fitness"
     bbox_xyxy: tuple[float, float, float, float] | None = None
     keypoints_xy: tuple[tuple[float, float], ...] | None = None
