@@ -686,3 +686,139 @@ def test_the_page_names_persistent_form_failure_as_its_own_thing():
     read as the same sentence."""
     assert "persistent_form_fault: " in CONSOLE_HTML
     assert "Cannot hold form" in CONSOLE_HTML
+
+
+# -- model serving on the ingest port -----------------------------------------
+#
+# The phones' weights are served from the fetch-models output directory over
+# the port that is already LAN-open — provisioning within one floor, never
+# public distribution. What is worth testing hardest is the narrowing: flat,
+# allow-listed, read-only, and immune to path tricks by construction.
+
+
+def test_models_manifest_and_files_are_served_on_the_ws_port(default_config, tmp_path):
+    import asyncio
+    import hashlib
+    import urllib.request
+
+    from argus.ingest.server import IngestServer
+
+    (tmp_path / "yolo26_pose_fp32.onnx").write_bytes(b"model-bytes")
+    (tmp_path / "notes.txt").write_bytes(b"not a model")          # ignored suffix
+    (tmp_path / ".hidden.onnx").write_bytes(b"hidden")            # ignored dotfile
+
+    cfg = dataclasses.replace(
+        default_config,
+        ingest=dataclasses.replace(default_config.ingest, ws_host="127.0.0.1", ws_port=0),
+        outputs=dataclasses.replace(default_config.outputs, console=False, http_port=0),
+        discovery=dataclasses.replace(default_config.discovery, enabled=False),
+        models=dataclasses.replace(default_config.models, dir=str(tmp_path)),
+    )
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            base = f"http://127.0.0.1:{server.ws_port}"
+
+            def get(path):
+                return urllib.request.urlopen(base + path, timeout=5)
+
+            manifest = json.loads((await asyncio.to_thread(get, "/models/manifest.json")).read())
+            assert [f["name"] for f in manifest["files"]] == ["yolo26_pose_fp32.onnx"]
+            assert manifest["files"][0]["sha256"] == hashlib.sha256(b"model-bytes").hexdigest()
+
+            body = (await asyncio.to_thread(get, "/models/yolo26_pose_fp32.onnx")).read()
+            assert body == b"model-bytes"
+
+            # WebSocket clients on the same port are untouched.
+            ws = await _hello_ws(server.ws_port)
+            assert json.loads(await ws.recv())["type"] == "hello_ack"
+            await ws.close()
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_model_serving_refuses_everything_that_is_not_a_listed_file(default_config, tmp_path):
+    import asyncio
+    import urllib.error
+    import urllib.request
+
+    from argus.ingest.server import IngestServer
+
+    (tmp_path / "real.onnx").write_bytes(b"x")
+    secret = tmp_path.parent / "secret.txt"
+    secret.write_bytes(b"not yours")
+
+    cfg = dataclasses.replace(
+        default_config,
+        ingest=dataclasses.replace(default_config.ingest, ws_host="127.0.0.1", ws_port=0),
+        outputs=dataclasses.replace(default_config.outputs, console=False, http_port=0),
+        discovery=dataclasses.replace(default_config.discovery, enabled=False),
+        models=dataclasses.replace(default_config.models, dir=str(tmp_path)),
+    )
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            base = f"http://127.0.0.1:{server.ws_port}"
+            for path in (
+                "/models/../secret.txt",      # traversal is just an unknown name
+                "/models/notes.txt",          # unlisted
+                "/models/",                   # no name
+                "/anything-else",             # not the models prefix at all
+            ):
+                def get(p=path):
+                    return urllib.request.urlopen(base + p, timeout=5)
+                with pytest.raises(urllib.error.HTTPError) as exc:
+                    await asyncio.to_thread(get)
+                assert exc.value.code == 404, path
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+def test_an_absent_models_dir_serves_an_empty_manifest(default_config, tmp_path):
+    """Not having run fetch-models is a normal state: phones fall back to the
+    file import, and the endpoint says "nothing here" rather than erroring."""
+    import asyncio
+    import urllib.request
+
+    from argus.ingest.server import IngestServer
+
+    cfg = dataclasses.replace(
+        default_config,
+        ingest=dataclasses.replace(default_config.ingest, ws_host="127.0.0.1", ws_port=0),
+        outputs=dataclasses.replace(default_config.outputs, console=False, http_port=0),
+        discovery=dataclasses.replace(default_config.discovery, enabled=False),
+        models=dataclasses.replace(default_config.models, dir=str(tmp_path / "never-created")),
+    )
+
+    async def run():
+        server = IngestServer(cfg)
+        await server.start()
+        try:
+            def get():
+                return urllib.request.urlopen(
+                    f"http://127.0.0.1:{server.ws_port}/models/manifest.json", timeout=5)
+            manifest = json.loads((await asyncio.to_thread(get)).read())
+            assert manifest == {"files": []}
+        finally:
+            await server.stop()
+
+    asyncio.run(run())
+
+
+async def _hello_ws(port):
+    import websockets
+
+    ws = await websockets.connect(f"ws://127.0.0.1:{port}")
+    await ws.send(json.dumps({
+        "type": "hello", "protocol_version": 1,
+        "station_id": "s0", "trainee_id": "t0",
+    }))
+    return ws

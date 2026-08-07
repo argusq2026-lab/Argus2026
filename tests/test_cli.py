@@ -218,3 +218,44 @@ def test_replay_and_discover_subcommands_against_a_live_server(tmp_path):
     finally:
         if run_proc.poll() is None:
             run_proc.kill()
+
+
+# -- fetch-models -------------------------------------------------------------
+#
+# The weights are deliberately not distributed; the recipe and hashes are.
+# These tests cover the distributable half only — nothing here downloads a
+# toolchain or exports a model.
+
+
+def test_fetch_models_print_only_names_the_pins_and_licences():
+    result = _run_cli("fetch-models", "--print-only")
+    assert result.returncode == 0
+    assert "torch==" in result.stdout
+    assert "AGPL-3.0" in result.stdout          # the licence is part of the recipe
+    assert "scripts/fetch_edge_models.py" in result.stdout
+
+
+def test_fetch_models_manifest_loads_and_pins_match_the_repo_manifest():
+    import json as _json
+    from argus.models_fetch import load_manifest
+
+    manifest = load_manifest()
+    repo = _json.loads((REPO_ROOT / "android" / "models.json").read_text(encoding="utf-8"))
+    assert manifest["pinned_versions"] == repo["pinned_versions"]
+    automated = [n for n, s in manifest["models"].items() if s.get("automated")]
+    assert "yolo26_pose" in automated
+
+
+def test_fetch_models_verify_reports_missing_and_mismatched(tmp_path):
+    from argus.models_fetch import load_manifest, verify
+
+    manifest = load_manifest()
+    good, problems = verify(tmp_path, manifest)
+    assert good == []
+    assert any("missing" in p for p in problems)
+
+    # A wrong file must be a loud problem, not silently accepted: a model
+    # that loads but is not the pinned export is the worst outcome.
+    (tmp_path / "yolo26_pose_fp32.onnx").write_bytes(b"not a model")
+    good, problems = verify(tmp_path, manifest)
+    assert any("sha256 mismatch" in p for p in problems)

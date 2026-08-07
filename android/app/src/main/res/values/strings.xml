@@ -48,4 +48,13 @@
         you right now. What is missing is a %1$s-specific on-device
         classifier and real data to fit it on -- the same work bicep and
         lunge needed before they shipped (see docs/ADDING_AN_EXERCISE.md).</string>
+
+    <!-- Model staging (ModelFetcher.kt). The weights are deliberately not in
+         the APK; the instructor's laptop serves what `argus fetch-models`
+         reproduced, and the file picker stays as the offline path. -->
+    <string name="model_source_title">Stage models from…</string>
+    <string name="model_source_server">The connected server (recommended)</string>
+    <string name="model_source_files">Files on this phone…</string>
+    <string name="model_fetch_no_server">Set the server address first (Server button)</string>
+    <string name="model_fetch_started">Asking the server for models…</string>
 </resources>

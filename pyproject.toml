@@ -53,6 +53,7 @@ packages = ["src/argus"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "configs/argus.default.toml" = "argus/_data/argus.default.toml"
+"android/models.json" = "argus/_data/models.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

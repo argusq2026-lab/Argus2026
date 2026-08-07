@@ -62,6 +62,9 @@ def build(clean: bool) -> Path:
         "--specpath", str(REPO / "build"),
         "--paths", str(REPO / "src"),
         "--add-data", f"{DEFAULT_CONFIG}{os.pathsep}{BUNDLED_CONFIG_DIR}",
+        # The model manifest rides along for `argus fetch-models`: the recipe
+        # and hashes are distributable even though the weights are not.
+        "--add-data", f"{REPO / 'android' / 'models.json'}{os.pathsep}{BUNDLED_CONFIG_DIR}",
         # Every subcommand imports its implementation inside the function that
         # needs it, to keep `argus --version` from paying for websockets. That
         # is good for startup and invisible to a static import graph, so the
@@ -71,6 +74,7 @@ def build(clean: bool) -> Path:
         "--hidden-import", "argus.discovery",
         "--hidden-import", "argus.doctor",
         "--hidden-import", "argus.synthetic",
+        "--hidden-import", "argus.models_fetch",
         "--noconfirm",
         str(ENTRY),
     ]

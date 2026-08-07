@@ -282,7 +282,25 @@ class MainActivity : AppCompatActivity() {
             render()
         }
         findViewById<Button>(R.id.debug).setOnLongClickListener {
-            pickModelFiles.launch(arrayOf("*/*")); true
+            // Two ways to stage a model, ordered by how a first-time floor
+            // actually goes: the laptop the phone connects to can serve the
+            // weights it reproduced (`argus fetch-models`), and the file
+            // picker remains for a phone with the files already on it.
+            AlertDialog.Builder(this)
+                .setTitle(R.string.model_source_title)
+                .setItems(
+                    arrayOf(
+                        getString(R.string.model_source_server),
+                        getString(R.string.model_source_files),
+                    )
+                ) { _, which ->
+                    when (which) {
+                        0 -> fetchModelsFromServer()
+                        1 -> pickModelFiles.launch(arrayOf("*/*"))
+                    }
+                }
+                .show()
+            true
         }
         findViewById<Button>(R.id.connect).setOnClickListener { showConnectDialog() }
         findViewById<Button>(R.id.flip).setOnClickListener {
@@ -737,6 +755,36 @@ class MainActivity : AppCompatActivity() {
         textSize = 12f
         alpha = 0.7f
         setPadding(0, 24, 0, 0)
+    }
+
+    /**
+     * Pull weights from the laptop in the Server dialog's ws:// URL.
+     *
+     * Uses the saved address rather than requiring a live connection: model
+     * staging is exactly the step that happens *before* the first successful
+     * Start, so gating it on being connected would be circular.
+     */
+    private fun fetchModelsFromServer() {
+        val wsUrl = getSharedPreferences("argus_edge_server", MODE_PRIVATE)
+            .getString("url", "")?.trim().orEmpty()
+        if (wsUrl.isEmpty()) {
+            render(getString(R.string.model_fetch_no_server))
+            return
+        }
+        render(getString(R.string.model_fetch_started))
+        Executors.newSingleThreadExecutor().execute {
+            val summary = ModelFetcher.fetchAll(wsUrl, modelStore.modelsDir) { progress ->
+                runOnUiThread {
+                    render("fetching ${'$'}{progress.file} (${'$'}{progress.index}/${'$'}{progress.total})")
+                }
+            }
+            runOnUiThread {
+                openYolo26()
+                openDetector()
+                openPoseEstimator()
+                render(summary)
+            }
+        }
     }
 
     private fun showConnectDialog() {

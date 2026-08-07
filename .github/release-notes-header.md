@@ -30,12 +30,20 @@ Requires an arm64 Android 12+ phone; the NPU path is built for Snapdragon.
    one-time "install unknown apps" prompt (and Play Protect, if it asks).
 2. Open **Argus Edge**, pick the floor's use case (e.g. **Fitness**), and
    allow the camera.
-3. **Stage the perception models — they are deliberately not inside the APK**
-   (licensing: see THIRD-PARTY-NOTICES.md). From a checkout of this repo,
-   `python scripts/fetch_edge_models.py` reproduces them byte-identically;
-   copy the resulting files to the phone (e.g. into Downloads), then
-   **long-press Debug** in the station screen and multi-select them in the
-   picker. The status strip reads *Ready* when the model is loaded.
+3. **Stage the perception models — they are deliberately not inside the APK
+   or this release** (licensing: the recipe is distributable, the weights are
+   not — see THIRD-PARTY-NOTICES.md). Once, on the laptop:
+   ```bash
+   ./argus-<your-os> fetch-models
+   ```
+   It reproduces the weights byte-identically using the machine's own Python
+   (3.10+, the one prerequisite; the pinned toolchain it downloads is
+   gigabytes, and it asks first). From then on **every phone pulls them
+   itself**: set the server address in the app, long-press **Debug** →
+   *The connected server*. The station verifies each file against the
+   server's manifest and reads *Ready* when loaded. The file picker remains
+   for offline staging, and `fetch-models --print-only` shows the manual
+   recipe and per-model licences.
 
 ## 3. Connect them
 

@@ -21,6 +21,7 @@ import contextlib
 import json
 import logging
 import time
+from pathlib import Path
 from dataclasses import dataclass, field, replace
 from typing import Callable
 
@@ -41,6 +42,7 @@ from argus.ingest.protocol import (
     parse_observation,
 )
 from argus.ingest.session import DuplicateTraineeError, SessionRegistry
+from argus.models_serve import ModelDirectory
 from argus.outputs import ConsoleSettings, JsonLogSink, TriageHTTPServer
 from argus.triage import TriageRecord, known_use_cases, needs_instructor, rank_trainees
 
@@ -104,6 +106,7 @@ class IngestServer:
         self._now = now
         self._registry = SessionRegistry(cfg.scoring, cfg.ingest.track_ttl_s)
         self._admission = AdmissionQueue()
+        self._model_dir = ModelDirectory(Path(cfg.models.dir))
         self._json_sink = JsonLogSink(cfg.outputs.json_log) if cfg.outputs.json_log else None
         self._http: TriageHTTPServer | None = None
         if cfg.outputs.http_port:
@@ -289,6 +292,36 @@ class IngestServer:
                 self._now(), self._registry.station_views(), self._admission.pending_views()
             )
 
+    def _process_http_request(self, connection, request):
+        """Answer plain HTTP on the WS port; None lets the handshake proceed.
+
+        A browser poking the ingest port, or a phone fetching weights. Only
+        GET /models/* is answered with content; other plain-HTTP paths get a
+        pointer to the right port rather than a bare hang.
+        """
+        from websockets.datastructures import Headers
+        from websockets.http11 import Response
+
+        # A genuine WebSocket upgrade is not ours to answer.
+        if request.headers.get("Upgrade", "").lower() == "websocket":
+            return None
+
+        served = self._model_dir.respond(request.path)
+        if served is None:
+            body = b"this is the argus ingest port; the console is on the http port\n"
+            return Response(
+                404, "Not Found",
+                Headers([("Content-Type", "text/plain"), ("Content-Length", str(len(body)))]),
+                body,
+            )
+        status, content_type, body = served
+        reason = "OK" if status == 200 else "Not Found"
+        return Response(
+            status, reason,
+            Headers([("Content-Type", content_type), ("Content-Length", str(len(body)))]),
+            body,
+        )
+
     # -- admission ------------------------------------------------------------
 
     async def _admit(self, ws: ServerConnection, hello) -> bool:
@@ -453,7 +486,15 @@ class IngestServer:
         if self._http is not None:
             self._http.start()
         self._ws_server = await websockets.serve(
-            self._handle, self.cfg.ingest.ws_host, self.cfg.ingest.ws_port
+            self._handle,
+            self.cfg.ingest.ws_host,
+            self.cfg.ingest.ws_port,
+            # Plain-HTTP requests on the WS port serve the operator's model
+            # weights to their own stations (GET /models/). Returning None
+            # continues the WebSocket handshake, so phones connecting as
+            # phones are untouched. See argus.models_serve for why this port
+            # and not the console's.
+            process_request=self._process_http_request,
         )
         self._rank_task = asyncio.create_task(self._rank_loop())
         self._beacon = self._build_beacon()

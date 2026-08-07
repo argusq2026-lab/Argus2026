@@ -155,6 +155,22 @@ def cmd_discover(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch_models(args: argparse.Namespace) -> int:
+    """Reproduce the phone's model weights locally — see argus.models_fetch.
+
+    Deliberately its own subcommand rather than something `run` does
+    implicitly: it downloads a multi-gigabyte toolchain and produces an
+    AGPL-3.0 artifact, both of which should happen because a person asked.
+    """
+    from argus.models_fetch import fetch, load_manifest, print_recipe
+
+    manifest = load_manifest()
+    if args.print_only:
+        print_recipe(manifest)
+        return 0
+    return fetch(Path(args.out).resolve(), manifest, assume_yes=args.yes)
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     cfg = _apply_overrides(load_config(args.config), args)
     payload = {
@@ -264,6 +280,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--timeout", type=float, default=3.0, help="Seconds to listen (default: 3)"
     )
     discover.set_defaults(func=cmd_discover)
+
+    fetch_models = sub.add_parser(
+        "fetch-models",
+        help="Reproduce the phone's model weights on this machine (they are "
+        "deliberately not distributed — see android/models.json)",
+    )
+    fetch_models.add_argument("--out", default="argus-models", help="Where to write the artifacts")
+    fetch_models.add_argument("--yes", action="store_true", help="Skip the download-size confirmation")
+    fetch_models.add_argument(
+        "--print-only", action="store_true",
+        help="Print the manual recipe and licences without downloading anything",
+    )
+    fetch_models.set_defaults(func=cmd_fetch_models)
 
     return parser
 

@@ -13,7 +13,7 @@
 # from -- see docs/PROTOCOL.md. Phone and laptop are expected to deploy from
 # copies of the same config.
 
-config_version = 8
+config_version = 9
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +223,17 @@ track_ttl_s = 10.0            # a station silent this long is presumed to have l
 # access to it. Turn it off on a network where even that is unwanted; phones
 # can still be pointed at the address by hand.
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Phone-side model weights, served to stations at GET /models/ on the
+# WebSocket port (already LAN-open). `argus fetch-models` writes here; an
+# absent directory just means phones use the in-app file import instead.
+# The weights are reproduced locally and never redistributed by this project
+# -- see android/models.json and THIRD-PARTY-NOTICES.md.
+# ---------------------------------------------------------------------------
+[models]
+dir = "argus-models"
+
+
 [discovery]
 enabled = true
 port = 8766

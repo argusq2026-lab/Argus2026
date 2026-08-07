@@ -17,7 +17,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 8
+CONFIG_VERSION = 9
 
 #: Shipped default config. Present both in a source checkout (repo-root
 #: ``configs/``) and in an installed wheel (``argus/_data/``).
@@ -231,6 +231,25 @@ class IngestConfig:
 
 
 @dataclass(frozen=True)
+class ModelsConfig:
+    """Where the phone-side model weights live on this machine, if anywhere.
+
+    `argus fetch-models` writes here and the ingest listener serves the files
+    read-only at `GET /models/` on the WebSocket port, so a phone on the floor
+    can pull them instead of someone cabling every device. Serving on the WS
+    port is deliberate: that port is already LAN-open by design, so this adds
+    zero new listening surface — and the files carry no trainee data, only
+    the weights the operator just reproduced on purpose.
+
+    An absent directory is a normal state, not an error: it means this floor
+    has not run `fetch-models`, phones fall back to the file-picker import,
+    and `argus doctor` says so.
+    """
+
+    dir: str = "argus-models"
+
+
+@dataclass(frozen=True)
 class SessionConfig:
     """Who is running this floor, and who gets to join it.
 
@@ -370,6 +389,7 @@ class ArgusConfig:
     ingest: IngestConfig = field(default_factory=IngestConfig)
     outputs: OutputsConfig = field(default_factory=OutputsConfig)
     session: SessionConfig = field(default_factory=SessionConfig)
+    models: ModelsConfig = field(default_factory=ModelsConfig)
     discovery: DiscoveryConfig = field(default_factory=DiscoveryConfig)
     source_path: Path | None = None
 
@@ -460,7 +480,7 @@ def load_config(path: str | Path | None = None) -> ArgusConfig:
         },
     )
 
-    known_top = {"config_version", "scoring", "ingest", "outputs", "session", "discovery"}
+    known_top = {"config_version", "scoring", "ingest", "outputs", "session", "discovery", "models"}
     unknown_top = set(raw) - known_top
     if unknown_top:
         raise ConfigError(f"unknown top-level section(s): {sorted(unknown_top)}")
@@ -470,6 +490,7 @@ def load_config(path: str | Path | None = None) -> ArgusConfig:
         ingest=_build(IngestConfig, _section(raw, "ingest"), "ingest"),
         outputs=_build(OutputsConfig, _section(raw, "outputs"), "outputs"),
         session=_build(SessionConfig, _section(raw, "session"), "session"),
+        models=_build(ModelsConfig, _section(raw, "models"), "models"),
         discovery=_build(DiscoveryConfig, _section(raw, "discovery"), "discovery"),
         source_path=cfg_path.resolve(),
     )
