@@ -374,9 +374,27 @@ cleanly. `fetch_edge_models.py` prints the exact export command; afterwards
 generate its required contract sidecar with
 `python scripts/gen_yolox_fixture.py models/edge/yolox.onnx`.
 
-### Push them onto the phone
+### Get them onto the phone
 
-Three ways in, same destination — the app's private `files/models/`:
+Three ways in, same destination — the app's private `files/models/`.
+
+**The one to use on a floor: let each phone pull them from the laptop.** The
+server hands the directory in `[models] dir` to stations read-only at
+`GET /models/` on the ingest port — the same host and port the phone already
+sends its observations to, so there is nothing extra to configure and no new
+listener to trust. Set the server address in the app's **Server** dialog, then
+long-press **Debug → The connected server**; each file is verified against the
+server's sha256 manifest before it is stored, and the status strip reads
+**Ready**. This scales to a rack of phones without a cable per phone, and it is
+provisioning inside one network rather than distribution — the weights never
+leave the operator's own LAN.
+
+Running the released binary rather than a checkout? `argus-… fetch-models`
+is the same recipe as `fetch_edge_models.py` for a machine with no clone: it
+builds the pinned toolchain in a private venv, exports, and verifies. Both
+write what the server then serves.
+
+The cable path, for staging a phone before there is a server to pull from:
 
 ```bash
 # POSIX — one command: build, install, stage, grant camera, adb reverse, launch
@@ -398,9 +416,11 @@ foreach ($f in @("yolo26_pose_fp32.onnx","pose_landmark_fp32.onnx")) {
 }
 ```
 
-**Or with no cable at all:** copy the files to the phone, open the app, tap
-**Debug → Model**, and multi-select them in the system picker. Nothing is ever
-fetched from a network by the app.
+**Or offline, with no cable and no server:** copy the files to the phone by any
+means, open the app, long-press **Debug → Files on this phone**, and
+multi-select them in the system picker. The app reaches the network only when
+you ask it to — for the server pull above, and to send observations to the
+laptop you connected it to.
 
 Verify:
 
@@ -535,7 +555,7 @@ importing it pulls in no transport library and no model runtime.
 | Gradle fails with an "Unsupported class file major version" | wrong JDK | it must be **17**; check `java -version` and `JAVA_HOME` |
 | `adb devices` shows `unauthorized` | RSA prompt not accepted | unlock the phone and accept it; `adb kill-server && adb devices` to re-prompt |
 | `adb devices` shows nothing (Windows) | missing OEM USB driver | install it, and set USB mode to File transfer |
-| App shows **"No model staged"** | §2.4 not done, or a device test wiped it | re-run `./stage.sh`, or import via **Debug → Model** |
+| App shows **"No model staged"** | §2.4 not done, or a device test wiped it | connect to the server and long-press **Debug → The connected server**; or re-run `./stage.sh` |
 | App installs but reports the NPU is unavailable | not a Qualcomm Hexagon device | there is no CPU fallback by design; this app needs the hardware in §2 |
 | `run-as: package not debuggable` | a release build is installed | stage onto the debug build (`installDebug`) |
 | Phone cannot reach the laptop over Wi-Fi | firewall, or client isolation on the network | open TCP 8765 (§1.7), or use the USB path (§3.1) |
